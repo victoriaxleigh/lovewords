@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read/write their own profile
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == uid;
+    }
+
+    // Games — players in the game can read/write
+    match /games/{gameId} {
+      allow read: if request.auth != null &&
+        request.auth.uid in resource.data.playerUids;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null &&
+        request.auth.uid in resource.data.playerUids;
+
+      // Love notes subcollection
+      match /loveNotes/{noteId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
+      }
+    }
+  }
+}
