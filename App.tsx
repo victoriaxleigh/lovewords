@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,11 +9,21 @@ import LobbyScreen from './src/screens/LobbyScreen';
 import GameScreen from './src/screens/GameScreen';
 import { Colors } from './src/utils/colors';
 import { Player } from './src/types';
+import { registerPushSubscription } from './src/utils/pushSubscription';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { user, loading } = useAuth();
+
+  // When user logs in, register this device for push notifications
+  useEffect(() => {
+    if (user?.id) {
+      // Small delay so it doesn't fire the permission popup instantly on login
+      const t = setTimeout(() => registerPushSubscription(user.id), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [user?.id]);
 
   if (loading) {
     return (

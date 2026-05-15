@@ -31,14 +31,12 @@ const TILE_DISTRIBUTION: { letter: string; value: number; count: number }[] = [
   { letter: '', value: 0, count: 2 }, // blanks
 ];
 
-let _tileIdCounter = 0;
-
 export function createTileBag(): Tile[] {
   const bag: Tile[] = [];
   for (const { letter, value, count } of TILE_DISTRIBUTION) {
     for (let i = 0; i < count; i++) {
       bag.push({
-        id: `tile_${_tileIdCounter++}`,
+        id: crypto.randomUUID(),
         letter,
         value,
         isBlank: letter === '',

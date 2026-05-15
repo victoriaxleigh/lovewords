@@ -1,8 +1,157 @@
 import { supabase } from './config';
 import { Game, Player, PlacedTile, LoveNote, Move } from '../types';
 import { createEmptyBoard, applyMoveToBoard } from '../engine/board';
-import { createTileBag, drawTiles } from '../engine/tiles';
+import { createTileBag, drawTiles, shuffle } from '../engine/tiles';
 import { scoreMove } from '../engine/scoring';
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+// Calls our Netlify serverless function, which forwards to OneSignal.
+// Fails silently — a notification error should never break a move.
+function sendPushNotification(
+  recipientUid: string,
+  senderName: string,
+  type: 'turn' | 'lovenote'
+) {
+  if (typeof window === 'undefined') return;
+  fetch('/.netlify/functions/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipientUid, senderName, type }),
+  }).catch(() => {}); // never throw — notifications are best-effort
+}
+
+// ─── Create Solo Practice Game ────────────────────────────────────────────────
+// Solo games NEVER change current_turn — it stays as the real user's UID forever.
+// Whose turn it is gets tracked by moves.length % 2 (even = player 1, odd = player 2).
+// Both players share the same uid so no fake UUID ever lands in the uuid column.
+// Solo games are identified by players[1].email === 'solo'.
+export async function createSoloGame(player: Player): Promise<string> {
+  const bag = createTileBag();
+  const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
+  const { drawn: rack2, remaining: finalBag } = drawTiles(bag2, 7);
+
+  const payload = {
+    player1_uid: player.uid,
+    player2_uid: player.uid,
+    players: [
+      { ...player, rack: rack1, score: 0 },
+      { uid: player.uid, displayName: 'Player 2 🎯', email: 'solo', rack: rack2, score: 0 },
+    ],
+    board: createEmptyBoard(),
+    bag: finalBag,
+    current_turn: player.uid, // stays myUid forever — turn tracked by moves.length
+    status: 'active',
+    moves: [],
+  };
+
+  const { data, error } = await supabase.from('games').insert(payload).select('id').single();
+  if (error) throw error;
+  return data.id;
+}
+
+// ─── Solo: Submit Move ────────────────────────────────────────────────────────
+// playerIndex: 0 = player 1, 1 = player 2 (derived from moves.length % 2)
+// current_turn is intentionally NOT updated — it stays as myUid forever.
+export async function submitSoloMove(
+  gameId: string,
+  game: Game,
+  playerIndex: number,
+  placedTiles: PlacedTile[]
+): Promise<{ success: boolean; error?: string }> {
+  const { total } = scoreMove(game.board, placedTiles);
+  const newBoard = applyMoveToBoard(game.board, placedTiles);
+
+  const usedIds = new Set(placedTiles.map((t) => t.id));
+  const remainingRack = game.players[playerIndex].rack.filter((t) => !usedIds.has(t.id));
+  const { drawn, remaining: newBag } = drawTiles(game.bag, placedTiles.length);
+  const newRack = [...remainingRack, ...drawn];
+
+  const updatedPlayers = [...game.players] as [Player, Player];
+  updatedPlayers[playerIndex] = {
+    ...updatedPlayers[playerIndex],
+    score: updatedPlayers[playerIndex].score + total,
+    rack: newRack,
+  };
+
+  const move: Move = {
+    uid: game.players[playerIndex].uid,
+    tiles: placedTiles,
+    score: total,
+    timestamp: Date.now(),
+  };
+
+  const isFinished = newBag.length === 0 && newRack.length === 0;
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      board: newBoard,
+      bag: newBag,
+      players: updatedPlayers,
+      moves: [...game.moves, move],
+      status: isFinished ? 'finished' : 'active',
+      updated_at: new Date().toISOString(),
+      // current_turn intentionally omitted — stays as myUid
+    })
+    .eq('id', gameId);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+// ─── Solo: Pass Turn ──────────────────────────────────────────────────────────
+export async function passSoloTurn(gameId: string, game: Game): Promise<void> {
+  const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
+  const { error } = await supabase
+    .from('games')
+    .update({
+      moves: [...game.moves, move],
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId);
+  if (error) throw error;
+}
+
+// ─── Solo: Swap Tiles ─────────────────────────────────────────────────────────
+export async function swapSoloTiles(
+  gameId: string,
+  game: Game,
+  playerIndex: number,
+  tileIds: string[]
+): Promise<{ success: boolean; error?: string; updatedGame?: Game }> {
+  if (tileIds.length === 0) return { success: false, error: 'No tiles selected' };
+  if (game.bag.length < tileIds.length) return { success: false, error: 'Not enough tiles in bag to swap' };
+
+  const player = game.players[playerIndex];
+  const tilesToReturn = player.rack.filter((t) => tileIds.includes(t.id));
+  const remainingRack = player.rack.filter((t) => !tileIds.includes(t.id));
+
+  const newBag = shuffle([...game.bag, ...tilesToReturn]);
+  const { drawn, remaining } = drawTiles(newBag, tileIds.length);
+  const newRack = [...remainingRack, ...drawn];
+
+  const updatedPlayers = [...game.players] as [Player, Player];
+  updatedPlayers[playerIndex] = { ...player, rack: newRack };
+
+  const move: Move = { uid: 'swap', tiles: [], score: 0, timestamp: Date.now() };
+  const newMoves = [...game.moves, move];
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      players: updatedPlayers,
+      bag: remaining,
+      moves: newMoves,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId);
+
+  if (error) return { success: false, error: error.message };
+  return {
+    success: true,
+    updatedGame: { ...game, players: updatedPlayers, bag: remaining, moves: newMoves },
+  };
+}
 
 // ─── Create Game ──────────────────────────────────────────────────────────────
 export async function createGame(player1: Player, player2: Player): Promise<string> {
@@ -31,25 +180,23 @@ export async function createGame(player1: Player, player2: Player): Promise<stri
 
 // ─── Subscribe to a single game (real-time) ───────────────────────────────────
 export function subscribeToGame(gameId: string, onUpdate: (game: Game) => void) {
-  // Fetch initial state
-  supabase
-    .from('games')
-    .select('*')
-    .eq('id', gameId)
-    .single()
-    .then(({ data, error }) => {
-      if (error) console.error('Failed to fetch game:', error);
-      if (data) onUpdate(rowToGame(data));
-    })
-    .catch((err) => console.error('Game fetch error:', err));
+  // Always fetch the full row — payload.new only contains changed columns, so
+  // updates that don't touch 'board' (swap, pass) would give payload.new.board = undefined,
+  // crashing BoardComponent when it calls board.map(). A fresh SELECT is always complete.
+  const fetchGame = async () => {
+    const { data, error } = await supabase.from('games').select('*').eq('id', gameId).single();
+    if (error) console.error('Failed to fetch game:', error);
+    if (data) onUpdate(rowToGame(data));
+  };
 
-  // Subscribe to changes
+  fetchGame();
+
   const channel = supabase
     .channel(`game-${gameId}`)
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
-      (payload) => onUpdate(rowToGame(payload.new))
+      () => fetchGame()
     )
     .subscribe();
 
@@ -128,16 +275,65 @@ export async function submitMove(
     .eq('id', gameId);
 
   if (error) return { success: false, error: error.message };
+
+  // Send push notification to opponent
+  const opponent = game.players[otherIndex];
+  const myName = game.players[playerIndex].displayName;
+  sendPushNotification(opponent.uid, myName, 'turn');
+
+  return { success: true };
+}
+
+// ─── Swap tiles ───────────────────────────────────────────────────────────────
+export async function swapTiles(
+  gameId: string,
+  game: Game,
+  playerUid: string,
+  tileIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  if (game.currentTurn !== playerUid) return { success: false, error: 'Not your turn' };
+  if (tileIds.length === 0) return { success: false, error: 'No tiles selected' };
+  if (game.bag.length < tileIds.length) return { success: false, error: 'Not enough tiles in bag to swap' };
+
+  const playerIndex = game.players.findIndex((p) => p.uid === playerUid);
+  const player = game.players[playerIndex];
+  const otherIndex = 1 - playerIndex;
+
+  const tilesToReturn = player.rack.filter((t) => tileIds.includes(t.id));
+  const remainingRack = player.rack.filter((t) => !tileIds.includes(t.id));
+
+  // Shuffle returned tiles back into bag
+  const newBag = shuffle([...game.bag, ...tilesToReturn]);
+  const { drawn, remaining } = drawTiles(newBag, tileIds.length);
+  const newRack = [...remainingRack, ...drawn];
+
+  const updatedPlayers = [...game.players];
+  updatedPlayers[playerIndex] = { ...player, rack: newRack };
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      players: updatedPlayers,
+      bag: remaining,
+      current_turn: game.players[otherIndex].uid,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId);
+
+  if (error) return { success: false, error: error.message };
   return { success: true };
 }
 
 // ─── Pass turn ────────────────────────────────────────────────────────────────
 export async function passTurn(gameId: string, game: Game, playerUid: string) {
+  if (game.currentTurn !== playerUid) throw new Error('Not your turn');
   const otherIndex = game.players[0].uid === playerUid ? 1 : 0;
+  const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
   const { error } = await supabase
     .from('games')
     .update({
       current_turn: game.players[otherIndex].uid,
+      moves: [...game.moves, move],
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId);
@@ -150,9 +346,10 @@ export async function sendLoveNote(
   fromUid: string,
   toUid: string,
   message: string,
-  emoji: string
-) {
-  await supabase.from('love_notes').insert({
+  emoji: string,
+  senderName: string
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.from('love_notes').insert({
     game_id: gameId,
     from_uid: fromUid,
     to_uid: toUid,
@@ -160,6 +357,10 @@ export async function sendLoveNote(
     emoji,
     read: false,
   });
+  if (error) return { success: false, error: error.message };
+
+  sendPushNotification(toUid, senderName, 'lovenote');
+  return { success: true };
 }
 
 export function subscribeToLoveNotes(gameId: string, onUpdate: (notes: LoveNote[]) => void) {
@@ -188,6 +389,13 @@ export function subscribeToLoveNotes(gameId: string, onUpdate: (notes: LoveNote[
 
 export async function markNoteRead(noteId: string) {
   await supabase.from('love_notes').update({ read: true }).eq('id', noteId);
+}
+
+// ─── Delete a game ────────────────────────────────────────────────────────────
+export async function deleteGame(gameId: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.from('games').delete().eq('id', gameId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

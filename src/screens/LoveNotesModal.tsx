@@ -8,13 +8,13 @@ import {
   StyleSheet,
   Modal,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LoveNote } from '../types';
 import { sendLoveNote, subscribeToLoveNotes } from '../supabase/gameService';
 import { Colors } from '../utils/colors';
 import { sendLoveNoteNotification } from '../utils/webNotifications';
-
-const EMOJIS = ['💕', '💖', '😘', '🌹', '💝', '🥰', '✨', '🫶', '💌', '🎉'];
 
 const QUICK_NOTES = [
   "You're the best word partner 💌",
@@ -23,6 +23,17 @@ const QUICK_NOTES = [
   "You're beating me but I still love you 😂",
   "Miss you! Let's play more 🌹",
   "Thinking of you ✨",
+  "You have all the right letters 💕",
+  "I'd pick you out of any tile bag 🎲",
+  "You make my heart double its word score 💖",
+  "You're worth way more than 10 points 😘",
+  "Triple word score? More like triple heart score 🥰",
+  "I'd give you all my vowels 💌",
+  "You're the Q to my U 💝",
+  "No blanks when it comes to how I feel about you 🫶",
+  "You complete my rack 😍",
+  "You played your way into my heart 💕",
+  "Every move I make is for you 🎯",
 ];
 
 type Props = {
@@ -30,21 +41,20 @@ type Props = {
   onClose: () => void;
   gameId: string;
   myUid: string;
+  myDisplayName: string;
   partnerUid: string;
 };
 
-export default function LoveNotesModal({ visible, onClose, gameId, myUid, partnerUid }: Props) {
+export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisplayName, partnerUid }: Props) {
   const [notes, setNotes] = useState<LoveNote[]>([]);
   const [message, setMessage] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState('💕');
   const [sending, setSending] = useState(false);
-
+  const [sendError, setSendError] = useState('');
   const prevNoteCountRef = React.useRef(0);
 
   useEffect(() => {
     if (!visible) return;
     const unsub = subscribeToLoveNotes(gameId, (newNotes) => {
-      // Notify if a new note arrived from partner while modal is closed
       if (!visible && newNotes.length > prevNoteCountRef.current) {
         const latest = newNotes[0];
         if (latest.toUid === myUid) {
@@ -58,14 +68,19 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, partne
   }, [gameId, visible, myUid]);
 
   async function handleSend(text?: string) {
-    const msg = text ?? message.trim();
+    const msg = (text ?? message).trim();
     if (!msg) return;
     setSending(true);
+    setSendError('');
     try {
-      await sendLoveNote(gameId, myUid, partnerUid, msg, selectedEmoji);
-      setMessage('');
-    } catch {
-      Alert.alert('Could not send note');
+      const result = await sendLoveNote(gameId, myUid, partnerUid, msg, '💕', myDisplayName);
+      if (!result.success) {
+        setSendError(result.error ?? 'Could not send — try again');
+      } else {
+        setMessage('');
+      }
+    } catch (e: any) {
+      setSendError('Could not send — try again');
     } finally {
       setSending(false);
     }
@@ -73,37 +88,62 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, partne
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Love Notes 💌</Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} accessibilityLabel="Close love notes" accessibilityRole="button">
             <Text style={styles.close}>Done</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Emoji picker */}
-        <View style={styles.emojiRow}>
-          {EMOJIS.map((e) => (
-            <TouchableOpacity
-              key={e}
-              onPress={() => setSelectedEmoji(e)}
-              style={[styles.emojiBtn, selectedEmoji === e && styles.emojiBtnSelected]}
-            >
-              <Text style={styles.emoji}>{e}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Notes feed — flex: 1 so it fills all available space */}
+        <FlatList
+          data={notes}
+          keyExtractor={(n) => n.id}
+          style={styles.feed}
+          contentContainerStyle={styles.feedContent}
+          inverted
+          ListEmptyComponent={
+            <Text style={styles.empty}>No notes yet — send the first one! 💌</Text>
+          }
+          renderItem={({ item }) => {
+            const isMine = item.fromUid === myUid;
+            return (
+              <View style={[styles.noteCard, isMine ? styles.noteCardMine : styles.noteCardTheirs]}>
+                <Text style={[styles.noteText, isMine && styles.noteTextMine]}>{item.message}</Text>
+                <Text style={[styles.noteTime, isMine && styles.noteTimeMine]}>
+                  {new Date(item.timestamp).toLocaleDateString()}
+                </Text>
+              </View>
+            );
+          }}
+        />
 
-        {/* Quick notes */}
-        <View style={styles.quickNotes}>
-          {QUICK_NOTES.map((note) => (
-            <TouchableOpacity key={note} style={styles.quickNote} onPress={() => handleSend(note)}>
-              <Text style={styles.quickNoteText}>{note}</Text>
+        {/* Quick note chips — FlatList handles tap vs scroll better than ScrollView */}
+        <FlatList
+          horizontal
+          data={QUICK_NOTES}
+          keyExtractor={(item) => item}
+          showsHorizontalScrollIndicator={false}
+          style={styles.quickScroll}
+          contentContainerStyle={styles.quickContent}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.chip}
+              onPress={() => handleSend(item)}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.chipText}>{item}</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          )}
+        />
 
         {/* Message input */}
+        {sendError ? <Text style={styles.errorText}>{sendError}</Text> : null}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -112,112 +152,58 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, partne
             value={message}
             onChangeText={setMessage}
             multiline
+            returnKeyType="send"
+            accessibilityLabel="Love note message"
           />
           <TouchableOpacity
-            style={styles.sendBtn}
+            style={[styles.sendBtn, (!message.trim() || sending) && styles.sendBtnDisabled]}
             onPress={() => handleSend()}
             disabled={sending || !message.trim()}
           >
             <Text style={styles.sendBtnText}>Send</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Notes feed */}
-        <FlatList
-          data={notes}
-          keyExtractor={(n) => n.id}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => {
-            const isMine = item.fromUid === myUid;
-            return (
-              <View style={[styles.noteCard, isMine ? styles.noteCardMine : styles.noteCardTheirs]}>
-                <Text style={styles.noteEmoji}>{item.emoji}</Text>
-                <Text style={[styles.noteText, isMine && styles.noteTextMine]}>{item.message}</Text>
-                <Text style={styles.noteTime}>
-                  {new Date(item.timestamp).toLocaleDateString()}
-                </Text>
-              </View>
-            );
-          }}
-        />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     paddingTop: 24,
     borderBottomWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  title: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-  close: { fontSize: 16, color: Colors.primary, fontWeight: '600' },
-  emojiRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 12,
-    gap: 6,
-    backgroundColor: Colors.surface,
-  },
-  emojiBtn: {
-    padding: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  emojiBtnSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.background,
-  },
-  emoji: { fontSize: 22 },
-  quickNotes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    padding: 12,
-  },
-  quickNote: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  quickNoteText: { fontSize: 12, color: Colors.text },
-  inputRow: {
-    flexDirection: 'row',
-    margin: 12,
-    gap: 8,
-  },
-  input: {
+  title: { fontSize: 20, fontWeight: '800', color: Colors.primaryDark },
+  close: { fontSize: 16, color: Colors.primaryDark, fontWeight: '600' },
+  feed: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
+  },
+  feedContent: {
+    padding: 16,
+    flexGrow: 1,
+  },
+  empty: {
+    textAlign: 'center',
+    color: Colors.textLight,
     fontSize: 14,
-    color: Colors.text,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 44,
+    marginTop: 40,
+    fontStyle: 'italic',
   },
-  sendBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  sendBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   noteCard: {
     borderRadius: 16,
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 10,
     maxWidth: '80%',
     backgroundColor: Colors.surface,
@@ -226,14 +212,66 @@ const styles = StyleSheet.create({
   },
   noteCardMine: {
     alignSelf: 'flex-end',
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
   noteCardTheirs: {
     alignSelf: 'flex-start',
   },
-  noteEmoji: { fontSize: 20, marginBottom: 4 },
   noteText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
   noteTextMine: { color: '#fff' },
-  noteTime: { fontSize: 10, color: 'rgba(0,0,0,0.35)', marginTop: 4, alignSelf: 'flex-end' },
+  noteTime: { fontSize: 10, color: Colors.textLight, marginTop: 4, alignSelf: 'flex-end' },
+  noteTimeMine: { color: 'rgba(255,255,255,0.85)' },
+  quickScroll: {
+    flexGrow: 0,
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  quickContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  chipText: { fontSize: 12, color: Colors.text, whiteSpace: 'nowrap' } as any,
+  inputRow: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    maxHeight: 100,
+  },
+  sendBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: {
+    backgroundColor: Colors.border,
+  },
+  sendBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  errorText: { color: 'red', fontSize: 12, textAlign: 'center', paddingVertical: 4 },
 });

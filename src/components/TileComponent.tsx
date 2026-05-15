@@ -9,7 +9,8 @@ type Props = {
   onPress?: () => void;
   size?: number;
   disabled?: boolean;
-  isNew?: boolean; // tile placed this turn
+  isNew?: boolean; // tile placed this turn (pending, not yet submitted)
+  highlight?: boolean; // tile was part of the last committed word
 };
 
 export default function TileComponent({
@@ -19,16 +20,23 @@ export default function TileComponent({
   size = 40,
   disabled = false,
   isNew = false,
+  highlight = false,
 }: Props) {
   const tileSize = size;
   const fontSize = size * 0.42;
   const valueFontSize = size * 0.22;
+
+  const label = tile.isBlank
+    ? 'Blank tile'
+    : `${tile.letter}, ${tile.value} point${tile.value === 1 ? '' : 's'}`;
 
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled || !onPress}
       activeOpacity={0.7}
+      accessibilityLabel={label}
+      accessibilityRole="button"
       style={[
         styles.tile,
         {
@@ -40,9 +48,15 @@ export default function TileComponent({
             ? Colors.tilePlaced
             : Colors.tileDefault,
           borderRadius: size * 0.12,
-          shadowColor: selected ? Colors.primary : '#000',
-          shadowOpacity: selected ? 0.5 : 0.25,
+          shadowColor: highlight ? '#FFB300' : '#000',
+          shadowOpacity: highlight ? 0.9 : 0.2,
+          shadowRadius: highlight ? 6 : 3,
+          shadowOffset: { width: 0, height: highlight ? 0 : 2 },
+          elevation: selected ? 6 : highlight ? 6 : 4,
           transform: [{ scale: selected ? 1.08 : 1 }],
+          borderColor: selected ? Colors.primary : highlight ? '#FFB300' : '#E0C8D0',
+          borderWidth: selected ? 2.5 : highlight ? 2 : 1,
+          zIndex: selected ? 10 : 1,
         },
       ]}
     >

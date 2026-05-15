@@ -1,22 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   SafeAreaView,
+  ScrollView,
   Modal,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
-import { isValidPlacement } from '../engine/board';
-import BoardComponent from '../components/BoardComponent';
+import { isValidPlacement, BOARD_SIZE } from '../engine/board';
+import BoardComponent, { CELL_SIZE } from '../components/BoardComponent';
 import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
 import LoveNotesModal from './LoveNotesModal';
@@ -39,7 +41,23 @@ export default function GameScreen() {
   const [validating, setValidating] = useState(false);
   const [blankPicker, setBlankPicker] = useState<{ row: number; col: number } | null>(null);
   const [dictReady, setDictReady] = useState(isDictionaryLoaded());
-  const prevTurnRef = React.useRef<string | null>(null);
+  const prevTurnRef = useRef<string | null>(null);
+  const [showPassConfirm, setShowPassConfirm] = useState(false);
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapSelectedIds, setSwapSelectedIds] = useState<string[]>([]);
+  const [swapping, setSwapping] = useState(false);
+  const [smackTalk, setSmackTalk] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  // Drag-and-drop
+  const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
+  const dragXY = useRef(new Animated.ValueXY()).current;
+  const boardRef = useRef<View>(null);
+  const boardPos = useRef({ x: 0, y: 0 });
+  const prevMovesLengthRef = useRef<number>(-1); // -1 = uninitialized; avoids spurious clear on first load
+  const soloWaitingRealtimeRef = useRef(false);  // keeps submitting=true until RT update arrives
+
 
   // Poll until dictionary finishes loading
   useEffect(() => {
@@ -58,37 +76,117 @@ export default function GameScreen() {
     requestNotificationPermission();
   }, []);
 
+  const SMACK_TALK = [
+    "Yikes… is that really your best? 😬",
+    "My grandma scores higher than that 👵",
+    "Maybe try actual words next time? 😂",
+    "Are you even trying?? 💅",
+    "I've seen better plays in a kindergarten class 🍎",
+    "That score is giving participation trophy energy 🏅",
+    "Babe… I love you but WOW 😂",
+    "Should I spot you some vowels? 🙃",
+    "Triple word score? You can't even find a double 😏",
+    "The bag called — it wants its tiles back 🎲",
+    "Even your blank tiles are underperforming 💀",
+    "Not to be mean but… actually yes, to be mean 😘",
+    "Is your strategy just vibes? Asking for a friend 👀",
+    "You spelled 'losing' correctly at least 🤭",
+    "Bold strategy, let's see if it pays off… it won't 😂",
+    "I still love you even when you play like this 💕… barely",
+  ];
+
   useEffect(() => {
     const unsub = subscribeToGame(gameId, (updatedGame) => {
       // Fire notification if turn just switched to me
-      if (
-        prevTurnRef.current !== null &&
-        prevTurnRef.current !== myUid &&
-        updatedGame.currentTurn === myUid
-      ) {
-        const opponent = updatedGame.players.find((p) => p.uid !== myUid);
-        sendTurnNotification(opponent?.displayName ?? 'Your partner');
+      const isSoloUpdated = updatedGame.players.some((p) => p.email === 'solo');
+
+      if (!isSoloUpdated) {
+        // Normal game: fire notification when turn switches to me
+        const turnJustSwitchedToMe =
+          prevTurnRef.current !== null &&
+          prevTurnRef.current !== myUid &&
+          updatedGame.currentTurn === myUid;
+
+        if (turnJustSwitchedToMe) {
+          const opponent = updatedGame.players.find((p) => p.uid !== myUid);
+          sendTurnNotification(opponent?.displayName ?? 'Your partner');
+
+          const myPlayer = updatedGame.players.find((p) => p.uid === myUid);
+          const them = updatedGame.players.find((p) => p.uid !== myUid);
+          if (myPlayer && them && them.score - myPlayer.score > 10) {
+            const msg = SMACK_TALK[Math.floor(Math.random() * SMACK_TALK.length)];
+            setSmackTalk(msg);
+          }
+        }
+      } else {
+        // Solo game: on first update just initialise the ref (no state clear)
+        if (prevMovesLengthRef.current === -1) {
+          prevMovesLengthRef.current = updatedGame.moves.length;
+        } else if (updatedGame.moves.length !== prevMovesLengthRef.current) {
+          // A move was committed — reset UI for the next side's turn
+          setPendingTiles([]);
+          setSelectedTile(null);
+          setSwapMode(false);
+          setSwapSelectedIds([]);
+          setShowPassConfirm(false);
+          setSubmitError(null);
+          if (soloWaitingRealtimeRef.current) {
+            setSubmitting(false);
+            setSwapping(false);
+            setSwapMode(false);
+            setSwapSelectedIds([]);
+            soloWaitingRealtimeRef.current = false;
+          }
+          prevMovesLengthRef.current = updatedGame.moves.length;
+        }
       }
+
       prevTurnRef.current = updatedGame.currentTurn;
       setGame(updatedGame);
     });
     return unsub;
   }, [gameId, myUid]);
 
-  const isMyTurn = game?.currentTurn === myUid;
-  const me = game?.players.find((p) => p.uid === myUid);
-  const partner = game?.players.find((p) => p.uid !== myUid);
+  const isSolo = game?.players.some((p) => p.email === 'solo') ?? false;
+  // Solo: side alternates by moves count. Multiplayer: find my stable index in the players array.
+  const currentSide = isSolo
+    ? ((game?.moves.length ?? 0) % 2)
+    : (game?.players.findIndex((p) => p.uid === myUid) ?? 0);
+  const isMyTurn = isSolo || game?.currentTurn === myUid;
+  const me = game?.players[currentSide];
+  const partner = game?.players[1 - currentSide];
+  // activeUid for non-solo submit calls only
+  const activeUid = game?.currentTurn ?? myUid;
   const isFirstMove = game?.moves.length === 0;
 
-  // Handle rack tile selection
+  // Live score preview — recalculates whenever tiles are placed
+  const previewScore = useMemo(() => {
+    if (!game || pendingTiles.length === 0) return null;
+    try {
+      const { total } = scoreMove(game.board, pendingTiles);
+      return total;
+    } catch {
+      return null;
+    }
+  }, [game, pendingTiles]);
+
+  // Highlight the tiles from the most recent committed word move
+  const lastMoveTiles = useMemo(() => {
+    if (!game) return new Set<string>();
+    const lastWordMove = game.moves.slice().reverse().find((m) => m.tiles.length > 0);
+    return new Set(lastWordMove?.tiles.map((t) => `${t.row},${t.col}`) ?? []);
+  }, [game?.moves]);
+
+  // Rack tap selects/deselects a tile (click-to-place for web; drag still works on mobile)
   function handleRackTilePress(tile: Tile) {
     if (!isMyTurn || game?.status !== 'active') return;
-    setSelectedTile((prev) => (prev?.id === tile.id ? null : tile));
+    setSelectedTile((prev) => prev?.id === tile.id ? null : tile);
   }
 
   // Place a tile on the board
   function handleCellPress(row: number, col: number) {
     if (!selectedTile || !game || !isMyTurn) return;
+    if (game.board[row][col].tile !== null) return; // already has a committed tile
     if (pendingTiles.find((t) => t.row === row && t.col === col)) return;
 
     if (selectedTile.isBlank) {
@@ -126,61 +224,172 @@ export default function GameScreen() {
   function handleRecall() {
     setPendingTiles([]);
     setSelectedTile(null);
+    setSubmitError(null);
   }
+
+  // ── Drag handlers ─────────────────────────────────────────────────────────
+  function handleDragStart(tile: Tile, pageX: number, pageY: number) {
+    if (!isMyTurn || game?.status !== 'active') return;
+    // Measure board position fresh each drag
+    boardRef.current?.measure((_x, _y, _w, _h, bpx, bpy) => {
+      boardPos.current = { x: bpx, y: bpy };
+    });
+    setDraggingTile(tile);
+    setSelectedTile(null);
+    dragXY.setValue({ x: pageX - 25, y: pageY - 25 });
+  }
+
+  function handleDragMove(pageX: number, pageY: number) {
+    dragXY.setValue({ x: pageX - 25, y: pageY - 25 });
+  }
+
+  function handleDragEnd(pageX: number, pageY: number, tile: Tile) {
+    setDraggingTile(null);
+    if (!game || !isMyTurn) return;
+    const col = Math.floor((pageX - boardPos.current.x - 2) / CELL_SIZE);
+    const row = Math.floor((pageY - boardPos.current.y - 2) / CELL_SIZE);
+    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return;
+    if (game.board[row][col].tile !== null) return;
+    if (tile.isBlank) {
+      setSelectedTile(tile);
+      setBlankPicker({ row, col });
+    } else {
+      setPendingTiles((prev) => {
+        if (prev.find((t) => t.row === row && t.col === col)) return prev;
+        return [...prev, { ...tile, row, col, isNew: true }];
+      });
+    }
+  }
+
+  function handleDragCancel() {
+    setDraggingTile(null);
+  }
+
+  // Drag a tile that's already placed on the board to a new cell.
+  // Removes it from pendingTiles immediately so the cell clears, then starts the
+  // floating animation — handleDragEnd lands it on the new target cell as normal.
+  function handleBoardTileDragStart(tile: Tile, pageX: number, pageY: number) {
+    if (!isMyTurn || game?.status !== 'active') return;
+    boardRef.current?.measure((_x, _y, _w, _h, bpx, bpy) => {
+      boardPos.current = { x: bpx, y: bpy };
+    });
+    setPendingTiles((prev) => prev.filter((t) => t.id !== tile.id));
+    setDraggingTile(tile);
+    setSelectedTile(null);
+    dragXY.setValue({ x: pageX - 25, y: pageY - 25 });
+  }
+
 
   // Submit the move
   async function handleSubmit() {
     if (!game || !isMyTurn || pendingTiles.length === 0) return;
+    setSubmitError(null);
+    setSubmitSuccess(null);
 
     // Validate placement
     if (!isValidPlacement(game.board, pendingTiles, isFirstMove ?? false)) {
-      Alert.alert('Invalid placement', 'Tiles must connect to existing tiles and form a line.');
+      setSubmitError('Tiles must form a line and connect to existing tiles (first move must cover the center ★).');
       return;
     }
 
     const words = getFormedWords(game.board, pendingTiles);
     if (words.length === 0) {
-      Alert.alert('No words formed', 'Try a different placement.');
+      setSubmitError('No words formed — try a different placement.');
       return;
     }
 
     setValidating(true);
-    const { valid, invalidWords } = await validateWords(words);
-    setValidating(false);
+    let valid = true;
+    let invalidWords: string[] = [];
+    try {
+      const result = await validateWords(words);
+      valid = result.valid;
+      invalidWords = result.invalidWords;
+    } catch {
+      // dictionary error — be generous and allow the word
+    } finally {
+      setValidating(false);
+    }
 
     if (!valid) {
-      Alert.alert(
-        'Invalid word(s)',
-        `"${invalidWords.join('", "')}" ${invalidWords.length > 1 ? 'are' : 'is'} not in the dictionary.`
-      );
+      setSubmitError(`"${invalidWords.join('", "')}" ${invalidWords.length > 1 ? 'are' : 'is'} not in the dictionary.`);
       return;
     }
 
     const { total } = scoreMove(game.board, pendingTiles);
 
     setSubmitting(true);
-    const result = await submitMove(gameId, game, myUid, pendingTiles);
-    setSubmitting(false);
-    if (!result.success) {
-      Alert.alert('Error', result.error ?? 'Something went wrong');
-    } else {
-      setPendingTiles([]);
-      Alert.alert('✅ Nice!', `${words.join(', ')} — +${total} pts`);
+    let holdForRealtime = false;
+    try {
+      const result = isSolo
+        ? await submitSoloMove(gameId, game, currentSide, pendingTiles)
+        : await submitMove(gameId, game, activeUid, pendingTiles);
+      if (!result.success) {
+        setSubmitError(result.error ?? 'Something went wrong — try again.');
+      } else {
+        if (!isSolo) setPendingTiles([]);
+        // Solo: keep submitting=true so tiles can't be placed before the RT rack update arrives
+        if (isSolo) {
+          holdForRealtime = true;
+          soloWaitingRealtimeRef.current = true;
+        }
+        setSubmitSuccess(`✅ ${words.join(', ')} — +${total} pts`);
+        setTimeout(() => setSubmitSuccess(null), 3000);
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message ?? 'Network error — try again.');
+    } finally {
+      if (!holdForRealtime) setSubmitting(false);
     }
   }
 
   async function handlePass() {
     if (!game) return;
-    Alert.alert('Pass turn?', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Pass',
-        onPress: async () => {
-          await passTurn(gameId, game, myUid);
-          setPendingTiles([]);
-        },
-      },
-    ]);
+    if (isSolo) {
+      await passSoloTurn(gameId, game);
+    } else {
+      await passTurn(gameId, game, activeUid);
+    }
+    setPendingTiles([]);
+    setShowPassConfirm(false);
+  }
+
+  function handleEnterSwapMode() {
+    setPendingTiles([]);
+    setSelectedTile(null);
+    setSwapSelectedIds([]);
+    setSwapMode(true);
+  }
+
+  // Tap a single tile in swap mode → immediately discard it and draw a replacement
+  async function handleSwapTileToggle(tileId: string) {
+    if (!game || swapping) return;
+    if (game.bag.length === 0) {
+      setSubmitError('No tiles left in the bag to swap.');
+      setSwapMode(false);
+      return;
+    }
+    setSwapping(true);
+    try {
+      const result = isSolo
+        ? await swapSoloTiles(gameId, game, currentSide, [tileId])
+        : await swapTiles(gameId, game, activeUid, [tileId]);
+      if (!result.success) {
+        setSubmitError(result.error ?? 'Could not swap — try again.');
+      } else {
+        // Solo swap returns updatedGame for immediate local state update.
+        // Prevents the UI from getting stuck if the RT update is delayed.
+        // The RT update will arrive later and re-sync (harmless).
+        const updated = (result as { updatedGame?: Game }).updatedGame;
+        if (updated) setGame(updated);
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message ?? 'Swap failed — try again.');
+    } finally {
+      setSwapping(false);
+      setSwapMode(false);
+      setSwapSelectedIds([]);
+    }
   }
 
   if (!game) {
@@ -192,6 +401,7 @@ export default function GameScreen() {
   }
 
   if (game.status === 'finished') {
+    const isSoloFinished = game.players.some((p) => p.email === 'solo');
     const winner =
       game.players[0].score > game.players[1].score
         ? game.players[0]
@@ -200,9 +410,17 @@ export default function GameScreen() {
         : null;
     return (
       <View style={styles.loading}>
-        <Text style={styles.finishedEmoji}>{winner?.uid === myUid ? '🏆' : '💕'}</Text>
+        <Text style={styles.finishedEmoji}>
+          {isSoloFinished ? '🎯' : winner?.uid === myUid ? '🏆' : '💕'}
+        </Text>
         <Text style={styles.finishedText}>
-          {winner ? (winner.uid === myUid ? 'You won!' : `${winner.displayName} won!`) : "It's a tie! 💕"}
+          {isSoloFinished
+            ? 'Practice complete!'
+            : winner
+            ? winner.uid === myUid
+              ? 'You won!'
+              : `${winner.displayName} won!`
+            : "It's a tie! 💕"}
         </Text>
         <Text style={styles.finishedScores}>
           {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
@@ -216,14 +434,21 @@ export default function GameScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityLabel="Back to games" accessibilityRole="button">
           <Text style={styles.back}>← Games</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowLoveNotes(true)} style={styles.loveBtn}>
-          <Text style={styles.loveBtnText}>💌 Note</Text>
-        </TouchableOpacity>
+        {!isSolo && (
+          <TouchableOpacity onPress={() => setShowLoveNotes(true)} style={styles.loveBtn} accessibilityLabel="Open love notes" accessibilityRole="button">
+            <Text style={styles.loveBtnText}>💌 Note</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Scoreboard */}
@@ -232,12 +457,18 @@ export default function GameScreen() {
         currentTurn={game.currentTurn}
         myUid={myUid}
         bagCount={game.bag.length}
+        isSolo={isSolo}
+        currentSide={currentSide}
       />
 
       {/* Turn indicator */}
       <View style={[styles.turnBanner, isMyTurn ? styles.turnBannerMine : styles.turnBannerTheirs]}>
         <Text style={styles.turnText}>
-          {isMyTurn ? '💌 Your turn — place your tiles!' : `⏳ Waiting for ${partner?.displayName}…`}
+          {isSolo
+            ? `🎯 Playing as ${me?.displayName ?? 'Player'}`
+            : isMyTurn
+            ? '💌 Your turn — place your tiles!'
+            : `⏳ Waiting for ${partner?.displayName}…`}
         </Text>
       </View>
 
@@ -249,49 +480,161 @@ export default function GameScreen() {
         onCellPress={handleCellPress}
         onTilePress={handlePendingTilePress}
         isMyTurn={isMyTurn}
+        boardRef={boardRef}
+        lastMoveTiles={lastMoveTiles}
+        boardTileDragCallbacks={isMyTurn && game.status === 'active' ? {
+          onDragStart: handleBoardTileDragStart,
+          onDragMove: handleDragMove,
+          onDragEnd: handleDragEnd,
+          onDragCancel: handleDragCancel,
+        } : undefined}
       />
 
-      {/* Tile rack */}
+      {/* Tile rack — behaviour switches based on swapMode; only one rack ever renders */}
       <TileRack
         tiles={me?.rack.filter((t) => !pendingTiles.find((p) => p.id === t.id)) ?? []}
-        selectedTileId={selectedTile?.id ?? null}
-        onTilePress={handleRackTilePress}
+        selectedTileId={swapMode ? null : selectedTile?.id ?? null}
+        onTilePress={swapMode ? (t) => handleSwapTileToggle(t.id) : handleRackTilePress}
         disabled={!isMyTurn || game.status !== 'active'}
+        swapSelectedIds={swapSelectedIds}
+        draggingTileId={swapMode ? null : draggingTile?.id ?? null}
+        dragCallbacks={swapMode ? undefined : {
+          onDragStart: handleDragStart,
+          onDragMove: handleDragMove,
+          onDragEnd: handleDragEnd,
+          onDragCancel: handleDragCancel,
+        }}
       />
 
       {/* Action buttons */}
       {isMyTurn && (
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
-            <Text style={styles.actionBtnSecondaryText}>Recall</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtnSecondary} onPress={handlePass}>
-            <Text style={styles.actionBtnSecondaryText}>Pass</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={pendingTiles.length === 0 || submitting || validating}
-          >
-            {submitting || validating ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.actionBtnText}>
-                {!dictReady ? 'Loading dictionary…' : `Submit ${pendingTiles.length > 0 ? `(${pendingTiles.length})` : ''}`}
+        <View>
+          {/* Inline submit feedback */}
+          {submitError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>⚠️ {submitError}</Text>
+              <TouchableOpacity onPress={() => setSubmitError(null)} accessibilityLabel="Dismiss error" accessibilityRole="button">
+                <Text style={styles.errorBannerDismiss}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {submitSuccess && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successBannerText}>{submitSuccess}</Text>
+            </View>
+          )}
+
+          {/* Selection hint */}
+          {!swapMode && (
+            <Text style={styles.hint}>
+              {pendingTiles.length > 0
+                ? 'Tap a placed tile to return it, or drag to reposition'
+                : 'Tap or drag tiles onto the board'}
+            </Text>
+          )}
+
+          {/* Swap mode */}
+          {swapMode ? (
+            <View>
+              <Text style={styles.hint}>
+                {swapping ? 'Drawing your new tile…' : 'Tap a tile above to discard it and draw a replacement'}
               </Text>
-            )}
-          </TouchableOpacity>
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
+                  onPress={() => setSwapMode(false)}
+                  disabled={swapping}
+                >
+                  <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : showPassConfirm ? (
+            <View style={styles.actions}>
+              <Text style={[styles.hint, { flex: 1, textAlign: 'center' }]}>Pass your turn?</Text>
+              <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => setShowPassConfirm(false)}>
+                <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={handlePass}>
+                <Text style={styles.actionBtnText}>Yes, Pass</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
+                <Text style={styles.actionBtnSecondaryText}>Recall</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleEnterSwapMode}>
+                <Text style={styles.actionBtnSecondaryText}>Swap</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => setShowPassConfirm(true)}>
+                <Text style={styles.actionBtnSecondaryText}>Pass</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
+                onPress={handleSubmit}
+                disabled={pendingTiles.length === 0 || submitting || validating}
+              >
+                {submitting || validating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.actionBtnText}>
+                    {!dictReady
+                      ? 'Loading…'
+                      : previewScore !== null
+                      ? `Submit  +${previewScore} pts`
+                      : 'Submit'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
-      {/* Love notes modal */}
-      <LoveNotesModal
-        visible={showLoveNotes}
-        onClose={() => setShowLoveNotes(false)}
-        gameId={gameId}
-        myUid={myUid}
-        partnerUid={partner?.uid ?? ''}
-      />
+      </ScrollView>
+
+      {/* Floating tile during drag — outside ScrollView so it stays fixed on screen */}
+      {draggingTile && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { zIndex: 999 }]}
+        >
+          <Animated.View style={[styles.floatingTile, { transform: dragXY.getTranslateTransform() }]}>
+            <Text style={styles.floatingLetter}>{draggingTile.isBlank ? '★' : draggingTile.letter}</Text>
+            {!draggingTile.isBlank && <Text style={styles.floatingValue}>{draggingTile.value}</Text>}
+          </Animated.View>
+        </Animated.View>
+      )}
+
+      {/* Love notes modal — hidden in solo mode */}
+      {!isSolo && (
+        <LoveNotesModal
+          visible={showLoveNotes}
+          onClose={() => setShowLoveNotes(false)}
+          gameId={gameId}
+          myUid={myUid}
+          myDisplayName={myDisplayName}
+          partnerUid={partner?.uid ?? ''}
+        />
+      )}
+
+      {/* Smack talk popup */}
+      <Modal visible={!!smackTalk} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.smackOverlay}
+          activeOpacity={1}
+          onPress={() => setSmackTalk(null)}
+        >
+          <View style={styles.smackModal}>
+            <Text style={styles.smackEmoji}>😂</Text>
+            <Text style={styles.smackText}>{smackTalk}</Text>
+            <TouchableOpacity style={styles.smackBtn} onPress={() => setSmackTalk(null)}>
+              <Text style={styles.smackBtnText}>Okay okay 😤</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Blank tile letter picker */}
       <Modal visible={!!blankPicker} transparent animationType="fade">
@@ -321,6 +664,8 @@ export default function GameScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 16 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',
@@ -329,7 +674,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  back: { color: Colors.primary, fontSize: 16, fontWeight: '600' },
+  back: { color: Colors.primaryDark, fontSize: 16, fontWeight: '600' },
   loveBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 20,
@@ -347,6 +692,13 @@ const styles = StyleSheet.create({
   turnBannerMine: { backgroundColor: '#FFF0F5' },
   turnBannerTheirs: { backgroundColor: '#F5F5F5' },
   turnText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+  hint: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: Colors.textLight,
+    paddingVertical: 4,
+    fontStyle: 'italic',
+  },
   actions: {
     flexDirection: 'row',
     paddingHorizontal: 12,
@@ -426,5 +778,117 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 15,
     fontWeight: '600',
+  },
+  floatingTile: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    backgroundColor: Colors.tileSelected,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  floatingLetter: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.tileText,
+  },
+  floatingValue: {
+    position: 'absolute',
+    bottom: 2,
+    right: 4,
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    borderRadius: 8,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#FFB3B3',
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#C0392B',
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  errorBannerDismiss: {
+    fontSize: 14,
+    color: '#C0392B',
+    fontWeight: '700',
+    paddingLeft: 8,
+  },
+  successBanner: {
+    backgroundColor: '#F0FFF4',
+    borderRadius: 8,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#A8E6B0',
+    alignItems: 'center',
+  },
+  successBannerText: {
+    fontSize: 13,
+    color: '#1E7B34',
+    fontWeight: '700',
+  },
+  smackOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smackModal: {
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 28,
+    width: '80%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  smackEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  smackText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  smackBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  smackBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

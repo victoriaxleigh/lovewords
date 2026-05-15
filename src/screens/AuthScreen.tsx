@@ -57,6 +57,7 @@ export default function AuthScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             autoCapitalize="words"
+            accessibilityLabel="Display name"
           />
         )}
         <TextInput
@@ -67,6 +68,7 @@ export default function AuthScreen() {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          accessibilityLabel="Email address"
         />
         <TextInput
           style={styles.input}
@@ -75,6 +77,7 @@ export default function AuthScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          accessibilityLabel="Password"
         />
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
@@ -145,5 +148,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  switchText: { color: Colors.primary, fontSize: 14, textDecorationLine: 'underline' },
+  switchText: { color: Colors.primaryDark, fontSize: 14, textDecorationLine: 'underline' },
 });

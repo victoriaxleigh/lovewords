@@ -92,7 +92,7 @@ export function isValidPlacement(board: Board, tiles: PlacedTile[], isFirstMove:
       [t.row, t.col + 1],
     ].some(([r, c]) => {
       const cell = getCell(board, r, c);
-      return cell?.tile !== null;
+      return cell !== null && cell.tile !== null;
     })
   );
   return hasAdjacent;

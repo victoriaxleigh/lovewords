@@ -48,8 +48,10 @@ async function loadDictionary(): Promise<Set<string>> {
   return loadPromise;
 }
 
-// Kick off loading as soon as this module is imported
-loadDictionary().catch(() => {});
+// Kick off loading as soon as this module is imported (browser only)
+if (typeof window !== 'undefined') {
+  loadDictionary().catch(() => {});
+}
 
 export async function isValidWord(word: string): Promise<boolean> {
   const upper = word.toUpperCase().trim();

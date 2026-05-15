@@ -1,0 +1,14 @@
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+  ignore = "exit 1"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "nft"
+
+# SPA fallback — all routes serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

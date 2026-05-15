@@ -32,7 +32,13 @@ export function scoreMove(
   const isHorizontal = rows.size === 1;
   const isVertical = cols.size === 1;
 
-  if (isHorizontal || (!isVertical && placedTiles.length === 1)) {
+  if (isHorizontal && isVertical) {
+    // Single tile placed — check both directions independently (no double-counting)
+    const hWord = extractHorizontalWord(virtualBoard, placedTiles[0].row, placedTiles[0].col, newTileSet);
+    if (hWord && hWord.word.length > 1) words.push(hWord);
+    const vWord = extractVerticalWord(virtualBoard, placedTiles[0].row, placedTiles[0].col, newTileSet);
+    if (vWord && vWord.word.length > 1) words.push(vWord);
+  } else if (isHorizontal) {
     const mainWord = extractHorizontalWord(virtualBoard, placedTiles[0].row, placedTiles[0].col, newTileSet);
     if (mainWord && mainWord.word.length > 1) words.push(mainWord);
 
@@ -41,9 +47,7 @@ export function scoreMove(
       const cross = extractVerticalWord(virtualBoard, pt.row, pt.col, newTileSet);
       if (cross && cross.word.length > 1) words.push(cross);
     }
-  }
-
-  if (isVertical) {
+  } else if (isVertical) {
     const mainWord = extractVerticalWord(virtualBoard, placedTiles[0].row, placedTiles[0].col, newTileSet);
     if (mainWord && mainWord.word.length > 1) words.push(mainWord);
 
