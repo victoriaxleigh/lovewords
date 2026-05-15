@@ -30,16 +30,18 @@ type Props = {
   isMyTurn: boolean;
   boardRef?: React.RefObject<View>;
   boardTileDragCallbacks?: BoardTileDragCallbacks;
-  lastMoveTiles?: Set<string>; // "row,col" keys of the most recently committed word
+  lastMoveTiles?: Set<string>;
+  boardDraggingTileId?: string | null;
 };
 
 function DraggablePendingTile({
-  tile, size, onTilePress, dragCallbacks,
+  tile, size, onTilePress, dragCallbacks, isDragging,
 }: {
   tile: PlacedTile;
   size: number;
   onTilePress: () => void;
   dragCallbacks?: BoardTileDragCallbacks;
+  isDragging?: boolean;
 }) {
   const onTilePressRef = useRef(onTilePress);
   const dragCallbacksRef = useRef(dragCallbacks);
@@ -71,7 +73,7 @@ function DraggablePendingTile({
   ).current;
 
   return (
-    <View {...pan.panHandlers}>
+    <View {...pan.panHandlers} style={isDragging ? { opacity: 0 } : undefined}>
       <TileComponent tile={tile} size={size} isNew />
     </View>
   );
@@ -87,7 +89,7 @@ const BONUS_BG: Record<string, string> = {
 
 export default function BoardComponent({
   board, pendingTiles, selectedTile, onCellPress, onTilePress, isMyTurn, boardRef,
-  boardTileDragCallbacks, lastMoveTiles,
+  boardTileDragCallbacks, lastMoveTiles, boardDraggingTileId,
 }: Props) {
   const pendingMap = new Map(pendingTiles.map((t) => [`${t.row},${t.col}`, t]));
 
@@ -126,6 +128,7 @@ export default function BoardComponent({
                     size={CELL_SIZE - 2}
                     onTilePress={() => onTilePress?.(pending)}
                     dragCallbacks={boardTileDragCallbacks}
+                    isDragging={boardDraggingTileId === pending.id}
                   />
                 ) : cell.tile ? (
                   <TileComponent tile={cell.tile} size={CELL_SIZE - 2} disabled highlight={isLastMove} />

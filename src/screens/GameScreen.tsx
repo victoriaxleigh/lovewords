@@ -52,6 +52,7 @@ export default function GameScreen() {
 
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
+  const [boardDraggingTileId, setBoardDraggingTileId] = useState<string | null>(null);
   const dragXY = useRef(new Animated.ValueXY()).current;
   const boardRef = useRef<View>(null);
   const boardPos = useRef({ x: 0, y: 0 });
@@ -245,24 +246,38 @@ export default function GameScreen() {
 
   function handleDragEnd(pageX: number, pageY: number, tile: Tile) {
     setDraggingTile(null);
+    setBoardDraggingTileId(null);
     if (!game || !isMyTurn) return;
     const col = Math.floor((pageX - boardPos.current.x - 2) / CELL_SIZE);
     const row = Math.floor((pageY - boardPos.current.y - 2) / CELL_SIZE);
-    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return;
-    if (game.board[row][col].tile !== null) return;
+    // Remove from old position (no-op if this was a rack drag)
+    const removeOld = (prev: PlacedTile[]) => prev.filter((t) => t.id !== tile.id);
+    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+      // Dropped off-board — return to rack by removing from pendingTiles
+      setPendingTiles(removeOld);
+      return;
+    }
+    if (game.board[row][col].tile !== null) {
+      // Occupied committed cell — put back at original position
+      setBoardDraggingTileId(null);
+      return;
+    }
     if (tile.isBlank) {
+      setPendingTiles(removeOld);
       setSelectedTile(tile);
       setBlankPicker({ row, col });
     } else {
       setPendingTiles((prev) => {
-        if (prev.find((t) => t.row === row && t.col === col)) return prev;
-        return [...prev, { ...tile, row, col, isNew: true }];
+        const filtered = removeOld(prev);
+        if (filtered.find((t) => t.row === row && t.col === col)) return prev; // occupied pending cell — abort
+        return [...filtered, { ...tile, row, col, isNew: true }];
       });
     }
   }
 
   function handleDragCancel() {
     setDraggingTile(null);
+    setBoardDraggingTileId(null);
   }
 
   // Drag a tile that's already placed on the board to a new cell.
@@ -273,7 +288,9 @@ export default function GameScreen() {
     boardRef.current?.measure((_x, _y, _w, _h, bpx, bpy) => {
       boardPos.current = { x: bpx, y: bpy };
     });
-    setPendingTiles((prev) => prev.filter((t) => t.id !== tile.id));
+    // Keep tile in pendingTiles so the DraggablePendingTile component stays mounted
+    // and its PanResponder stays alive. Hide it visually via boardDraggingTileId.
+    setBoardDraggingTileId(tile.id);
     setDraggingTile(tile);
     setSelectedTile(null);
     dragXY.setValue({ x: pageX - 25, y: pageY - 25 });
@@ -482,6 +499,7 @@ export default function GameScreen() {
         isMyTurn={isMyTurn}
         boardRef={boardRef}
         lastMoveTiles={lastMoveTiles}
+        boardDraggingTileId={boardDraggingTileId}
         boardTileDragCallbacks={isMyTurn && game.status === 'active' ? {
           onDragStart: handleBoardTileDragStart,
           onDragMove: handleDragMove,
