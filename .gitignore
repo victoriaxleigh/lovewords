@@ -43,3 +43,9 @@ yarn-error.*
 
 # Local Netlify folder
 .netlify
+
+# Test coverage output
+coverage/
+
+# Preview build output
+dist-preview/
