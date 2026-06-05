@@ -49,3 +49,7 @@ coverage/
 
 # Preview build output
 dist-preview/
+
+# Playwright MCP artifacts (snapshots, console logs, screenshots)
+.playwright-mcp/
+lovewords-*.png

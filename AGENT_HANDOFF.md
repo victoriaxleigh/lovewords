@@ -465,7 +465,7 @@ Registration (`authService.ts`):
 - `getFormedWords(board, placedTiles)` → `string[]` — convenience wrapper
 
 ### `tiles.ts`
-- `createTileBag()` — standard WWF distribution (100 tiles: 9×A, 12×E, 2 blanks, etc.), shuffled
+- `createTileBag()` — standard WWF distribution (104 tiles: 9×A, 13×E, 5×S, 7×T, 2 blanks, etc.), shuffled. Note: previously a Scrabble-count/WWF-value hybrid (100 tiles); switched to pure WWF for a less punishing rack.
 - Tile IDs use `crypto.randomUUID()` — collision-proof across reloads and sessions. Native browser API, no polyfill needed.
 - `drawTiles(bag, count)` → `{ drawn, remaining }` — takes from front of array
 - `shuffle(arr)` — Fisher-Yates

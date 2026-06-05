@@ -4,15 +4,33 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
-  PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { Board, PlacedTile, Tile } from '../types';
 import { BOARD_SIZE } from '../engine/board';
 import { Colors } from '../utils/colors';
 import TileComponent from './TileComponent';
 
-export const CELL_SIZE = Math.floor((Dimensions.get('window').width - 8) / BOARD_SIZE);
+const DRAG_THRESHOLD = 5;
+
+// Phone gets ~25px cells (board fills the width). Desktop is capped so the board
+// doesn't sprawl across a 1400px window. Also constrained by vertical space so the
+// pinned bottom bar (rack + action row) doesn't overlap it.
+const MAX_CELL_SIZE = 36;
+const CHROME_HEIGHT = 320; // header + scoreboard + turn banner + rack + actions + padding
+
+function computeCellSize(windowWidth: number, windowHeight: number): number {
+  const widthBased = Math.floor((windowWidth - 8) / BOARD_SIZE);
+  const heightBased = Math.floor((windowHeight - CHROME_HEIGHT) / BOARD_SIZE);
+  return Math.max(20, Math.min(MAX_CELL_SIZE, widthBased, heightBased));
+}
+
+// Live cell size at call time — GameScreen uses this for drag-end coordinate math
+// so resizes are picked up correctly.
+export function getCellSize(): number {
+  if (typeof window === 'undefined') return MAX_CELL_SIZE;
+  return computeCellSize(window.innerWidth, window.innerHeight);
+}
 
 export type BoardTileDragCallbacks = {
   onDragStart: (tile: Tile, pageX: number, pageY: number) => void;
@@ -43,37 +61,82 @@ function DraggablePendingTile({
   dragCallbacks?: BoardTileDragCallbacks;
   isDragging?: boolean;
 }) {
+  const wrapRef = useRef<View>(null);
+  const tileRef = useRef(tile);
   const onTilePressRef = useRef(onTilePress);
   const dragCallbacksRef = useRef(dragCallbacks);
+  useEffect(() => { tileRef.current = tile; }, [tile]);
   useEffect(() => { onTilePressRef.current = onTilePress; }, [onTilePress]);
   useEffect(() => { dragCallbacksRef.current = dragCallbacks; }, [dragCallbacks]);
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_e, gs) => Math.abs(gs.dx) > 4 || Math.abs(gs.dy) > 4,
-      onPanResponderGrant: (e) => {
-        dragCallbacksRef.current?.onDragStart(tile, e.nativeEvent.pageX, e.nativeEvent.pageY);
-      },
-      onPanResponderMove: (e) => {
-        dragCallbacksRef.current?.onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
-      },
-      onPanResponderRelease: (e, gs) => {
-        const dist = Math.sqrt(gs.dx ** 2 + gs.dy ** 2);
-        if (dist >= 8) {
-          dragCallbacksRef.current?.onDragEnd(e.nativeEvent.pageX, e.nativeEvent.pageY, tile);
-        } else {
-          onTilePressRef.current();
-        }
-      },
-      onPanResponderTerminate: () => {
-        dragCallbacksRef.current?.onDragCancel();
-      },
-    })
-  ).current;
+  useEffect(() => {
+    const el = wrapRef.current as unknown as HTMLElement | null;
+    if (!el) return;
+
+    let startX = 0;
+    let startY = 0;
+    let dragStarted = false;
+    let activePointerId: number | null = null;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (activePointerId !== null) return;
+      activePointerId = e.pointerId;
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      startX = e.clientX;
+      startY = e.clientY;
+      dragStarted = false;
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerId !== activePointerId) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!dragStarted && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        dragStarted = true;
+        dragCallbacksRef.current?.onDragStart(tileRef.current, e.clientX, e.clientY);
+      }
+      if (dragStarted) {
+        e.preventDefault();
+        dragCallbacksRef.current?.onDragMove(e.clientX, e.clientY);
+      }
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerId !== activePointerId) return;
+      try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      if (dragStarted) {
+        dragCallbacksRef.current?.onDragEnd(e.clientX, e.clientY, tileRef.current);
+      } else {
+        onTilePressRef.current();
+      }
+      activePointerId = null;
+      dragStarted = false;
+    };
+    const onPointerCancel = (e: PointerEvent) => {
+      if (e.pointerId !== activePointerId) return;
+      if (dragStarted) dragCallbacksRef.current?.onDragCancel();
+      activePointerId = null;
+      dragStarted = false;
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerCancel);
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerup', onPointerUp);
+      el.removeEventListener('pointercancel', onPointerCancel);
+    };
+  }, []);
 
   return (
-    <View {...pan.panHandlers} style={isDragging ? { opacity: 0 } : undefined}>
+    <View
+      ref={wrapRef}
+      style={[
+        { userSelect: 'none' as any, touchAction: 'none' as any },
+        isDragging ? { opacity: 0 } : undefined,
+      ]}
+    >
       <TileComponent tile={tile} size={size} isNew />
     </View>
   );
@@ -91,11 +154,13 @@ export default function BoardComponent({
   board, pendingTiles, selectedTile, onCellPress, onTilePress, isMyTurn, boardRef,
   boardTileDragCallbacks, lastMoveTiles, boardDraggingTileId,
 }: Props) {
+  const { width, height } = useWindowDimensions();
+  const cellSize = computeCellSize(width, height);
   const pendingMap = new Map(pendingTiles.map((t) => [`${t.row},${t.col}`, t]));
 
   return (
     // No ScrollView — board is sized to fit the screen width exactly
-    <View style={styles.board} ref={boardRef}>
+    <View style={[styles.board, { alignSelf: 'center' }]} ref={boardRef}>
       {board.map((rowCells, row) => (
         <View key={row} style={styles.row}>
           {rowCells.map((cell, col) => {
@@ -114,28 +179,28 @@ export default function BoardComponent({
                 style={[
                   styles.cell,
                   {
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    backgroundColor: hasTile ? 'transparent' : canPlace ? Colors.emptyCell : bonusBg,
-                    borderColor: canPlace ? 'rgba(255,255,255,0.6)' : hasTile ? '#333' : '#3D1A28',
-                    borderWidth: canPlace ? 1.5 : 0.5,
+                    width: cellSize,
+                    height: cellSize,
+                    backgroundColor: hasTile ? 'transparent' : bonusBg,
+                    borderColor: hasTile ? '#333' : '#3D1A28',
+                    borderWidth: 0.5,
                   },
                 ]}
               >
                 {pending ? (
                   <DraggablePendingTile
                     tile={pending}
-                    size={CELL_SIZE - 2}
+                    size={cellSize - 2}
                     onTilePress={() => onTilePress?.(pending)}
                     dragCallbacks={boardTileDragCallbacks}
                     isDragging={boardDraggingTileId === pending.id}
                   />
                 ) : cell.tile ? (
-                  <TileComponent tile={cell.tile} size={CELL_SIZE - 2} disabled highlight={isLastMove} />
+                  <TileComponent tile={cell.tile} size={cellSize - 2} disabled highlight={isLastMove} />
                 ) : cell.bonus ? (
                   <Text style={[
                     styles.bonusText,
-                    { fontSize: CELL_SIZE * 0.22 },
+                    { fontSize: cellSize * 0.22 },
                     cell.bonus === 'DL' && styles.bonusTextDark,
                   ]}>
                     {BONUS_LABELS[cell.bonus]}
