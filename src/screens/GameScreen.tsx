@@ -18,7 +18,7 @@ import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
 import { isValidPlacement, BOARD_SIZE } from '../engine/board';
-import BoardComponent, { CELL_SIZE } from '../components/BoardComponent';
+import BoardComponent, { getCellSize } from '../components/BoardComponent';
 import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
 import LoveNotesModal from './LoveNotesModal';
@@ -53,6 +53,11 @@ export default function GameScreen() {
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
   const [boardDraggingTileId, setBoardDraggingTileId] = useState<string | null>(null);
+  // Tiles that just appeared in the rack (after swap or submit-draw) — briefly highlighted
+  // so the player can see what's new.
+  const [recentlyDrawnIds, setRecentlyDrawnIds] = useState<Set<string>>(new Set());
+  const prevRackIdsRef = useRef<Set<string>>(new Set());
+  const prevSideRef = useRef<number>(-1);
   const dragXY = useRef(new Animated.ValueXY()).current;
   const boardRef = useRef<View>(null);
   const boardPos = useRef({ x: 0, y: 0 });
@@ -156,6 +161,44 @@ export default function GameScreen() {
   const isMyTurn = isSolo || game?.currentTurn === myUid;
   const me = game?.players[currentSide];
   const partner = game?.players[1 - currentSide];
+
+  // Safety net: alert when a pending tile has coords that won't render on the board.
+  // These would silently filter the rack and disappear from view ("ghost" tile).
+  useEffect(() => {
+    const ghosts = pendingTiles.filter(
+      (t) =>
+        !Number.isFinite(t.row) ||
+        !Number.isFinite(t.col) ||
+        t.row < 0 ||
+        t.row >= BOARD_SIZE ||
+        t.col < 0 ||
+        t.col >= BOARD_SIZE
+    );
+    if (ghosts.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[lovewords] ghost pending tiles detected', ghosts);
+    }
+  }, [pendingTiles]);
+
+  // Flash a highlight on tiles that just appeared in the rack (after swap or post-submit draw).
+  // In solo mode, currentSide flips between moves and "me" becomes the other player —
+  // that whole rack is "new" but isn't actually a draw, so skip the highlight on side flip.
+  useEffect(() => {
+    if (!me) return;
+    const newIds = new Set(me.rack.map((t) => t.id));
+    const sideChanged = prevSideRef.current !== currentSide;
+    prevSideRef.current = currentSide;
+    if (sideChanged || prevRackIdsRef.current.size === 0) {
+      prevRackIdsRef.current = newIds;
+      return;
+    }
+    const added = [...newIds].filter((id) => !prevRackIdsRef.current.has(id));
+    prevRackIdsRef.current = newIds;
+    if (added.length === 0) return;
+    setRecentlyDrawnIds(new Set(added));
+    const t = setTimeout(() => setRecentlyDrawnIds(new Set()), 2200);
+    return () => clearTimeout(t);
+  }, [me?.rack, currentSide]);
   // activeUid for non-solo submit calls only
   const activeUid = game?.currentTurn ?? myUid;
   const isFirstMove = game?.moves.length === 0;
@@ -248,11 +291,20 @@ export default function GameScreen() {
     setDraggingTile(null);
     setBoardDraggingTileId(null);
     if (!game || !isMyTurn) return;
-    const col = Math.floor((pageX - boardPos.current.x - 2) / CELL_SIZE);
-    const row = Math.floor((pageY - boardPos.current.y - 2) / CELL_SIZE);
+    const cellSize = getCellSize();
+    const col = Math.floor((pageX - boardPos.current.x - 2) / cellSize);
+    const row = Math.floor((pageY - boardPos.current.y - 2) / cellSize);
     // Remove from old position (no-op if this was a rack drag)
     const removeOld = (prev: PlacedTile[]) => prev.filter((t) => t.id !== tile.id);
-    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+    // Treat non-finite (NaN/Infinity) coords as off-board too — otherwise the row/col
+    // range check passes (NaN comparisons are false) and we'd add a tile with bad coords
+    // to pendingTiles, where it filters the rack but never renders on the board.
+    const validCoords = Number.isFinite(row) && Number.isFinite(col);
+    if (!validCoords || row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+      if (!validCoords) {
+        // eslint-disable-next-line no-console
+        console.warn('[lovewords] drag drop with bad coords', { pageX, pageY, boardPos: boardPos.current, cellSize, tile });
+      }
       // Dropped off-board — return to rack by removing from pendingTiles
       setPendingTiles(removeOld);
       return;
@@ -336,25 +388,32 @@ export default function GameScreen() {
     const { total } = scoreMove(game.board, pendingTiles);
 
     setSubmitting(true);
-    let holdForRealtime = false;
+    // Solo: arm the realtime-clear BEFORE awaiting. The realtime fetch can resolve
+    // before the update's own await does (the channel fires inside the update);
+    // if the ref isn't set yet, the callback skips its clear and the spinner sticks.
+    let holdForRealtime = isSolo;
+    if (isSolo) soloWaitingRealtimeRef.current = true;
     try {
       const result = isSolo
         ? await submitSoloMove(gameId, game, currentSide, pendingTiles)
         : await submitMove(gameId, game, activeUid, pendingTiles);
       if (!result.success) {
         setSubmitError(result.error ?? 'Something went wrong — try again.');
+        if (isSolo) {
+          soloWaitingRealtimeRef.current = false;
+          holdForRealtime = false;
+        }
       } else {
         if (!isSolo) setPendingTiles([]);
-        // Solo: keep submitting=true so tiles can't be placed before the RT rack update arrives
-        if (isSolo) {
-          holdForRealtime = true;
-          soloWaitingRealtimeRef.current = true;
-        }
         setSubmitSuccess(`✅ ${words.join(', ')} — +${total} pts`);
         setTimeout(() => setSubmitSuccess(null), 3000);
       }
     } catch (e: any) {
       setSubmitError(e?.message ?? 'Network error — try again.');
+      if (isSolo) {
+        soloWaitingRealtimeRef.current = false;
+        holdForRealtime = false;
+      }
     } finally {
       if (!holdForRealtime) setSubmitting(false);
     }
@@ -378,25 +437,32 @@ export default function GameScreen() {
     setSwapMode(true);
   }
 
-  // Tap a single tile in swap mode → immediately discard it and draw a replacement
-  async function handleSwapTileToggle(tileId: string) {
+  // Tap a tile in swap mode → toggle it in the selection list (no DB call yet).
+  function handleSwapTileSelect(tileId: string) {
     if (!game || swapping) return;
-    if (game.bag.length === 0) {
-      setSubmitError('No tiles left in the bag to swap.');
-      setSwapMode(false);
+    setSwapSelectedIds((prev) =>
+      prev.includes(tileId) ? prev.filter((id) => id !== tileId) : [...prev, tileId]
+    );
+  }
+
+  // Confirm button — commits all selected tiles to a single swap operation.
+  async function handleConfirmSwap() {
+    if (!game || swapping || swapSelectedIds.length === 0) return;
+    if (game.bag.length < swapSelectedIds.length) {
+      setSubmitError(
+        `Only ${game.bag.length} tile${game.bag.length === 1 ? '' : 's'} left in the bag — can't swap ${swapSelectedIds.length}.`
+      );
       return;
     }
     setSwapping(true);
+    setSubmitError(null);
     try {
       const result = isSolo
-        ? await swapSoloTiles(gameId, game, currentSide, [tileId])
-        : await swapTiles(gameId, game, activeUid, [tileId]);
+        ? await swapSoloTiles(gameId, game, currentSide, swapSelectedIds)
+        : await swapTiles(gameId, game, activeUid, swapSelectedIds);
       if (!result.success) {
         setSubmitError(result.error ?? 'Could not swap — try again.');
       } else {
-        // Solo swap returns updatedGame for immediate local state update.
-        // Prevents the UI from getting stuck if the RT update is delayed.
-        // The RT update will arrive later and re-sync (harmless).
         const updated = (result as { updatedGame?: Game }).updatedGame;
         if (updated) setGame(updated);
       }
@@ -508,13 +574,19 @@ export default function GameScreen() {
         } : undefined}
       />
 
+      </ScrollView>
+
+      {/* Rack + action row pinned outside ScrollView so Submit is always reachable */}
+      <View style={styles.bottomBar}>
+
       {/* Tile rack — behaviour switches based on swapMode; only one rack ever renders */}
       <TileRack
         tiles={me?.rack.filter((t) => !pendingTiles.find((p) => p.id === t.id)) ?? []}
         selectedTileId={swapMode ? null : selectedTile?.id ?? null}
-        onTilePress={swapMode ? (t) => handleSwapTileToggle(t.id) : handleRackTilePress}
+        onTilePress={swapMode ? (t) => handleSwapTileSelect(t.id) : handleRackTilePress}
         disabled={!isMyTurn || game.status !== 'active'}
         swapSelectedIds={swapSelectedIds}
+        recentlyDrawnIds={recentlyDrawnIds}
         draggingTileId={swapMode ? null : draggingTile?.id ?? null}
         dragCallbacks={swapMode ? undefined : {
           onDragStart: handleDragStart,
@@ -555,15 +627,38 @@ export default function GameScreen() {
           {swapMode ? (
             <View>
               <Text style={styles.hint}>
-                {swapping ? 'Drawing your new tile…' : 'Tap a tile above to discard it and draw a replacement'}
+                {swapping
+                  ? 'Drawing your new tiles…'
+                  : swapSelectedIds.length === 0
+                  ? 'Tap tiles to mark them for swap, then Confirm'
+                  : `${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'} selected — tap again to deselect`}
               </Text>
               <View style={styles.actions}>
                 <TouchableOpacity
                   style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
-                  onPress={() => setSwapMode(false)}
+                  onPress={() => {
+                    setSwapMode(false);
+                    setSwapSelectedIds([]);
+                  }}
                   disabled={swapping}
                 >
                   <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    (swapSelectedIds.length === 0 || swapping) && styles.actionBtnDisabled,
+                  ]}
+                  onPress={handleConfirmSwap}
+                  disabled={swapSelectedIds.length === 0 || swapping}
+                >
+                  {swapping ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.actionBtnText}>
+                      Confirm{swapSelectedIds.length > 0 ? ` (${swapSelectedIds.length})` : ''}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -610,7 +705,7 @@ export default function GameScreen() {
         </View>
       )}
 
-      </ScrollView>
+      </View>
 
       {/* Floating tile during drag — outside ScrollView so it stays fixed on screen */}
       {draggingTile && (
@@ -683,7 +778,12 @@ export default function GameScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 16 },
+  scrollContent: { paddingBottom: 8 },
+  bottomBar: {
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',

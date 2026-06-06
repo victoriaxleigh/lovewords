@@ -45,8 +45,8 @@ describe('swap tiles logic', () => {
     const { drawn: rack, remaining } = drawTiles(bag, 7);
     const idsToSwap = [rack[0].id, rack[1].id, rack[2].id];
     const { newBag } = performSwap(remaining, rack, idsToSwap);
-    // bag had (100-7)=93 tiles, we return 3 and draw 3, net stays 93
-    expect(newBag).toHaveLength(93);
+    // bag had (104-7)=97 tiles, we return 3 and draw 3, net stays 97
+    expect(newBag).toHaveLength(97);
   });
 
   test('throws when bag has fewer than 7 tiles', () => {

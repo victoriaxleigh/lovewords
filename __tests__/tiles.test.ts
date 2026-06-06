@@ -1,9 +1,9 @@
 import { createTileBag, drawTiles, exchangeTiles, shuffle } from '../src/engine/tiles';
 
 describe('Tile Bag', () => {
-  test('creates exactly 100 tiles', () => {
+  test('creates exactly 104 tiles (WWF distribution)', () => {
     const bag = createTileBag();
-    expect(bag).toHaveLength(100);
+    expect(bag).toHaveLength(104);
   });
 
   test('contains exactly 2 blank tiles', () => {
@@ -12,10 +12,10 @@ describe('Tile Bag', () => {
     expect(blanks).toHaveLength(2);
   });
 
-  test('contains exactly 12 E tiles', () => {
+  test('contains exactly 13 E tiles (WWF distribution)', () => {
     const bag = createTileBag();
     const eTiles = bag.filter((t) => t.letter === 'E');
-    expect(eTiles).toHaveLength(12);
+    expect(eTiles).toHaveLength(13);
   });
 
   test('contains exactly 1 Z tile worth 10 points', () => {
@@ -29,7 +29,7 @@ describe('Tile Bag', () => {
     const bag = createTileBag();
     const ids = bag.map((t) => t.id);
     const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(100);
+    expect(uniqueIds.size).toBe(104);
   });
 
   test('blank tiles are worth 0 points', () => {
@@ -44,7 +44,7 @@ describe('drawTiles', () => {
     const bag = createTileBag();
     const { drawn, remaining } = drawTiles(bag, 7);
     expect(drawn).toHaveLength(7);
-    expect(remaining).toHaveLength(93);
+    expect(remaining).toHaveLength(97);
   });
 
   test('drawn tiles are removed from remaining', () => {
@@ -58,13 +58,13 @@ describe('drawTiles', () => {
     const bag = createTileBag();
     const { drawn, remaining } = drawTiles(bag, 0);
     expect(drawn).toHaveLength(0);
-    expect(remaining).toHaveLength(100);
+    expect(remaining).toHaveLength(104);
   });
 
   test('drawing all tiles leaves empty bag', () => {
     const bag = createTileBag();
-    const { drawn, remaining } = drawTiles(bag, 100);
-    expect(drawn).toHaveLength(100);
+    const { drawn, remaining } = drawTiles(bag, 104);
+    expect(drawn).toHaveLength(104);
     expect(remaining).toHaveLength(0);
   });
 });
@@ -83,13 +83,13 @@ describe('exchangeTiles', () => {
     const { drawn: rack, remaining } = drawTiles(bag, 7);
     const tilesToExchange = rack.slice(0, 3);
     const { newBag } = exchangeTiles(rack, tilesToExchange, remaining);
-    // Bag should have 93 (remaining) + 3 (returned) - 3 (drawn) = 93
-    expect(newBag).toHaveLength(93);
+    // Bag had (104-7)=97 tiles, we return 3 and draw 3, net stays 97
+    expect(newBag).toHaveLength(97);
   });
 
   test('throws if not enough tiles in bag', () => {
     const bag = createTileBag();
-    const { drawn: rack, remaining } = drawTiles(bag, 97); // only 3 left
+    const { drawn: rack, remaining } = drawTiles(bag, 101); // only 3 left
     const tilesToExchange = rack.slice(0, 7);
     expect(() => exchangeTiles(rack, tilesToExchange, remaining)).toThrow();
   });

@@ -2,6 +2,52 @@
 
 ---
 
+## Session 6 — 2026-06-05
+
+### Tile distribution
+
+**Switched from Scrabble-counts/WWF-values hybrid to pure WWF distribution (100 → 104 tiles).** The previous bag was Scrabble distribution with WWF point values — fewer S/T/H/D combined with high penalty values on rough letters made racks feel punishing. Pure WWF gives more common letters (E 12→13, T 6→7, S 4→5, H 2→4, D 4→5; I 9→8, N 6→5) so racks build words more easily; WWF values (V=5, J/Z=10, B/C/F/M=4) preserve the upside on rare tiles. Initial bag count after dealing is now 90 (was 86). Updated tile + swap engine tests.
+
+### Drag/drop rewrite
+
+**Replaced PanResponder with native pointer events in `TileRack` and `BoardComponent`'s `DraggablePendingTile`.** The PanResponder model added responder negotiation latency, lost gestures to ancestor `ScrollView`s, and required mounting-time closures that grew stale. The new implementation attaches `pointerdown` / `pointermove` / `pointerup` / `pointercancel` listeners directly to the wrapper `View`'s DOM node via `useEffect` + `ref`, uses `setPointerCapture` to lock the gesture to the source element until release, and sets `touch-action: none` on the wrapper so mobile browsers don't try to scroll/zoom mid-drag. 5px movement threshold distinguishes tap from drag. The same code path covers mouse, touch, and pen — important for the planned PWA on mobile.
+
+### Game-screen layout
+
+**Board cell size now adapts to viewport.** Replaced module-load `Dimensions.get('window').width` with `useWindowDimensions()` inside `BoardComponent`. Cells are capped at 36px and additionally constrained by available height (`(windowHeight - 320) / 15`) so the board never overlaps the pinned bottom bar. `GameScreen` uses a new `getCellSize()` helper for drag-end coordinate math so resizes are picked up live.
+
+**Rack + action row pinned outside `ScrollView`.** The submit button used to require scrolling on shorter windows. The rack and action buttons now sit in a `bottomBar` view below the `ScrollView`; only the board area scrolls if anything overflows. Submit is always reachable.
+
+**Empty cells keep their bonus color when a tile is selected.** Previously `canPlace` flipped every empty cell to dark maroon, hiding the TW/DW/TL/DL markers exactly when the player most needed them. The cell-highlight border was also removed — it lit up every empty cell uniformly, which carried no information.
+
+### Bug fixes
+
+**Submit spinner stuck in solo mode**
+`handleSubmit` set `soloWaitingRealtimeRef.current = true` *after* awaiting `submitSoloMove`, but the realtime callback (firing from inside the mock or via Supabase websocket) could resolve `fetchGame → onUpdate` *before* the await returned. The callback then checked the ref, saw `false`, and skipped clearing `submitting` — and no further realtime events ever fired, so the spinner ran forever. Fixed by setting the ref *before* the await; cleared on failure paths.
+
+**Blank tile didn't render its assigned letter**
+`TileComponent` rendered `tile.isBlank ? '★' : tile.letter`, so a blank that had been assigned a letter via the picker still showed ★ on the board. Now renders `tile.letter || '★'` (showing the assigned letter in italic so it's still distinguishable as a blank), and the accessibility label says "Blank tile set to X".
+
+### Swap UX
+
+**Multi-select swap with confirm and new-tile highlight.** The previous behaviour was single-tile-immediate (tap a tile in swap mode → instant swap), which surprised players who expected to mark multiple tiles for swap. Reworked into a two-step flow: tap rack tiles in swap mode to toggle them in `swapSelectedIds` (visible selection highlight), then a **Confirm (N)** button commits all selected tiles in a single `swapSoloTiles` / `swapTiles` call. Cancel still backs out.
+
+Newly drawn tiles (after a swap *or* a submit-draw) flash with a gold border via the existing `highlight` prop on `TileComponent`. Detection is a `useEffect` that diffs the rack's tile IDs against the previous render via a ref; new IDs get added to `recentlyDrawnIds: Set<string>` for 2.2s. Solo mode suppresses the flash on side flips (after a move the rack switches to the other player's tiles, which would otherwise all read as "newly drawn").
+
+### Dev tooling
+
+**In-memory mock Supabase client (`?dev=1`, dev builds only).** Added `src/supabase/mockClient.ts` — a self-contained mock of the Supabase JS API surface used by the app (`auth`, `from().insert/select/update/delete/eq/or/order/single`, `channel().on().subscribe()`, `removeChannel`). `src/supabase/config.ts` swaps the real client for this mock when `?dev=1` is in the URL **and** `__DEV__` is true; the mock is `require()`d inside the `__DEV__` branch so Metro tree-shakes the entire module out of production builds (`npx expo export`). Auto-signs you in as `dev@local` and keeps games, profiles, and love notes in tab-local memory. Lets a dev exercise the UI without hitting real Supabase, without creating throwaway accounts, and without dealing with email-confirmation rate limits.
+
+### Defensive checks
+
+`handleDragEnd` now treats non-finite (`NaN`/`Infinity`) row/col as off-board and removes the tile from `pendingTiles` (treating it like a return-to-rack); logs `[lovewords] drag drop with bad coords` if it happens. A new `useEffect` in `GameScreen` watches `pendingTiles` and warns `[lovewords] ghost pending tiles detected` if any entry has out-of-range coordinates — meant to catch a reproducible-but-unexplained "lost letter" report where a placed tile vanished from both board and rack. Recall recovers it; defensive logging will help pin the source next time it happens.
+
+### Tests
+
+All 65 engine tests pass against the new bag size and distribution. Updated count assertions in `tiles.test.ts` (E count, total = 104, draw remainders, exchange remainders) and `swap.test.ts` (bag remainder).
+
+---
+
 ## Session 5 — 2026-05-15
 
 ### New Features

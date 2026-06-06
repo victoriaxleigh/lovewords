@@ -211,6 +211,15 @@ The submit path (`handleSubmit`) still uses `holdForRealtime` / `soloWaitingReal
 | 18 | sendLoveNote notified on DB failure | `gameService.ts` | ✅ Fixed | Session 5 |
 | 19 | No scrolling on web game screen | `GameScreen.tsx` | ✅ Fixed | Session 5 |
 | 20 | Tiles unplaceable on web (drag-only, no mouse fallback) | `GameScreen.tsx`, `BoardComponent.tsx` | ✅ Fixed | Session 5 |
+| 21 | Board zoomed in on desktop / wrong on resize | `BoardComponent.tsx`, `GameScreen.tsx` | ✅ Fixed | Session 6 |
+| 22 | Submit spinner stuck in solo (race: realtime fired before ref set) | `GameScreen.tsx` | ✅ Fixed | Session 6 |
+| 23 | Drag unreliable / multi-click required (PanResponder latency) | `TileRack.tsx`, `BoardComponent.tsx` | ✅ Fixed | Session 6 |
+| 24 | Bonus colors disappear when tile is selected | `BoardComponent.tsx` | ✅ Fixed | Session 6 |
+| 25 | Blank tile doesn't show assigned letter | `TileComponent.tsx` | ✅ Fixed | Session 6 |
+| 26 | Swap immediately ends turn — needs multi-select + confirm | `GameScreen.tsx`, `TileRack.tsx` | ✅ Fixed | Session 6 |
+| 27 | Submit button requires scrolling on shorter windows | `GameScreen.tsx` | ✅ Fixed | Session 6 |
+| 28 | Tile distribution hybrid (Scrabble counts + WWF values) felt punishing | `engine/tiles.ts` | ✅ Fixed | Session 6 |
+| 29 | Lost tile dragging pending tile from board (rare) | `GameScreen.tsx` | 🟠 Mitigated | Session 6 — defensive logging added; root cause not yet reproduced |
 
 ---
 

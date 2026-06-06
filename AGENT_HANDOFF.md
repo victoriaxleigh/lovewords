@@ -79,24 +79,28 @@ C:\Users\victo\lovewords\
 ## Credentials & Config
 
 ### Supabase (hardcoded in `src/supabase/config.ts`)
-```ts
-const SUPABASE_URL = 'https://rkgasiixoyhtxlxfchbb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // long JWT
-```
-These are the public-safe anon credentials. The full key is in the file.
+The Supabase URL and anon key are committed to `src/supabase/config.ts`. These
+are intentionally public — the anon key only grants what RLS policies allow,
+and the URL must be embedded in the client. Netlify's secrets scanner will
+flag them on deploy unless they're listed in `SECRETS_SCAN_OMIT_KEYS` (see
+`netlify.toml`).
 
 ### VAPID Keys
-- **Public key** (hardcoded in `src/utils/pushSubscription.ts`):
-  `BAonmTB4A44-9UCHM-GrM3itorKGP3OarN47r3K0vR2mI6qARnjSrXZeUQdFnR5A8BBdTLPPPcTQs_xBlQJ-3BM`
-- **Private key** (only in Netlify env vars, never in frontend code):
-  `H3V6O_WXCbD7a-57U7wgC3lbjiShMbs8m1GyIgVgMkw`
+- **Public key** is hardcoded in `src/utils/pushSubscription.ts`. It's public
+  by design (subscribe-side of the Web Push keypair) and must be in the
+  client bundle.
+- **Private key** lives only in the Netlify env var `VAPID_PRIVATE_KEY` (used
+  by `netlify/functions/notify.js`). **Never commit this value.** If it ever
+  appears in a commit, rotate the keypair (`web-push generate-vapid-keys`),
+  update the public key in `pushSubscription.ts`, and update both VAPID env
+  vars in Netlify.
 
 ### Netlify Environment Variables (for `notify.js` serverless function)
 ```
-VAPID_PUBLIC_KEY=BAonmTB4...
-VAPID_PRIVATE_KEY=H3V6O_W...
+VAPID_PUBLIC_KEY=<public key — same value as in pushSubscription.ts>
+VAPID_PRIVATE_KEY=<private key — REDACTED, see Netlify env settings>
 VAPID_EMAIL=<any email, identifies sender to push services>
-SUPABASE_URL=https://rkgasiixoyhtxlxfchbb.supabase.co
+SUPABASE_URL=<same as src/supabase/config.ts>
 SUPABASE_SERVICE_KEY=<service role key, NOT anon key — has full DB access>
 ```
 
@@ -465,7 +469,7 @@ Registration (`authService.ts`):
 - `getFormedWords(board, placedTiles)` → `string[]` — convenience wrapper
 
 ### `tiles.ts`
-- `createTileBag()` — standard WWF distribution (100 tiles: 9×A, 12×E, 2 blanks, etc.), shuffled
+- `createTileBag()` — standard WWF distribution (104 tiles: 9×A, 13×E, 5×S, 7×T, 2 blanks, etc.), shuffled. Note: previously a Scrabble-count/WWF-value hybrid (100 tiles); switched to pure WWF for a less punishing rack.
 - Tile IDs use `crypto.randomUUID()` — collision-proof across reloads and sessions. Native browser API, no polyfill needed.
 - `drawTiles(bag, count)` → `{ drawn, remaining }` — takes from front of array
 - `shuffle(arr)` — Fisher-Yates

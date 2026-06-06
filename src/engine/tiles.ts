@@ -1,27 +1,33 @@
 import { Tile } from '../types';
 
-// Standard Scrabble/WWF tile distribution
+// Words With Friends tile distribution + values (104 tiles total).
+// Previously this was a hybrid (Scrabble counts + WWF values), which felt
+// punishing — too few S/T/H/D combined with high penalty values on rough
+// letters. Pure WWF gives more common letters so racks build words more
+// easily; the WWF values (V=5, J/Z=10, B/C/F/M=4) still reward landing
+// the rare tiles. Difference from Scrabble: D 4→5, E 12→13, H 2→4,
+// I 9→8, N 6→5, S 4→5, T 6→7.
 const TILE_DISTRIBUTION: { letter: string; value: number; count: number }[] = [
   { letter: 'A', value: 1, count: 9 },
   { letter: 'B', value: 4, count: 2 },
   { letter: 'C', value: 4, count: 2 },
-  { letter: 'D', value: 2, count: 4 },
-  { letter: 'E', value: 1, count: 12 },
+  { letter: 'D', value: 2, count: 5 },
+  { letter: 'E', value: 1, count: 13 },
   { letter: 'F', value: 4, count: 2 },
   { letter: 'G', value: 3, count: 3 },
-  { letter: 'H', value: 3, count: 2 },
-  { letter: 'I', value: 1, count: 9 },
+  { letter: 'H', value: 3, count: 4 },
+  { letter: 'I', value: 1, count: 8 },
   { letter: 'J', value: 10, count: 1 },
   { letter: 'K', value: 5, count: 1 },
   { letter: 'L', value: 2, count: 4 },
   { letter: 'M', value: 4, count: 2 },
-  { letter: 'N', value: 2, count: 6 },
+  { letter: 'N', value: 2, count: 5 },
   { letter: 'O', value: 1, count: 8 },
   { letter: 'P', value: 4, count: 2 },
   { letter: 'Q', value: 10, count: 1 },
   { letter: 'R', value: 1, count: 6 },
-  { letter: 'S', value: 1, count: 4 },
-  { letter: 'T', value: 1, count: 6 },
+  { letter: 'S', value: 1, count: 5 },
+  { letter: 'T', value: 1, count: 7 },
   { letter: 'U', value: 2, count: 4 },
   { letter: 'V', value: 5, count: 2 },
   { letter: 'W', value: 4, count: 2 },

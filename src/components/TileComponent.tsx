@@ -26,9 +26,13 @@ export default function TileComponent({
   const fontSize = size * 0.42;
   const valueFontSize = size * 0.22;
 
-  const label = tile.isBlank
-    ? 'Blank tile'
-    : `${tile.letter}, ${tile.value} point${tile.value === 1 ? '' : 's'}`;
+  const displayLetter = tile.letter !== '' ? tile.letter : '★';
+  const label =
+    tile.isBlank && tile.letter === ''
+      ? 'Blank tile'
+      : tile.isBlank
+      ? `Blank tile set to ${tile.letter}`
+      : `${tile.letter}, ${tile.value} point${tile.value === 1 ? '' : 's'}`;
 
   return (
     <TouchableOpacity
@@ -60,8 +64,8 @@ export default function TileComponent({
         },
       ]}
     >
-      <Text style={[styles.letter, { fontSize }]}>
-        {tile.isBlank ? '★' : tile.letter}
+      <Text style={[styles.letter, tile.isBlank && tile.letter !== '' && styles.blankAssigned, { fontSize }]}>
+        {displayLetter}
       </Text>
       {!tile.isBlank && (
         <Text style={[styles.value, { fontSize: valueFontSize }]}>{tile.value}</Text>
@@ -85,6 +89,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.tileText,
     letterSpacing: -0.5,
+  },
+  // Subtle italic so assigned blanks read as "this is a blank, not a real tile"
+  blankAssigned: {
+    fontStyle: 'italic',
   },
   value: {
     position: 'absolute',
