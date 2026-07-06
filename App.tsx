@@ -10,11 +10,15 @@ import GameScreen from './src/screens/GameScreen';
 import { Colors } from './src/utils/colors';
 import { Player } from './src/types';
 import { registerPushSubscription } from './src/utils/pushSubscription';
+import { setupBadgeClearing } from './src/utils/appBadge';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { user, loading } = useAuth();
+
+  // Clear the Home Screen app-icon badge whenever the app is open/foregrounded.
+  useEffect(() => setupBadgeClearing(), []);
 
   // When user logs in, register this device for push notifications
   useEffect(() => {

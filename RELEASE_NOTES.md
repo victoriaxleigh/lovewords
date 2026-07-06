@@ -2,6 +2,34 @@
 
 ---
 
+## Session 7 — 2026-07-06
+
+### iPhone Home Screen icon + PWA install
+
+**New app logo.** Added `assets/logo/icon.svg` — a white Words-with-Friends-style tile with a pink heart and an "8" point value, on a pink gradient (full-bleed so iOS can mask the corners). `scripts/generate-icons.js` (uses `sharp`, added as a devDependency) rasterizes it into `public/apple-touch-icon.png` (180), `public/icon-192.png`, `public/icon-512.png`, `public/icon-512-maskable.png`, and `public/favicon-32.png`, and also regenerates `assets/icon.png` / `assets/adaptive-icon.png` (1024) so native/EAS builds stay in sync. Re-run with `npm run icons` after editing the SVG.
+
+**Made the web app an installable PWA.** Added `public/manifest.json` (name, standalone display, theme color, icon set). Expo's generated `dist/index.html` template doesn't include the iOS/PWA `<head>` tags, so `scripts/inject-web-meta.js` injects them post-export (`apple-touch-icon` link, `manifest` link, `apple-mobile-web-app-capable`/`-title`/`-status-bar-style`, `theme-color`). It's idempotent. New `npm run build:web` script chains the three steps in order: generate icons → `expo export` → inject meta. **Deploys must now use `npm run build:web`, not a bare `expo export`**, or the tags are missing.
+
+### Home Screen notification badge
+
+**The app icon now shows a count badge when notifications arrive.** Uses the Badging API (`navigator.setAppBadge` / `clearAppBadge`). `public/sw.js`'s push handler sets the badge to `getNotifications().length + 1` when a push is received (works with the app closed). `src/utils/appBadge.ts` → `setupBadgeClearing()` (wired into `App.tsx`) clears the badge and dismisses tray notifications whenever the app is opened or refocused — the "clear when I open the app" model. All calls are feature-guarded and best-effort (no-op / never throw on unsupported platforms).
+
+**Constraints (documented in `AGENT_HANDOFF.md`):** the badge only appears on an app **added to the iPhone Home Screen** (installed PWA), on **iOS 16.4+**, with notification permission granted. It never shows in a Safari tab.
+
+### Bug fix
+
+**Supabase anon key was split across two lines — build broke.** `src/supabase/config.ts` had a stray newline in the middle of the `SUPABASE_ANON_KEY` JWT string (line 5→6), an unterminated-string syntax error that failed `expo export`. The live site was still serving an older bundle from before the break, masking it. Joined the key back onto one line.
+
+### Tests
+
+Re-ran `npx jest` (from the project dir) — all **65 engine tests pass** across `board`, `scoring`, `tiles`, `swap`, `dictionary`. No engine files were touched this session; icon/badge/PWA work is all build-tooling and web-shell.
+
+### Deployed
+
+`npm run build:web` + `netlify deploy --prod` → live at `https://lovewords1234.netlify.app`. Verified the production site serves all six head tags and returns 200 for `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and `manifest.json`.
+
+---
+
 ## Session 6 — 2026-06-05
 
 ### Tile distribution

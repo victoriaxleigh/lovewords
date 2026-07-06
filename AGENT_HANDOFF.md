@@ -1,6 +1,6 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-05-15 (Session 5)
+> Last updated: 2026-07-06 (Session 7)
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app for a couple to play async online.
@@ -118,9 +118,16 @@ SUPABASE_SERVICE_KEY=...
 
 ```bash
 cd C:\Users\victo\lovewords
-npx expo export --platform web        # builds to dist/
+npm run build:web                             # icons + expo export + inject PWA meta → dist/
 netlify deploy --prod --dir=dist --no-build   # deploy
 ```
+
+**⚠️ Use `npm run build:web`, NOT a bare `npx expo export`.** The bare export does
+NOT add the iOS Home Screen / PWA tags. `build:web` runs three steps in order:
+1. `scripts/generate-icons.js` — rasterizes `assets/logo/icon.svg` → PNGs in `public/`
+2. `expo export --platform web` — copies `public/*` into `dist/` root
+3. `scripts/inject-web-meta.js` — injects apple-touch-icon / manifest / apple-mobile-web-app
+   meta into `dist/index.html` (Expo's generated template omits these). Idempotent.
 
 **Pitfalls:**
 - `--no-build` is required — without it, Netlify CLI tries to install extensions and 403s
@@ -438,6 +445,48 @@ Multiplayer swap clears state immediately in `finally` (unchanged).
 - Fails silently everywhere — push errors never break game actions
 - `node_bundler = "nft"` in `netlify.toml` is required for `web-push` to bundle correctly (esbuild fails)
 - Push subscription is stored one-per-user (upsert on conflict `user_id`)
+
+---
+
+## App Icon & Home Screen Badge (iPhone)
+
+Added Session 7 (2026-07-06). Makes LoveWords installable to the iPhone Home
+Screen with a custom icon and a notification count badge on the tile.
+
+### Logo
+- **Source of truth:** `assets/logo/icon.svg` — a white WWF-style tile with a pink
+  heart and an "8" point value, on a pink gradient (full-bleed so iOS can mask the
+  corners). Edit this SVG, then re-run `npm run icons` to regenerate all PNGs.
+- `scripts/generate-icons.js` (sharp) renders it into:
+  - `public/apple-touch-icon.png` (180) — iOS Home Screen icon
+  - `public/icon-192.png`, `public/icon-512.png`, `public/icon-512-maskable.png` — PWA manifest
+  - `public/favicon-32.png` — browser tab
+  - `assets/icon.png`, `assets/adaptive-icon.png` (1024) — kept in sync for native/EAS builds
+- `public/manifest.json` — makes it an installable standalone PWA (name, theme, icons).
+- iOS auto-detects `/apple-touch-icon.png` at the site root; the `<link>` + manifest
+  + `apple-mobile-web-app-*` meta are injected into `dist/index.html` by
+  `scripts/inject-web-meta.js` at build time (Expo's template omits them).
+
+### Badge (the "1" on the icon)
+Uses the **Badging API** (`navigator.setAppBadge` / `clearAppBadge`).
+
+**Hard requirements — badge shows nothing otherwise:**
+- App must be **Added to Home Screen** (installed PWA), NOT a Safari tab
+- **iOS 16.4+**
+- Notification permission granted (the existing push flow requests it)
+
+**Model = "clear when I open the app":**
+- **Increment:** `public/sw.js` push handler sets the badge to
+  `getNotifications().length + 1` when a push arrives (works with the app closed).
+- **Clear:** `src/utils/appBadge.ts` → `setupBadgeClearing()` (wired in `App.tsx`)
+  calls `clearAppBadge()` + closes tray notifications on load and on focus/visibility.
+- All calls are feature-guarded and best-effort — no-op on unsupported platforms,
+  never throw, never break game actions.
+
+**Testing note:** the badge can ONLY be verified on a real iPhone with the app
+added to the Home Screen. It will never appear in desktop Safari or a normal
+mobile Safari tab. Full flow to test: install to Home Screen → grant notifications
+→ have the partner make a move while the app is closed → badge appears → open app → clears.
 
 ---
 

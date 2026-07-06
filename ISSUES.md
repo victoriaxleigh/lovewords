@@ -1,6 +1,6 @@
 # Lovewords — Active Bug & UX Issues
 
-> Updated 2026-05-15 (Session 5). Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> Updated 2026-07-06 (Session 7). Pass this to the next agent alongside `AGENT_HANDOFF.md`.
 > All file paths are relative to `C:\Users\victo\lovewords\`.
 > ✅ = resolved  🔴 = critical  🟠 = high  🟡 = medium
 
@@ -220,6 +220,9 @@ The submit path (`handleSubmit`) still uses `holdForRealtime` / `soloWaitingReal
 | 27 | Submit button requires scrolling on shorter windows | `GameScreen.tsx` | ✅ Fixed | Session 6 |
 | 28 | Tile distribution hybrid (Scrabble counts + WWF values) felt punishing | `engine/tiles.ts` | ✅ Fixed | Session 6 |
 | 29 | Lost tile dragging pending tile from board (rare) | `GameScreen.tsx` | 🟠 Mitigated | Session 6 — defensive logging added; root cause not yet reproduced |
+| 30 | Supabase anon key split across two lines — build syntax error | `src/supabase/config.ts` | ✅ Fixed | Session 7 |
+| 31 | No Home Screen icon / not installable as a PWA | `assets/logo/`, `public/manifest.json`, `scripts/` | ✅ Added | Session 7 |
+| 32 | No notification badge on Home Screen icon | `public/sw.js`, `src/utils/appBadge.ts`, `App.tsx` | ✅ Added | Session 7 |
 
 ---
 
