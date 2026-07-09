@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Tile } from '../types';
 import TileComponent from './TileComponent';
 import { Colors } from '../utils/colors';
@@ -23,6 +23,7 @@ type Props = {
   recentlyDrawnIds?: Set<string>;
   dragCallbacks?: DragCallbacks;
   draggingTileId?: string | null;
+  onShuffle?: () => void;
 };
 
 function DraggableTile({
@@ -132,26 +133,39 @@ function DraggableTile({
 }
 
 export default function TileRack({
-  tiles, selectedTileId, onTilePress, disabled, swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId,
+  tiles, selectedTileId, onTilePress, disabled, swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId, onShuffle,
 }: Props) {
   return (
     <View style={styles.container}>
-      <View style={styles.rack}>
-        {tiles.map((tile) => (
-          <DraggableTile
-            key={tile.id}
-            tile={tile}
-            selected={tile.id === selectedTileId || (swapSelectedIds?.includes(tile.id) ?? false)}
-            onTilePress={() => onTilePress(tile)}
-            disabled={disabled}
-            dragCallbacks={dragCallbacks}
-            isDragging={tile.id === draggingTileId}
-            highlight={recentlyDrawnIds?.has(tile.id) ?? false}
-          />
-        ))}
-        {Array.from({ length: Math.max(0, 7 - tiles.length) }).map((_, i) => (
-          <View key={`empty-${i}`} style={styles.emptySlot} />
-        ))}
+      <View style={styles.rackRow}>
+        <View style={styles.rack}>
+          {tiles.map((tile) => (
+            <DraggableTile
+              key={tile.id}
+              tile={tile}
+              selected={tile.id === selectedTileId || (swapSelectedIds?.includes(tile.id) ?? false)}
+              onTilePress={() => onTilePress(tile)}
+              disabled={disabled}
+              dragCallbacks={dragCallbacks}
+              isDragging={tile.id === draggingTileId}
+              highlight={recentlyDrawnIds?.has(tile.id) ?? false}
+            />
+          ))}
+          {Array.from({ length: Math.max(0, 7 - tiles.length) }).map((_, i) => (
+            <View key={`empty-${i}`} style={styles.emptySlot} />
+          ))}
+        </View>
+        {onShuffle && (
+          <TouchableOpacity
+            style={[styles.shuffleBtn, tiles.length < 2 && styles.shuffleBtnDisabled]}
+            onPress={onShuffle}
+            disabled={tiles.length < 2}
+            accessibilityLabel="Shuffle rack"
+            accessibilityRole="button"
+          >
+            <Text style={styles.shuffleIcon}>🔀</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -159,6 +173,7 @@ export default function TileRack({
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', paddingVertical: 10 },
+  rackRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rack: {
     flexDirection: 'row',
     backgroundColor: '#5C2A3E',
@@ -180,4 +195,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     margin: 2,
   },
+  shuffleBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shuffleBtnDisabled: { opacity: 0.4 },
+  shuffleIcon: { fontSize: 22 },
 });

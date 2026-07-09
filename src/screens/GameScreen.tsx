@@ -162,6 +162,27 @@ export default function GameScreen() {
   const me = game?.players[currentSide];
   const partner = game?.players[1 - currentSide];
 
+  // Local-only rack display order (shuffle). Tile ids not in the order (fresh draws)
+  // keep their natural position at the end; stale ids are simply ignored.
+  const [rackOrder, setRackOrder] = useState<string[] | null>(null);
+  const orderedRack = useMemo(() => {
+    const rack = me?.rack ?? [];
+    if (!rackOrder) return rack;
+    const pos = new Map(rackOrder.map((id, i) => [id, i]));
+    return [...rack].sort(
+      (a, b) => (pos.get(a.id) ?? rackOrder.length) - (pos.get(b.id) ?? rackOrder.length)
+    );
+  }, [me?.rack, rackOrder]);
+
+  function handleShuffle() {
+    const ids = (me?.rack ?? []).map((t) => t.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    setRackOrder(ids);
+  }
+
   // Safety net: alert when a pending tile has coords that won't render on the board.
   // These would silently filter the rack and disappear from view ("ghost" tile).
   useEffect(() => {
@@ -581,7 +602,8 @@ export default function GameScreen() {
 
       {/* Tile rack — behaviour switches based on swapMode; only one rack ever renders */}
       <TileRack
-        tiles={me?.rack.filter((t) => !pendingTiles.find((p) => p.id === t.id)) ?? []}
+        tiles={orderedRack.filter((t) => !pendingTiles.find((p) => p.id === t.id))}
+        onShuffle={handleShuffle}
         selectedTileId={swapMode ? null : selectedTile?.id ?? null}
         onTilePress={swapMode ? (t) => handleSwapTileSelect(t.id) : handleRackTilePress}
         disabled={!isMyTurn || game.status !== 'active'}

@@ -1,5 +1,7 @@
 [build]
-  command = "npx expo export --platform web"
+  # build:web = generate icons -> expo export -> inject PWA/iOS meta tags.
+  # A bare `expo export` would ship without the manifest/apple-touch-icon tags.
+  command = "npm run build:web"
   publish = "dist"
 
 [build.environment]
