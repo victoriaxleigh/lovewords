@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Tile } from '../types';
 import TileComponent from './TileComponent';
 import { Colors } from '../utils/colors';
@@ -27,7 +27,7 @@ type Props = {
 };
 
 function DraggableTile({
-  tile, selected, onTilePress, disabled, dragCallbacks, isDragging, highlight,
+  tile, selected, onTilePress, disabled, dragCallbacks, isDragging, highlight, size,
 }: {
   tile: Tile;
   selected: boolean;
@@ -36,6 +36,7 @@ function DraggableTile({
   dragCallbacks?: DragCallbacks;
   isDragging?: boolean;
   highlight?: boolean;
+  size: number;
 }) {
   const wrapRef = useRef<View>(null);
   // Latest values via refs so the (mount-time) listeners always see fresh props.
@@ -124,7 +125,7 @@ function DraggableTile({
       <TileComponent
         tile={tile}
         selected={selected}
-        size={46}
+        size={size}
         disabled={disabled}
         highlight={highlight}
       />
@@ -132,9 +133,15 @@ function DraggableTile({
   );
 }
 
+const MAX_TILE_SIZE = 46;
+
 export default function TileRack({
   tiles, selectedTileId, onTilePress, disabled, swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId, onShuffle,
 }: Props) {
+  const { width } = useWindowDimensions();
+  // Fit 7 tiles + rack padding (16) + shuffle button & gap (48) + screen margin (16)
+  // in the viewport; each tile carries 4px of margin on top of its size.
+  const tileSize = Math.max(32, Math.min(MAX_TILE_SIZE, Math.floor((width - 80) / 7) - 4));
   return (
     <View style={styles.container}>
       <View style={styles.rackRow}>
@@ -149,10 +156,11 @@ export default function TileRack({
               dragCallbacks={dragCallbacks}
               isDragging={tile.id === draggingTileId}
               highlight={recentlyDrawnIds?.has(tile.id) ?? false}
+              size={tileSize}
             />
           ))}
           {Array.from({ length: Math.max(0, 7 - tiles.length) }).map((_, i) => (
-            <View key={`empty-${i}`} style={styles.emptySlot} />
+            <View key={`empty-${i}`} style={[styles.emptySlot, { width: tileSize, height: tileSize }]} />
           ))}
         </View>
         {onShuffle && (
@@ -187,8 +195,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   emptySlot: {
-    width: 46,
-    height: 46,
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
