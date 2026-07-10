@@ -178,6 +178,23 @@ export async function createGame(player1: Player, player2: Player): Promise<stri
   return data.id;
 }
 
+// Realtime events that fire while the websocket is down (phone locked, app
+// backgrounded, bad service) are never replayed — a resumed page would sit on
+// stale state until the *next* event. Refetch whenever the app comes back to
+// the foreground. Web-only; no-ops on native where window/document don't exist.
+function refetchOnResume(refetch: () => void): () => void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
+  const onResume = () => {
+    if (document.visibilityState === 'visible') refetch();
+  };
+  window.addEventListener('focus', onResume);
+  document.addEventListener('visibilitychange', onResume);
+  return () => {
+    window.removeEventListener('focus', onResume);
+    document.removeEventListener('visibilitychange', onResume);
+  };
+}
+
 // ─── Subscribe to a single game (real-time) ───────────────────────────────────
 export function subscribeToGame(gameId: string, onUpdate: (game: Game) => void) {
   // Always fetch the full row — payload.new only contains changed columns, so
@@ -198,9 +215,16 @@ export function subscribeToGame(gameId: string, onUpdate: (game: Game) => void) 
       { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
       () => fetchGame()
     )
-    .subscribe();
+    .subscribe((status: string) => {
+      // Rejoining after a dropped socket doesn't replay missed events — catch up.
+      if (status === 'SUBSCRIBED') fetchGame();
+    });
 
-  return () => supabase.removeChannel(channel);
+  const stopResumeRefetch = refetchOnResume(fetchGame);
+  return () => {
+    stopResumeRefetch();
+    supabase.removeChannel(channel);
+  };
 }
 
 // ─── Subscribe to all games for a user ────────────────────────────────────────
@@ -220,9 +244,15 @@ export function subscribeToUserGames(uid: string, onUpdate: (games: Game[]) => v
   const channel = supabase
     .channel(`user-games-${uid}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, fetch)
-    .subscribe();
+    .subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') fetch();
+    });
 
-  return () => supabase.removeChannel(channel);
+  const stopResumeRefetch = refetchOnResume(fetch);
+  return () => {
+    stopResumeRefetch();
+    supabase.removeChannel(channel);
+  };
 }
 
 // ─── Submit a move ────────────────────────────────────────────────────────────
