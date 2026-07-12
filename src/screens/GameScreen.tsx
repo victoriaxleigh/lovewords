@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -49,6 +49,8 @@ export default function GameScreen() {
   const [smackTalk, setSmackTalk] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [rematching, setRematching] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
 
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
@@ -512,6 +514,18 @@ export default function GameScreen() {
         : game.players[0].score < game.players[1].score
         ? game.players[1]
         : null;
+    const handleRematch = async () => {
+      if (rematching) return;
+      setRematching(true);
+      setRematchError(null);
+      try {
+        const newGameId = await createRematch(game);
+        (navigation as any).replace('Game', { gameId: newGameId, myUid, myDisplayName });
+      } catch (e: any) {
+        setRematchError(e?.message ?? 'Could not start a rematch — try again.');
+        setRematching(false);
+      }
+    };
     return (
       <View style={styles.loading}>
         <Text style={styles.finishedEmoji}>
@@ -529,6 +543,22 @@ export default function GameScreen() {
         <Text style={styles.finishedScores}>
           {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
         </Text>
+        {rematchError && <Text style={styles.rematchError}>⚠️ {rematchError}</Text>}
+        <TouchableOpacity
+          style={[styles.rematchBtn, rematching && styles.actionBtnDisabled]}
+          onPress={handleRematch}
+          disabled={rematching}
+          accessibilityLabel="Start a rematch"
+          accessibilityRole="button"
+        >
+          {rematching ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.rematchBtnText}>
+              {isSoloFinished ? '🎯 Play again' : '🔁 Rematch'}
+            </Text>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>Back to games</Text>
         </TouchableOpacity>
@@ -869,6 +899,17 @@ const styles = StyleSheet.create({
   finishedScores: { fontSize: 16, color: Colors.textLight, marginBottom: 32 },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  rematchBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    marginBottom: 12,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  rematchBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  rematchError: { color: Colors.error, fontSize: 14, marginBottom: 12, textAlign: 'center' },
   blankOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

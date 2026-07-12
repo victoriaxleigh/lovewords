@@ -178,6 +178,17 @@ export async function createGame(player1: Player, player2: Player): Promise<stri
   return data.id;
 }
 
+// ─── Rematch ──────────────────────────────────────────────────────────────────
+// Fresh game, same players. Loser goes first; on a tie, whoever went second
+// last game gets first turn. createGame/createSoloGame re-init rack and score.
+export async function createRematch(game: Game): Promise<string> {
+  const [p1, p2] = game.players;
+  if (p2.email === 'solo') return createSoloGame(p1);
+  const first = p1.score < p2.score ? p1 : p2;
+  const second = first === p1 ? p2 : p1;
+  return createGame(first, second);
+}
+
 // Realtime events that fire while the websocket is down (phone locked, app
 // backgrounded, bad service) are never replayed — a resumed page would sit on
 // stale state until the *next* event. Refetch whenever the app comes back to

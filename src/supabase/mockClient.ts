@@ -14,6 +14,10 @@ const FAKE_USER = {
 const stores: Record<string, Row[]> = { games: [], profiles: [], love_notes: [] };
 stores.profiles.push({ id: FAKE_USER_ID, email: FAKE_USER.email, display_name: 'Dev' });
 
+// Browser-console handle for driving hard-to-reach states in dev
+// (e.g. flip a game to 'finished' to test the game-over screen).
+(globalThis as any).__lwMockStores = stores;
+
 const authListeners: Array<(event: string, session: any) => void> = [];
 const channelListeners: Array<{ table: string; cb: (payload?: any) => void }> = [];
 
