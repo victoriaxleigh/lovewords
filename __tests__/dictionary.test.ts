@@ -60,6 +60,18 @@ describe('isValidWord', () => {
     expect(await isValidWord('aa')).toBe(true);
     expect(await isValidWord('xi')).toBe(true);
   });
+
+  // SUPPLEMENT words are merged in even though the fetched list (mocked
+  // above) doesn't contain them — this is what fixes KI on real ENABLE.
+  test('accepts supplement words missing from the fetched list', async () => {
+    expect(await isValidWord('ki')).toBe(true);
+    expect(await isValidWord('ok')).toBe(true);
+    expect(await isValidWord('ew')).toBe(true);
+    expect(await isValidWord('zen')).toBe(true);
+    expect(await isValidWord('emoji')).toBe(true);
+    expect(await isValidWord('memes')).toBe(true);
+    expect(await isValidWord('yeet')).toBe(true);
+  });
 });
 
 describe('validateWords', () => {

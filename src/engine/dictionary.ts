@@ -1,14 +1,32 @@
 /**
- * Scrabble dictionary using the ENABLE word list —
- * the same ~178,000-word list used by Words With Friends.
+ * Scrabble dictionary using the ENABLE word list (public domain, ~173k words).
+ * WWF and modern Scrabble dictionaries built on ENABLE but added words after it
+ * froze in 1997 — those we care about live in SUPPLEMENT below.
  *
  * On first use it fetches the list from a public CDN and
  * caches it in localStorage so every lookup after that is instant.
  */
 
-const CACHE_KEY = 'lovewords_dict_v1';
+// Bump the version when SUPPLEMENT changes so cached phones pick it up.
+const CACHE_KEY = 'lovewords_dict_v2';
 const WORD_LIST_URL =
   'https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt';
+
+// Words that are valid in modern Scrabble (NWL) / Words With Friends but
+// missing from 1997-era ENABLE. Plurals need their own entries.
+const SUPPLEMENT = [
+  // Two-letter staples — QI/ZA are the classic Q- and Z-dumps
+  'QI', 'ZA', 'KI', 'GI', 'FE', 'OI', 'OK', 'EW', 'TE', 'DA', 'PO',
+  'QIS', 'ZAS', 'KIS', 'GIS', 'FES', 'OKS',
+  // Modern additions to the official lists
+  'ZEN', 'GIF', 'GIFS', 'VAX', 'VAXES',
+  'EMOJI', 'EMOJIS', 'SELFIE', 'SELFIES', 'MEME', 'MEMES',
+  'VAPE', 'VAPES', 'VAPED', 'VAPING',
+  'BLOG', 'BLOGS', 'VLOG', 'VLOGS', 'BAE', 'BAES', 'FOMO',
+  'YEET', 'YEETS', 'YEETED', 'YEETING',
+  'HANGRY', 'HANGRIER', 'HANGRIEST', 'ADORBS',
+  // House words — anything we decide counts, goes here 💕
+];
 
 let wordSet: Set<string> | null = null;
 let loadPromise: Promise<Set<string>> | null = null;
@@ -22,7 +40,7 @@ async function loadDictionary(): Promise<Set<string>> {
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        wordSet = new Set(JSON.parse(cached));
+        wordSet = new Set([...JSON.parse(cached), ...SUPPLEMENT]);
         return wordSet;
       }
     } catch {}
@@ -35,7 +53,7 @@ async function loadDictionary(): Promise<Set<string>> {
       .map((w) => w.trim().toUpperCase())
       .filter(Boolean);
 
-    wordSet = new Set(words);
+    wordSet = new Set([...words, ...SUPPLEMENT]);
 
     // Cache it
     try {
