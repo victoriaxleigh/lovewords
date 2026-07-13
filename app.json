@@ -24,8 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFF0F5"
       },
-      "package": "com.lovewords.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.lovewords.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

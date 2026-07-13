@@ -66,21 +66,3 @@ export function drawTiles(bag: Tile[], count: number): { drawn: Tile[]; remainin
   const remaining = bag.slice(count);
   return { drawn, remaining };
 }
-
-export function exchangeTiles(
-  rack: Tile[],
-  tilesToExchange: Tile[],
-  bag: Tile[]
-): { newRack: Tile[]; newBag: Tile[] } {
-  if (bag.length < tilesToExchange.length) {
-    throw new Error('Not enough tiles in bag to exchange');
-  }
-  const exchangeIds = new Set(tilesToExchange.map((t) => t.id));
-  const keptTiles = rack.filter((t) => !exchangeIds.has(t.id));
-  const newBag = shuffle([...bag, ...tilesToExchange]);
-  const { drawn, remaining } = drawTiles(newBag, tilesToExchange.length);
-  return {
-    newRack: [...keptTiles, ...drawn],
-    newBag: remaining,
-  };
-}

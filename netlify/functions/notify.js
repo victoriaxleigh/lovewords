@@ -1,5 +1,8 @@
 /**
- * Netlify serverless function — sends a Web Push notification to a user.
+ * Netlify serverless function — sends a push notification to a user via
+ * whichever channel(s) they've registered: Web Push (browser/PWA) and/or
+ * Expo push (native iOS/Android app). A user can have both; each is
+ * independent and best-effort — one failing never blocks the other.
  *
  * Required env vars (Netlify → Site settings → Environment variables):
  *   VAPID_PUBLIC_KEY   — the public key generated during setup
@@ -34,7 +37,6 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Missing fields' };
   }
 
-  // Fetch the recipient's push subscription from Supabase
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
@@ -42,24 +44,30 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: 'Supabase env vars not set' };
   }
 
-  const res = await fetch(
-    `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(recipientUid)}&select=endpoint,p256dh,auth`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-    }
-  );
+  const supabaseHeaders = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
 
-  const rows = await res.json();
-  if (!rows || rows.length === 0) {
-    // Recipient hasn't enabled notifications — that's fine
+  // Web Push subscription (browser/PWA) and Expo push token (native app) are
+  // independent — a user may have one, both, or neither depending on platform.
+  const [webPushRes, expoTokenRes] = await Promise.all([
+    fetch(
+      `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(recipientUid)}&select=endpoint,p256dh,auth`,
+      { headers: supabaseHeaders }
+    ),
+    fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(recipientUid)}&select=expo_push_token`,
+      { headers: supabaseHeaders }
+    ),
+  ]);
+
+  const webPushRows = await webPushRes.json();
+  const profileRows = await expoTokenRes.json();
+  const webPushSub = webPushRows && webPushRows[0];
+  const expoPushToken = profileRows && profileRows[0] && profileRows[0].expo_push_token;
+
+  if (!webPushSub && !expoPushToken) {
+    // Recipient hasn't enabled notifications on any platform — that's fine
     return { statusCode: 200, body: 'No subscription found' };
   }
-
-  const { endpoint, p256dh, auth } = rows[0];
-  const subscription = { endpoint, keys: { p256dh, auth } };
 
   // Playful, on-brand nudges — one is picked at random so it never feels naggy.
   const NUDGES = [
@@ -85,26 +93,46 @@ exports.handler = async (event) => {
       ? NUDGES[Math.floor(Math.random() * NUDGES.length)]
       : `${senderName} left you a little something 💕`;
 
+  const results = await Promise.allSettled([
+    webPushSub ? sendWebPush(webPushSub, title, message, supabaseUrl, supabaseHeaders, recipientUid) : Promise.resolve('skipped'),
+    expoPushToken ? sendExpoPush(expoPushToken, title, message) : Promise.resolve('skipped'),
+  ]);
+
+  results.forEach((r) => {
+    if (r.status === 'rejected') console.error('push send error:', r.reason?.message ?? r.reason);
+  });
+
+  // Best-effort — a delivery failure on one or both channels never surfaces
+  // as an error to the caller; a push notification is never critical path.
+  return { statusCode: 200, body: 'Sent' };
+};
+
+async function sendWebPush(subscriptionRow, title, message, supabaseUrl, supabaseHeaders, recipientUid) {
+  const { endpoint, p256dh, auth } = subscriptionRow;
+  const subscription = { endpoint, keys: { p256dh, auth } };
   const payload = JSON.stringify({ title, body: message });
 
   try {
     await webpush.sendNotification(subscription, payload);
-    return { statusCode: 200, body: 'Sent' };
   } catch (err) {
     // 410 = subscription expired/invalid — clean it up
     if (err.statusCode === 410) {
       await fetch(
         `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(recipientUid)}`,
-        {
-          method: 'DELETE',
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+        { method: 'DELETE', headers: supabaseHeaders }
       );
     }
-    console.error('webpush error:', err.message);
-    return { statusCode: 200, body: 'Notification failed (non-fatal)' };
+    throw err;
   }
-};
+}
+
+async function sendExpoPush(expoPushToken, title, message) {
+  const res = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ to: expoPushToken, title, body: message, sound: 'default' }),
+  });
+  if (!res.ok) {
+    throw new Error(`Expo push API returned ${res.status}`);
+  }
+}

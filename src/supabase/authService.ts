@@ -1,4 +1,5 @@
 import { supabase } from './config';
+import { FUNCTIONS_BASE } from '../utils/apiBase';
 
 export async function register(email: string, password: string, displayName: string) {
   const emailLower = email.toLowerCase().trim();
@@ -45,6 +46,31 @@ export function onAuthChange(callback: (user: any | null) => void) {
     callback(session?.user ?? null);
   });
   return () => subscription.unsubscribe();
+}
+
+// Permanently deletes the current user's account and all their game data.
+// Calls the delete-account Netlify function (service-role access — the
+// client's anon key can't delete other rows or auth.users itself).
+export async function deleteAccount(): Promise<{ success: boolean; error?: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    return { success: false, error: 'Not signed in' };
+  }
+
+  try {
+    const res = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/delete-account`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { success: false, error: text || 'Failed to delete account' };
+    }
+    await logout();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Failed to delete account' };
+  }
 }
 
 export async function getUserByEmail(email: string) {

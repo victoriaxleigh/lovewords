@@ -1,4 +1,4 @@
-import { createTileBag, drawTiles, exchangeTiles, shuffle } from '../src/engine/tiles';
+import { createTileBag, drawTiles, shuffle } from '../src/engine/tiles';
 
 describe('Tile Bag', () => {
   test('creates exactly 104 tiles (WWF distribution)', () => {
@@ -66,32 +66,6 @@ describe('drawTiles', () => {
     const { drawn, remaining } = drawTiles(bag, 104);
     expect(drawn).toHaveLength(104);
     expect(remaining).toHaveLength(0);
-  });
-});
-
-describe('exchangeTiles', () => {
-  test('returns same rack size after exchange', () => {
-    const bag = createTileBag();
-    const { drawn: rack, remaining } = drawTiles(bag, 7);
-    const tilesToExchange = rack.slice(0, 3);
-    const { newRack } = exchangeTiles(rack, tilesToExchange, remaining);
-    expect(newRack).toHaveLength(7);
-  });
-
-  test('exchanged tiles go back into bag', () => {
-    const bag = createTileBag();
-    const { drawn: rack, remaining } = drawTiles(bag, 7);
-    const tilesToExchange = rack.slice(0, 3);
-    const { newBag } = exchangeTiles(rack, tilesToExchange, remaining);
-    // Bag had (104-7)=97 tiles, we return 3 and draw 3, net stays 97
-    expect(newBag).toHaveLength(97);
-  });
-
-  test('throws if not enough tiles in bag', () => {
-    const bag = createTileBag();
-    const { drawn: rack, remaining } = drawTiles(bag, 101); // only 3 left
-    const tilesToExchange = rack.slice(0, 7);
-    expect(() => exchangeTiles(rack, tilesToExchange, remaining)).toThrow();
   });
 });
 

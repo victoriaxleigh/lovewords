@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
+  Platform,
 } from 'react-native';
-import { createGame, createSoloGame, subscribeToUserGames, deleteGame } from '../supabase/gameService';
-import { logout, getUserByEmail } from '../supabase/authService';
+import { createGame, createSoloGame, subscribeToUserGames, deleteGame, getUserGameCount } from '../supabase/gameService';
+import { getUserByEmail } from '../supabase/authService';
+import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, Player } from '../types';
 import { Colors } from '../utils/colors';
 import { RADII } from '../utils/styles';
@@ -38,10 +40,24 @@ export default function LobbyScreen({ currentUser }: Props) {
     return unsub;
   }, [currentUser.uid]);
 
+  // Native app only: one free game, then a $2.99 lifetime unlock. The web app
+  // stays free/unlimited (Platform.OS === 'web' skips the gate entirely).
+  // Only blocks *starting a new* game — existing games are never affected.
+  async function isBlockedByPaywall(): Promise<boolean> {
+    if (Platform.OS === 'web') return false;
+    if (await getHasLifetimeAccess()) return false;
+    const gameCount = await getUserGameCount(currentUser.uid);
+    return gameCount >= 1;
+  }
+
   async function handleStartSolo() {
     setStartingSolo(true);
     setErrorMsg(null);
     try {
+      if (await isBlockedByPaywall()) {
+        navigation.navigate('Paywall');
+        return;
+      }
       const gameId = await createSoloGame(currentUser);
       navigation.navigate('Game', { gameId, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
     } catch (err: any) {
@@ -56,6 +72,10 @@ export default function LobbyScreen({ currentUser }: Props) {
     setInviting(true);
     setErrorMsg(null);
     try {
+      if (await isBlockedByPaywall()) {
+        navigation.navigate('Paywall');
+        return;
+      }
       const opponentData = await getUserByEmail(inviteEmail);
       if (!opponentData) {
         setErrorMsg('No user with that email exists. Ask them to sign up!');
@@ -113,8 +133,12 @@ export default function LobbyScreen({ currentUser }: Props) {
           <Text style={styles.greeting}>Hi, {currentUser.displayName} 💕</Text>
           <Text style={styles.subtitle}>Your love word games</Text>
         </View>
-        <TouchableOpacity onPress={logout} accessibilityLabel="Sign out" accessibilityRole="button">
-          <Text style={styles.signOut}>Sign out</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityLabel="Settings"
+          accessibilityRole="button"
+        >
+          <Text style={styles.settingsBtn}>⚙️ Settings</Text>
         </TouchableOpacity>
       </View>
 
@@ -124,13 +148,13 @@ export default function LobbyScreen({ currentUser }: Props) {
         <View style={styles.inviteRow}>
           <TextInput
             style={styles.inviteInput}
-            placeholder="Partner's email"
+            placeholder="Friend's email"
             placeholderTextColor={Colors.textLight}
             value={inviteEmail}
             onChangeText={setInviteEmail}
             keyboardType="email-address"
             autoCapitalize="none"
-            accessibilityLabel="Partner's email address"
+            accessibilityLabel="Friend's email address"
           />
           <TouchableOpacity style={styles.inviteBtn} onPress={handleInvite} disabled={inviting}>
             {inviting ? (
@@ -171,7 +195,7 @@ export default function LobbyScreen({ currentUser }: Props) {
       ) : games.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>🎲</Text>
-          <Text style={styles.emptyText}>No games yet! Invite your partner above.</Text>
+          <Text style={styles.emptyText}>No games yet! Invite a friend above.</Text>
         </View>
       ) : (
         <FlatList
@@ -246,7 +270,7 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 22, fontWeight: '800', color: Colors.text },
   subtitle: { fontSize: 14, color: Colors.textLight, marginTop: 2 },
-  signOut: { color: Colors.primaryDark, fontSize: 14, marginTop: 4, textDecorationLine: 'underline' },
+  settingsBtn: { color: Colors.primaryDark, fontSize: 14, marginTop: 4, fontWeight: '600' },
   inviteBox: {
     backgroundColor: Colors.surface,
     margin: 16,

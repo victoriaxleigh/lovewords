@@ -3,6 +3,7 @@ import { Game, Player, PlacedTile, LoveNote, Move } from '../types';
 import { createEmptyBoard, applyMoveToBoard } from '../engine/board';
 import { createTileBag, drawTiles, shuffle } from '../engine/tiles';
 import { scoreMove } from '../engine/scoring';
+import { FUNCTIONS_BASE } from '../utils/apiBase';
 
 // Game ends after this many consecutive passes (2 each in a 2-player game).
 // Covers the "stuck" case where neither player has a valid play.
@@ -18,15 +19,15 @@ function trailingPassCount(moves: Move[]): number {
 }
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
-// Calls our Netlify serverless function, which forwards to OneSignal.
-// Fails silently — a notification error should never break a move.
+// Calls our Netlify serverless function, which sends a Web Push (browser) and/or
+// Expo push (native) notification depending on which subscription the recipient
+// has on file. Fails silently — a notification error should never break a move.
 function sendPushNotification(
   recipientUid: string,
   senderName: string,
   type: 'turn' | 'lovenote' | 'nudge'
 ) {
-  if (typeof window === 'undefined') return;
-  fetch('/.netlify/functions/notify', {
+  fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipientUid, senderName, type }),
@@ -198,6 +199,19 @@ export async function createGame(player1: Player, player2: Player): Promise<stri
   const { data, error } = await supabase.from('games').insert(payload).select('id').single();
   if (error) throw error;
   return data.id;
+}
+
+// ─── Game count (paywall gate) ────────────────────────────────────────────────
+// How many games this uid has ever been a part of (solo or multiplayer).
+// The native app's paywall gate uses this to detect "already played their
+// free game" — derived from existing data, no separate counter column needed.
+export async function getUserGameCount(uid: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('games')
+    .select('id', { count: 'exact', head: true })
+    .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 // ─── Rematch ──────────────────────────────────────────────────────────────────
