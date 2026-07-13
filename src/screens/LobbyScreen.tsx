@@ -12,6 +12,7 @@ import { createGame, createSoloGame, subscribeToUserGames, deleteGame } from '..
 import { logout, getUserByEmail } from '../supabase/authService';
 import { Game, Player } from '../types';
 import { Colors } from '../utils/colors';
+import { RADII } from '../utils/styles';
 import { useNavigation } from '@react-navigation/native';
 
 type Props = {
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
   inviteInput: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 10,
+    borderRadius: RADII.md,
     padding: 12,
     fontSize: 14,
     color: Colors.text,
@@ -270,7 +271,7 @@ const styles = StyleSheet.create({
   },
   inviteBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 10,
+    borderRadius: RADII.md,
     paddingHorizontal: 18,
     justifyContent: 'center',
   },

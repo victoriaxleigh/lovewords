@@ -4,14 +4,15 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Image,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { login, register } from '../supabase/authService';
 import { Colors } from '../utils/colors';
+import { RADII, SHADOWS } from '../utils/styles';
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -19,11 +20,12 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
-    if (!email || !password) return Alert.alert('Missing fields', 'Please fill in all fields');
-    if (mode === 'register' && !displayName)
-      return Alert.alert('Missing fields', 'Please enter your name');
+    setError(null);
+    if (!email || !password) { setError('Please fill in all fields'); return; }
+    if (mode === 'register' && !displayName) { setError('Please enter your name'); return; }
 
     setLoading(true);
     try {
@@ -33,7 +35,7 @@ export default function AuthScreen() {
         await register(email.trim(), password, displayName.trim());
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      setError(err.message ?? 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -45,9 +47,14 @@ export default function AuthScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={styles.logo}>💌</Text>
+        <Image
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          source={require('../../assets/icon.png')}
+          style={styles.logo}
+          accessibilityLabel="LoveWords icon"
+        />
         <Text style={styles.title}>LoveWords</Text>
-        <Text style={styles.subtitle}>Word game just for you two ✨</Text>
+        <Text style={styles.subtitle}>A game for word lovers 💬</Text>
 
         {mode === 'register' && (
           <TextInput
@@ -80,6 +87,15 @@ export default function AuthScreen() {
           accessibilityLabel="Password"
         />
 
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)} accessibilityLabel="Dismiss error">
+              <Text style={styles.errorDismiss}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -90,7 +106,7 @@ export default function AuthScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        <TouchableOpacity onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
           <Text style={styles.switchText}>
             {mode === 'login'
               ? "Don't have an account? Sign up"
@@ -110,7 +126,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  logo: { fontSize: 64, marginBottom: 8 },
+  logo: {
+    width: 90,
+    height: 90,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
   title: {
     fontSize: 36,
     fontWeight: '900',
@@ -125,7 +146,7 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: RADII.md,
     padding: 14,
     fontSize: 16,
     color: Colors.text,
@@ -133,19 +154,29 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     marginBottom: 12,
   },
+  errorBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    borderRadius: RADII.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#FFB3B3',
+  },
+  errorText: { flex: 1, fontSize: 13, color: '#C0392B', fontWeight: '600' },
+  errorDismiss: { fontSize: 15, color: '#C0392B', fontWeight: '700', paddingLeft: 8 },
   button: {
     width: '100%',
     backgroundColor: Colors.primary,
-    borderRadius: 12,
+    borderRadius: RADII.md,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 16,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 6,
+    ...SHADOWS.btn,
   },
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   switchText: { color: Colors.primaryDark, fontSize: 14, textDecorationLine: 'underline' },
