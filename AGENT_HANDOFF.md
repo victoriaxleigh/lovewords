@@ -1,14 +1,17 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-06 (Session 7)
+> Last updated: 2026-07-13 (Session 8)
 
 ## What This App Is
-**LoveWords** is a Words with Friends clone built as a web app for a couple to play async online.
-- Built with **Expo ~54 / React Native 0.81 / React 19** (web target only)
-- Deployed on **Netlify** (URL managed by user)
+**LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
+- **Partner mode** (the original): a couple plays async against each other
+- **Friends mode** (planned, same UI/smack talk): any two friends, same invite flow
+- Built with **Expo ~54 / React Native 0.81 / React 19** (web-only today; native iOS/Android is the next milestone)
+- Deployed on **Netlify** with auto-deploy on push to `main`
 - Backend: **Supabase** (Postgres, Realtime, Auth)
-- Push notifications: **Web Push API** with VAPID keys + Netlify serverless function (`web-push` npm package)
+- Push notifications: **Web Push API** with VAPID keys + Netlify serverless function (`web-push` npm package) — **to be replaced with `expo-notifications` for native**
 - Dictionary: ENABLE word list (~178k words) fetched from GitHub CDN at runtime, cached in `localStorage`
+- **App Store direction**: $2.99 one-time purchase, no ads — EAS Build + App Store submission is next after Expo Push Notifications
 
 ---
 
@@ -51,8 +54,8 @@ C:\Users\victo\lovewords\
     │   ├── GameScreen.tsx           ← Main game (~820 lines, the core)
     │   └── LoveNotesModal.tsx       ← In-game chat/love notes
     ├── components/
-    │   ├── BoardComponent.tsx       ← 15×15 board, exports CELL_SIZE
-    │   ├── TileRack.tsx             ← Drag rack with PanResponder (drag + tap-to-select)
+    │   ├── BoardComponent.tsx       ← 15×15 board, exports getCellSize(); uses Gesture.Pan
+    │   ├── TileRack.tsx             ← Drag rack with react-native-gesture-handler (drag + tap)
     │   ├── TileComponent.tsx        ← Single tile (selected state, blank, isNew, highlight)
     │   └── ScoreBoard.tsx           ← Score + bag count header
     ├── engine/
@@ -70,6 +73,7 @@ C:\Users\victo\lovewords\
     │   └── index.ts                 ← All shared TypeScript types
     └── utils/
         ├── colors.ts                ← Color palette (light pink/rose theme)
+        ├── styles.ts                ← Shared design tokens: RADII (sm/md/lg/xl) and SHADOWS (card/btn)
         ├── webNotifications.ts      ← requestNotificationPermission, sendTurnNotification, sendLoveNoteNotification
         └── pushSubscription.ts      ← SW registration + Supabase push_subscriptions upsert
 ```
@@ -130,20 +134,25 @@ NOT add the iOS Home Screen / PWA tags. `build:web` runs three steps in order:
    meta into `dist/index.html` (Expo's generated template omits these). Idempotent.
 
 **Pitfalls:**
-- `--no-build` is required — without it, Netlify CLI tries to install extensions and 403s
+- `--no-build` is required for manual CLI deploys — without it, Netlify CLI tries to install extensions and 403s
 - Rate limit (429 Too Many Requests): wait 10-15 min between deploys
 - Netlify CLI requires `netlify login` first; the auth token is NOT available in the agent environment — user must run from their own terminal
-- The `netlify.toml` sets `ignore = "exit 1"` so Netlify's own CI never auto-builds; deploy is always manual
+- **Auto-deploy is live**: pushing to `main` triggers Netlify CI using `npm run build:web`. The old `ignore = "exit 1"` was removed in Session 8.
 
 ```toml
-# netlify.toml
+# netlify.toml (current state)
 [build]
-  command = "npx expo export --platform web"
+  command = "npm run build:web"
   publish = "dist"
-  ignore = "exit 1"
+
+[build.environment]
+  NODE_VERSION = "20"
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,VAPID_PUBLIC_KEY"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "nft"        # nft required — esbuild can't bundle web-push
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -365,25 +374,64 @@ if (isSolo) {
 
 ## Drag-and-Drop Architecture
 
-- **Both drag and tap work for placing tiles.** Drag is the primary interaction on mobile; tap-to-select is the fallback for web mouse users.
-- **`TileRack.tsx`** contains a `DraggableTile` inner component per tile, each with its own `PanResponder`
-- **`BoardComponent.tsx`** contains a `DraggablePendingTile` inner component — same pattern — for tiles already placed on the board. This allows dragging a placed tile to a new cell without recalling it first.
-- **Tap vs drag threshold**: 8px (`Math.sqrt(dx² + dy²) < 8` = tap, else = drag) — applies to both rack and board tiles
-  - Rack tap in normal mode: selects/deselects the tile (`setSelectedTile`). Rack tap in swap mode: swap action.
-  - Board tile tap (< 8px): returns tile to rack (`handlePendingTilePress`)
-  - Board tile drag (≥ 8px): pulls tile off its cell, starts floating animation (`handleBoardTileDragStart`)
-- **Web click-to-place flow**: tap a rack tile to select it → tap an open board cell to place it (via `handleCellPress`, which already handled the `selectedTile` path). Tap a placed tile to return it to rack.
-- `onDragStart` → `handleDragStart` (rack) or `handleBoardTileDragStart` (board) in GameScreen
-  - `handleBoardTileDragStart`: calls `setPendingTiles(prev => prev.filter(t => t.id !== tile.id))` to clear the cell, then starts the floating animation. Same measure + dragXY logic as rack drag.
-- `onDragMove` → updates `Animated.ValueXY` (`dragXY`) to follow finger, offset by -25px to center on fingertip
-- `onDragEnd` → `handleDragEnd`: uses **functional updater** `setPendingTiles(prev => ...)` to avoid stale closure checking occupied cells. Board and rack drags share the same handler.
-- If dropped off-board or onto an occupied cell, the tile simply returns to the rack (it's not in `pendingTiles`, so the rack filter shows it again automatically)
-- Floating tile: `Animated.View` with `StyleSheet.absoluteFillObject` + `zIndex: 999`, `pointerEvents="none"`, placed **outside** the `ScrollView` in `GameScreen` so it stays screen-fixed during scroll
-- `CELL_SIZE = Math.floor((Dimensions.get('window').width - 8) / BOARD_SIZE)` — exported from `BoardComponent.tsx`
-- Tile in rack fades to `opacity: 0.3` while being dragged (`draggingTileId` prop)
-- In swap mode: `dragCallbacks` is set to `undefined` on the rack AND `boardTileDragCallbacks` is `undefined` on the board (drag disabled while swapping)
-- **⚠️ Stale closure fix:** `PanResponder` is created once with `useRef`. `onTilePress`, `disabled`, and `dragCallbacks` are kept in refs updated via `useEffect`. Always use `xyzRef.current` inside the PanResponder handlers — never the raw prop — or callbacks will be stale after re-renders.
-- **Web scrolling**: `GameScreen` wraps content in a `ScrollView` (header → action buttons). `boardRef.current?.measure()` is called fresh on each drag start, returning current page coordinates that account for scroll offset — drop targets stay accurate after scrolling.
+**Session 8:** Rewrote from `PanResponder` (web-only pointer events) to `react-native-gesture-handler` (`Gesture.Pan` + `GestureDetector`). This unblocks native iOS/Android builds. `GestureHandlerRootView` is already in `App.tsx`.
+
+- **Both drag and tap work for placing tiles.** Drag is primary on mobile; tap-to-select is the web fallback.
+- **`TileRack.tsx`** — `DraggableTile` inner component wraps each tile in a `GestureDetector`
+- **`BoardComponent.tsx`** — `DraggablePendingTile` inner component — same pattern — for tiles already placed on the board (drag to reposition without recalling)
+- **Tap vs drag threshold**: 5px — tracked manually in the `.onBegin`/`.onUpdate` handlers since RNGH's `minDistance` fires too late for the tap path
+
+### Gesture pattern (same in both TileRack and BoardComponent)
+
+```ts
+// Gesture created once with useMemo(()=>..., []) — mutable state via refs
+const gesture = useMemo(() =>
+  Gesture.Pan()
+    .runOnJS(true)        // callbacks run on JS thread (needed for setState)
+    .minDistance(0)       // receive events from the very first touch
+    .onBegin((e) => {
+      dragStartedRef.current = false;
+      startXRef.current = e.absoluteX;
+      startYRef.current = e.absoluteY;
+    })
+    .onUpdate((e) => {
+      const dx = e.absoluteX - startXRef.current;
+      const dy = e.absoluteY - startYRef.current;
+      if (!dragStartedRef.current &&
+          (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        dragStartedRef.current = true;
+        dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
+      }
+      if (dragStartedRef.current) dragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
+    })
+    .onEnd((e) => {
+      if (dragStartedRef.current) dragCallbacksRef.current?.onDragEnd(e.absoluteX, e.absoluteY, tileRef.current);
+      else onTilePressRef.current();   // tap — no drag started
+      dragStartedRef.current = false;
+    })
+    .onFinalize(() => {
+      // Interrupted mid-drag (e.g. incoming call) — clean up
+      if (dragStartedRef.current) { dragCallbacksRef.current?.onDragCancel(); dragStartedRef.current = false; }
+    }),
+[], // created once; all state via refs
+);
+```
+
+**⚠️ Ref pattern is required.** The gesture object is created once (`useMemo([])`). All prop values that change (`tile`, `disabled`, `onTilePress`, `dragCallbacks`) are mirrored into refs via `useEffect` and read as `xyzRef.current` inside handlers. Never access props directly inside the gesture — they'll be stale.
+
+### Rest of the drag flow (unchanged from Session 7)
+- `onDragStart` → `handleDragStart` (rack) or `handleBoardTileDragStart` (board) in `GameScreen`
+- `onDragMove` → updates `Animated.ValueXY` (`dragXY`), offset -25px to center on fingertip
+- `onDragEnd` → `handleDragEnd`: functional updater `setPendingTiles(prev => ...)` to avoid stale closures
+- Floating tile: `Animated.View` outside the `ScrollView`, `absoluteFillObject`, `zIndex: 999`, `pointerEvents="none"`
+- Tile fades to `opacity: 0.3` while dragging (`draggingTileId` prop)
+- Swap mode: `dragCallbacks` and `boardTileDragCallbacks` both set to `undefined` to disable drag
+- Cell size: `getCellSize()` (exported from `BoardComponent.tsx`) uses `Dimensions.get('window')` — cross-platform, no `window.innerWidth`
+
+### TileRack extras (Session 7/8)
+- **Shuffle button** (🔀): `onShuffle` optional prop; appears to the right of the rack; disabled when < 2 tiles
+- **Responsive tile size**: `useWindowDimensions` + `MAX_TILE_SIZE = 46`; tiles shrink on narrow screens so all 7 + the shuffle button fit
+- **Empty slots**: grey placeholder `View`s fill the remaining 7-tile width
 
 ---
 
@@ -414,7 +462,7 @@ Multiplayer swap clears state immediately in `finally` (unchanged).
 
 ## Submit Error Handling
 
-`Alert.alert` is **not used** anywhere in GameScreen or LobbyScreen. AuthScreen still uses it (known issue).
+`Alert.alert` is **not used anywhere in the app** (fixed in Session 8 — AuthScreen was the last holdout).
 
 ### Inline banners
 - `submitError` state → red banner with ✕ dismiss button above action buttons
@@ -573,37 +621,33 @@ When it's the user's turn (normal games only, not solo) and they're losing by mo
 
 ## Tests
 
-65 unit tests cover the engine layer. Run with:
+**66 unit tests**, all passing (last run Session 8). Run with:
 ```bash
 npx jest
 ```
 Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tests__/`. Always run after touching anything in `src/engine/` or `src/supabase/gameService.ts`.
 
-Not re-run in Session 5. Session 5 touched `gameService.ts` (shuffle, passTurn, sendLoveNote, submitSoloMove uid fix) — recommend running at the start of Session 6.
-
 ---
 
 ## Known Issues / Pending Work
 
-### Must fix
-~~1. Tile ID collision on page reload~~ — **Fixed in Session 4.** `tiles.ts` now uses `crypto.randomUUID()`.
-
-### Fixed in Session 2 (late) — for reference
-- **Swap crash (white screen)**: `handleSwapTileToggle` had no try/catch and the bag guard was `< 7` instead of `< tileIds.length`. Fixed with try/catch/finally and corrected guard.
-- **Self-notifications / wrong rack**: `currentSide` was computed from `currentTurn`, causing `me`/`partner` to swap on the opponent's turn. Fixed: use `findIndex` for multiplayer (see Solo Mode section above).
-
-### Fixed in Session 3, re-fixed in Session 4 — for reference
-- **Solo swap white screen**: Session 3 applied a `holdForRealtime` lock to prevent a brief stale-rack flash. Session 4 replaced this with an immediate local state update (see Swap Tiles section) after the lock caused a worse regression — UI frozen indefinitely when Realtime was slow.
+### App Store path (next major milestone)
+1. **Expo Push Notifications** — replace Web Push / VAPID (`web-push` package, `netlify/functions/notify.js`, `public/sw.js`, `src/utils/pushSubscription.ts`, `src/utils/webNotifications.ts`) with `expo-notifications` (already in `package.json`). Required for native iOS/Android push. The existing web push infra can be left in place and conditionally used for PWA, or removed entirely.
+2. **EAS Build** — set up `eas.json`, update `app.json` with bundle ID (`com.victoriaxleigh.lovewords` or similar) and Apple Team ID. Run `eas build --platform ios` to produce the `.ipa`.
+3. **App Store assets** — 1024×1024 icon (SVG already in `assets/logo/icon.svg`, PNG at `assets/icon.png`), screenshots (3–5 per device size), privacy policy URL, App Store listing copy (name, subtitle, description, keywords, category).
+4. **Friends mode** — same invite/game flow, but the lobby copy and invite prompt should say "invite a friend" not "invite your partner". No schema changes needed.
 
 ### Nice to fix
-2. **GitHub auto-deploy** — not set up. Every deploy is manual via `netlify deploy --prod --dir=dist --no-build`.
+5. **Push notifications end-to-end not fully verified** — the Netlify function has been deployed but the full flow (opponent receives notification when not on page) hasn't been confirmed working end-to-end.
 
-3. **Push notifications end-to-end not fully verified** — the Netlify function has been deployed but the full flow (opponent receives notification when not on page) hasn't been confirmed working.
+6. **Pre-existing TypeScript errors** — leftover `src/firebase/` directory from an earlier abandoned Firebase attempt causes TS errors. They don't block the Expo web build (Expo uses Babel/Metro, not `tsc`). Safe to ignore or delete the `src/firebase/` folder entirely.
 
-4. **`Alert.alert` still in `AuthScreen.tsx`** — login/register errors still use `Alert.alert`. Works fine on web (browser native dialog) but inconsistent with the rest of the app.
+7. **`exchangeTiles` in `tiles.ts`** — exported but never called anywhere. The swap logic in `swapTiles`/`swapSoloTiles` in `gameService.ts` is inlined. Can be cleaned up.
 
-5. **Pre-existing TypeScript errors** — leftover `src/firebase/` directory from an earlier abandoned Firebase attempt causes TS errors. They don't block the Expo web build (Expo uses Babel/Metro, not `tsc`). Safe to ignore or delete the `src/firebase/` folder entirely.
-
-6. **`exchangeTiles` in `tiles.ts`** — exported but never called anywhere. The swap logic in `swapTiles`/`swapSoloTiles` in `gameService.ts` is inlined. Can be cleaned up.
-
-7. **UI button style inconsistency** — `borderRadius: 10` in LobbyScreen vs `borderRadius: 12` in GameScreen. Low priority. Would benefit from a shared `src/utils/styles.ts`.
+### Fixed this session (Session 8) — for reference
+- **Drag system** (Issues 23/29): Rewrote `TileRack.tsx` and `BoardComponent.tsx` from `PanResponder` + web pointer events to `react-native-gesture-handler` (`Gesture.Pan` + `GestureDetector`). Unblocks native builds. Also merged boyfriend's shuffle button and responsive tile sizing.
+- **Issue 8** (`Alert.alert` in `AuthScreen`): Replaced with inline dismissable error banner. No more browser native dialogs.
+- **Issue 5 partial** (borderRadius inconsistency): Added `src/utils/styles.ts` with `RADII`/`SHADOWS` tokens. LobbyScreen invite input/button updated from 10→12 to match rest of app.
+- **Login tagline**: Updated to "A game for word lovers 💬".
+- **Auth screen logo**: Replaced `💌` emoji with `<Image source={require('../../assets/icon.png')}>` — matches the home screen icon (pink tile, heart, "8").
+- **Auto-deploy**: Removed `ignore = "exit 1"` from `netlify.toml`. Pushes to `main` now trigger Netlify CI automatically.
