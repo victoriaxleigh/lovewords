@@ -10,7 +10,7 @@ import { scoreMove } from '../engine/scoring';
 function sendPushNotification(
   recipientUid: string,
   senderName: string,
-  type: 'turn' | 'lovenote'
+  type: 'turn' | 'lovenote' | 'nudge'
 ) {
   if (typeof window === 'undefined') return;
   fetch('/.netlify/functions/notify', {
@@ -18,6 +18,13 @@ function sendPushNotification(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipientUid, senderName, type }),
   }).catch(() => {}); // never throw — notifications are best-effort
+}
+
+// ─── Nudge ────────────────────────────────────────────────────────────────────
+// Poke your partner when it's their turn and they're taking their sweet time.
+// Best-effort push only — no DB write, no game-state change.
+export function sendNudge(recipientUid: string, senderName: string) {
+  sendPushNotification(recipientUid, senderName, 'nudge');
 }
 
 // ─── Create Solo Practice Game ────────────────────────────────────────────────

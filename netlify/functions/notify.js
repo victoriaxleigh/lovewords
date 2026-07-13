@@ -61,14 +61,28 @@ exports.handler = async (event) => {
   const { endpoint, p256dh, auth } = rows[0];
   const subscription = { endpoint, keys: { p256dh, auth } };
 
+  // Playful, on-brand nudges — one is picked at random so it never feels naggy.
+  const NUDGES = [
+    `${senderName} misses you… and it's your turn 💕`,
+    `Psst 👀 ${senderName} is waiting on your move!`,
+    `${senderName} sent you a little love-poke 💌 your turn!`,
+    `Hey cutie — ${senderName} says it's your move 😘`,
+    `${senderName} can't win until you play 😏 your turn 💕`,
+    `Tick tock 💗 ${senderName} is waiting for your word!`,
+  ];
+
   const title =
     type === 'turn'
       ? '💌 Your turn on LoveWords!'
+      : type === 'nudge'
+      ? `👉 A nudge from ${senderName}`
       : `💕 Love note from ${senderName}`;
 
   const message =
     type === 'turn'
       ? `${senderName} just played — go make your move! 🎯`
+      : type === 'nudge'
+      ? NUDGES[Math.floor(Math.random() * NUDGES.length)]
       : `${senderName} left you a little something 💕`;
 
   const payload = JSON.stringify({ title, body: message });

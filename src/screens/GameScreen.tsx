@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -51,6 +51,8 @@ export default function GameScreen() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const [nudgeCooldown, setNudgeCooldown] = useState(false);
 
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
@@ -442,6 +444,16 @@ export default function GameScreen() {
     }
   }
 
+  // Nudge the partner — best-effort push, with a 30s cooldown so you can't spam.
+  function handleNudge() {
+    if (!partner || nudgeCooldown) return;
+    sendNudge(partner.uid, myDisplayName);
+    setNudgeSent(true);
+    setNudgeCooldown(true);
+    setTimeout(() => setNudgeSent(false), 3000);
+    setTimeout(() => setNudgeCooldown(false), 30000);
+  }
+
   async function handlePass() {
     if (!game) return;
     if (isSolo) {
@@ -604,6 +616,17 @@ export default function GameScreen() {
             ? '💌 Your turn — place your tiles!'
             : `⏳ Waiting for ${partner?.displayName}…`}
         </Text>
+        {!isSolo && !isMyTurn && game.status === 'active' && (
+          <TouchableOpacity
+            style={[styles.nudgeBtn, nudgeCooldown && styles.nudgeBtnDisabled]}
+            onPress={handleNudge}
+            disabled={nudgeCooldown}
+            accessibilityLabel="Nudge your partner to take their turn"
+            accessibilityRole="button"
+          >
+            <Text style={styles.nudgeBtnText}>{nudgeSent ? '✅ Nudged!' : '👉 Nudge them'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Board */}
@@ -862,6 +885,15 @@ const styles = StyleSheet.create({
   turnBannerMine: { backgroundColor: '#FFF0F5' },
   turnBannerTheirs: { backgroundColor: '#F5F5F5' },
   turnText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+  nudgeBtn: {
+    marginTop: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+  },
+  nudgeBtnDisabled: { backgroundColor: Colors.border },
+  nudgeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   hint: {
     textAlign: 'center',
     fontSize: 12,
