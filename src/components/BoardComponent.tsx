@@ -1,11 +1,13 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Dimensions,
   useWindowDimensions,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Board, PlacedTile, Tile } from '../types';
 import { BOARD_SIZE } from '../engine/board';
 import { Colors } from '../utils/colors';
@@ -26,10 +28,11 @@ function computeCellSize(windowWidth: number, windowHeight: number): number {
 }
 
 // Live cell size at call time — GameScreen uses this for drag-end coordinate math
-// so resizes are picked up correctly.
+// so resizes are picked up correctly. Uses Dimensions (cross-platform) instead of
+// window.innerWidth so this works on iOS/Android as well as web.
 export function getCellSize(): number {
-  if (typeof window === 'undefined') return MAX_CELL_SIZE;
-  return computeCellSize(window.innerWidth, window.innerHeight);
+  const { width, height } = Dimensions.get('window');
+  return computeCellSize(width, height);
 }
 
 export type BoardTileDragCallbacks = {
@@ -61,7 +64,6 @@ function DraggablePendingTile({
   dragCallbacks?: BoardTileDragCallbacks;
   isDragging?: boolean;
 }) {
-  const wrapRef = useRef<View>(null);
   const tileRef = useRef(tile);
   const onTilePressRef = useRef(onTilePress);
   const dragCallbacksRef = useRef(dragCallbacks);
@@ -69,76 +71,53 @@ function DraggablePendingTile({
   useEffect(() => { onTilePressRef.current = onTilePress; }, [onTilePress]);
   useEffect(() => { dragCallbacksRef.current = dragCallbacks; }, [dragCallbacks]);
 
-  useEffect(() => {
-    const el = wrapRef.current as unknown as HTMLElement | null;
-    if (!el) return;
+  const dragStartedRef = useRef(false);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
 
-    let startX = 0;
-    let startY = 0;
-    let dragStarted = false;
-    let activePointerId: number | null = null;
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (activePointerId !== null) return;
-      activePointerId = e.pointerId;
-      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-      startX = e.clientX;
-      startY = e.clientY;
-      dragStarted = false;
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      if (e.pointerId !== activePointerId) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!dragStarted && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
-        dragStarted = true;
-        dragCallbacksRef.current?.onDragStart(tileRef.current, e.clientX, e.clientY);
-      }
-      if (dragStarted) {
-        e.preventDefault();
-        dragCallbacksRef.current?.onDragMove(e.clientX, e.clientY);
-      }
-    };
-    const onPointerUp = (e: PointerEvent) => {
-      if (e.pointerId !== activePointerId) return;
-      try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-      if (dragStarted) {
-        dragCallbacksRef.current?.onDragEnd(e.clientX, e.clientY, tileRef.current);
-      } else {
-        onTilePressRef.current();
-      }
-      activePointerId = null;
-      dragStarted = false;
-    };
-    const onPointerCancel = (e: PointerEvent) => {
-      if (e.pointerId !== activePointerId) return;
-      if (dragStarted) dragCallbacksRef.current?.onDragCancel();
-      activePointerId = null;
-      dragStarted = false;
-    };
-
-    el.addEventListener('pointerdown', onPointerDown);
-    el.addEventListener('pointermove', onPointerMove);
-    el.addEventListener('pointerup', onPointerUp);
-    el.addEventListener('pointercancel', onPointerCancel);
-    return () => {
-      el.removeEventListener('pointerdown', onPointerDown);
-      el.removeEventListener('pointermove', onPointerMove);
-      el.removeEventListener('pointerup', onPointerUp);
-      el.removeEventListener('pointercancel', onPointerCancel);
-    };
-  }, []);
+  const gesture = useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .minDistance(0)
+      .onBegin((e) => {
+        dragStartedRef.current = false;
+        startXRef.current = e.absoluteX;
+        startYRef.current = e.absoluteY;
+      })
+      .onUpdate((e) => {
+        const dx = e.absoluteX - startXRef.current;
+        const dy = e.absoluteY - startYRef.current;
+        if (!dragStartedRef.current &&
+            (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          dragStartedRef.current = true;
+          dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
+        }
+        if (dragStartedRef.current) {
+          dragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
+        }
+      })
+      .onEnd((e) => {
+        if (dragStartedRef.current) {
+          dragCallbacksRef.current?.onDragEnd(e.absoluteX, e.absoluteY, tileRef.current);
+        } else {
+          onTilePressRef.current();
+        }
+        dragStartedRef.current = false;
+      })
+      .onFinalize(() => {
+        if (dragStartedRef.current) {
+          dragCallbacksRef.current?.onDragCancel();
+          dragStartedRef.current = false;
+        }
+      }),
+  []);
 
   return (
-    <View
-      ref={wrapRef}
-      style={[
-        { userSelect: 'none' as any, touchAction: 'none' as any },
-        isDragging ? { opacity: 0 } : undefined,
-      ]}
-    >
-      <TileComponent tile={tile} size={size} isNew />
-    </View>
+    <GestureDetector gesture={gesture}>
+      <View style={isDragging ? { opacity: 0 } : undefined}>
+        <TileComponent tile={tile} size={size} isNew />
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -159,7 +138,6 @@ export default function BoardComponent({
   const pendingMap = new Map(pendingTiles.map((t) => [`${t.row},${t.col}`, t]));
 
   return (
-    // No ScrollView — board is sized to fit the screen width exactly
     <View style={[styles.board, { alignSelf: 'center' }]} ref={boardRef}>
       {board.map((rowCells, row) => (
         <View key={row} style={styles.row}>
@@ -232,6 +210,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bonusTextDark: {
-    color: 'rgba(45,10,30,0.85)', // #2D0A1E at 85% — 8:1 on #64B5F6 vs 2.2:1 for white
+    color: 'rgba(45,10,30,0.85)',
   },
 });
