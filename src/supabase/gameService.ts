@@ -4,6 +4,19 @@ import { createEmptyBoard, applyMoveToBoard } from '../engine/board';
 import { createTileBag, drawTiles, shuffle } from '../engine/tiles';
 import { scoreMove } from '../engine/scoring';
 
+// Game ends after this many consecutive passes (2 each in a 2-player game).
+// Covers the "stuck" case where neither player has a valid play.
+const CONSECUTIVE_PASS_LIMIT = 4;
+
+function trailingPassCount(moves: Move[]): number {
+  let count = 0;
+  for (let i = moves.length - 1; i >= 0; i--) {
+    if (moves[i].uid === 'pass') count++;
+    else break;
+  }
+  return count;
+}
+
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // Calls our Netlify serverless function, which forwards to OneSignal.
 // Fails silently — a notification error should never break a move.
@@ -109,10 +122,12 @@ export async function submitSoloMove(
 // ─── Solo: Pass Turn ──────────────────────────────────────────────────────────
 export async function passSoloTurn(gameId: string, game: Game): Promise<void> {
   const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
+  const isFinished = trailingPassCount(game.moves) + 1 >= CONSECUTIVE_PASS_LIMIT;
   const { error } = await supabase
     .from('games')
     .update({
       moves: [...game.moves, move],
+      status: isFinished ? 'finished' : 'active',
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId);
@@ -377,11 +392,13 @@ export async function passTurn(gameId: string, game: Game, playerUid: string) {
   if (game.currentTurn !== playerUid) throw new Error('Not your turn');
   const otherIndex = game.players[0].uid === playerUid ? 1 : 0;
   const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
+  const isFinished = trailingPassCount(game.moves) + 1 >= CONSECUTIVE_PASS_LIMIT;
   const { error } = await supabase
     .from('games')
     .update({
       current_turn: game.players[otherIndex].uid,
       moves: [...game.moves, move],
+      status: isFinished ? 'finished' : 'active',
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId);

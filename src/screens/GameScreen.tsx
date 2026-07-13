@@ -520,6 +520,8 @@ export default function GameScreen() {
 
   if (game.status === 'finished') {
     const isSoloFinished = game.players.some((p) => p.email === 'solo');
+    const endedByPasses = game.moves.length >= 4 &&
+      game.moves.slice(-4).every((m) => m.uid === 'pass');
     const winner =
       game.players[0].score > game.players[1].score
         ? game.players[0]
@@ -552,6 +554,9 @@ export default function GameScreen() {
               : `${winner.displayName} won!`
             : "It's a tie! 💕"}
         </Text>
+        {endedByPasses && (
+          <Text style={styles.finishedReason}>No more moves — game ended by passes</Text>
+        )}
         <Text style={styles.finishedScores}>
           {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
         </Text>
@@ -928,6 +933,7 @@ const styles = StyleSheet.create({
   actionBtnSecondaryText: { color: Colors.text, fontWeight: '600', fontSize: 14 },
   finishedEmoji: { fontSize: 64, marginBottom: 12 },
   finishedText: { fontSize: 28, fontWeight: '900', color: Colors.primary, marginBottom: 8 },
+  finishedReason: { fontSize: 13, color: Colors.textLight, marginBottom: 8, fontStyle: 'italic' },
   finishedScores: { fontSize: 16, color: Colors.textLight, marginBottom: 32 },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
