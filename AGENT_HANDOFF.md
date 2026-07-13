@@ -1,6 +1,6 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-13 (Session 8)
+> Last updated: 2026-07-13 (Session 8 — updated same day)
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
@@ -435,6 +435,38 @@ const gesture = useMemo(() =>
 
 ---
 
+## Game-End Conditions
+
+The game sets `status: 'finished'` in two ways:
+
+1. **Player goes out**: `submitMove` / `submitSoloMove` check `newBag.length === 0 && newRack.length === 0`. When the bag empties and the active player uses their last tiles, the game ends.
+
+2. **Consecutive passes** (added Session 8): `passTurn` / `passSoloTurn` call `trailingPassCount(game.moves)`. When the 4th consecutive pass lands (`CONSECUTIVE_PASS_LIMIT = 4`, i.e. 2 passes each player), `status` is set to `'finished'`. This covers the stuck case where neither player has a valid play.
+
+```ts
+// gameService.ts — top of file
+const CONSECUTIVE_PASS_LIMIT = 4;
+
+function trailingPassCount(moves: Move[]): number {
+  let count = 0;
+  for (let i = moves.length - 1; i >= 0; i--) {
+    if (moves[i].uid === 'pass') count++;
+    else break;
+  }
+  return count;
+}
+
+// Inside passTurn / passSoloTurn:
+const isFinished = trailingPassCount(game.moves) + 1 >= CONSECUTIVE_PASS_LIMIT;
+// then include status: isFinished ? 'finished' : 'active' in the update
+```
+
+**Game-over screen** (`GameScreen.tsx`): detects the pass-end case with `game.moves.slice(-4).every(m => m.uid === 'pass')` and shows an italic *"No more moves — game ended by passes"* note below the winner text.
+
+**Not implemented** (vs real Scrabble): end-of-game tile penalty (subtracting remaining rack tile values from each player's score). Low priority for a casual app.
+
+---
+
 ## Swap Tiles — Current Behaviour
 
 Swap is a **single-tile immediate** operation:
@@ -651,3 +683,4 @@ Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tes
 - **Login tagline**: Updated to "A game for word lovers 💬".
 - **Auth screen logo**: Replaced `💌` emoji with `<Image source={require('../../assets/icon.png')}>` — matches the home screen icon (pink tile, heart, "8").
 - **Auto-deploy**: Removed `ignore = "exit 1"` from `netlify.toml`. Pushes to `main` now trigger Netlify CI automatically.
+- **Consecutive pass end**: Game now ends after 4 consecutive passes (2 each). `passTurn` and `passSoloTurn` both check `trailingPassCount`. Game-over screen shows reason when triggered this way.
