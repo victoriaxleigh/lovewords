@@ -22,10 +22,12 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isRegister = mode === 'register';
+
   async function handleSubmit() {
     setError(null);
-    if (!email || !password) { setError('Please fill in all fields'); return; }
-    if (mode === 'register' && !displayName) { setError('Please enter your name'); return; }
+    if (!email || !password) { setError('Fill in all fields to continue'); return; }
+    if (isRegister && !displayName) { setError('Add your name so friends can find you'); return; }
 
     setLoading(true);
     try {
@@ -41,78 +43,106 @@ export default function AuthScreen() {
     }
   }
 
+  function switchMode(next: 'login' | 'register') {
+    setMode(next);
+    setError(null);
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Image
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          source={require('../../assets/icon.png')}
-          style={styles.logo}
-          accessibilityLabel="LoveWords icon"
-        />
-        <Text style={styles.title}>LoveWords</Text>
-        <Text style={styles.subtitle}>A game for word lovers 💬</Text>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.logoHalo}>
+            <Image
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              source={require('../../assets/icon.png')}
+              style={styles.logo}
+              accessibilityLabel="LoveWords icon"
+            />
+          </View>
+          <Text style={styles.title}>LoveWords</Text>
+          <Text style={styles.subtitle}>A word game for the people you love 💕</Text>
+        </View>
 
-        {mode === 'register' && (
-          <TextInput
-            style={styles.input}
-            placeholder="Your name"
-            placeholderTextColor={Colors.textLight}
-            value={displayName}
-            onChangeText={setDisplayName}
-            autoCapitalize="words"
-            accessibilityLabel="Display name"
-          />
-        )}
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={Colors.textLight}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          accessibilityLabel="Email address"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={Colors.textLight}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          accessibilityLabel="Password"
-        />
-
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)} accessibilityLabel="Dismiss error">
-              <Text style={styles.errorDismiss}>✕</Text>
+        {/* Card */}
+        <View style={styles.card}>
+          {/* Segmented toggle */}
+          <View style={styles.segment}>
+            <TouchableOpacity
+              style={[styles.segmentBtn, !isRegister && styles.segmentBtnActive]}
+              onPress={() => switchMode('login')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !isRegister }}
+            >
+              <Text style={[styles.segmentText, !isRegister && styles.segmentTextActive]}>Sign in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segmentBtn, isRegister && styles.segmentBtnActive]}
+              onPress={() => switchMode('register')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isRegister }}
+            >
+              <Text style={[styles.segmentText, isRegister && styles.segmentTextActive]}>Sign up</Text>
             </TouchableOpacity>
           </View>
-        )}
 
-        <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {mode === 'login' ? 'Sign In' : 'Create Account'}
-            </Text>
+          {isRegister && (
+            <TextInput
+              style={styles.input}
+              placeholder="Your name"
+              placeholderTextColor={Colors.textLight}
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoCapitalize="words"
+              accessibilityLabel="Display name"
+            />
           )}
-        </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={Colors.textLight}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Email address"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={Colors.textLight}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            accessibilityLabel="Password"
+          />
 
-        <TouchableOpacity onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
-          <Text style={styles.switchText}>
-            {mode === 'login'
-              ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
-          </Text>
-        </TouchableOpacity>
+          {error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={() => setError(null)} accessibilityLabel="Dismiss error">
+                <Text style={styles.errorDismiss}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading} accessibilityRole="button">
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>{isRegister ? 'Create account' : 'Sign in'}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.footer}>
+          {isRegister ? 'Play together, wherever you are.' : 'Welcome back — your turn awaits.'}
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -124,30 +154,69 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
+  },
+  hero: { alignItems: 'center', marginBottom: 28 },
+  logoHalo: {
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    backgroundColor: Colors.tilePlaced,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+    ...SHADOWS.btn,
   },
   logo: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    marginBottom: 16,
+    width: 84,
+    height: 84,
+    borderRadius: 22,
   },
   title: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '900',
-    color: Colors.primary,
-    marginBottom: 4,
+    color: Colors.primaryDark,
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textLight,
-    marginBottom: 40,
+    marginTop: 6,
+    textAlign: 'center',
   },
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 20,
+    ...SHADOWS.card,
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    borderRadius: RADII.md,
+    padding: 4,
+    marginBottom: 16,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: RADII.sm,
+    alignItems: 'center',
+  },
+  segmentBtnActive: {
+    backgroundColor: Colors.surface,
+    ...SHADOWS.card,
+  },
+  segmentText: { fontSize: 14, fontWeight: '700', color: Colors.textLight },
+  segmentTextActive: { color: Colors.primary },
   input: {
     width: '100%',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
     borderRadius: RADII.md,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: Colors.text,
     borderWidth: 1,
@@ -162,22 +231,26 @@ const styles = StyleSheet.create({
     borderRadius: RADII.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#FFB3B3',
   },
-  errorText: { flex: 1, fontSize: 13, color: '#C0392B', fontWeight: '600' },
-  errorDismiss: { fontSize: 15, color: '#C0392B', fontWeight: '700', paddingLeft: 8 },
+  errorText: { flex: 1, fontSize: 13, color: Colors.errorDark, fontWeight: '600' },
+  errorDismiss: { fontSize: 15, color: Colors.errorDark, fontWeight: '700', paddingLeft: 8 },
   button: {
     width: '100%',
     backgroundColor: Colors.primary,
     borderRadius: RADII.md,
-    padding: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
     ...SHADOWS.btn,
   },
-  buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  switchText: { color: Colors.primaryDark, fontSize: 14, textDecorationLine: 'underline' },
+  buttonText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  footer: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginTop: 24,
+    textAlign: 'center',
+  },
 });

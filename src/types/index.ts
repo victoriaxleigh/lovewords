@@ -69,7 +69,6 @@ export type Game = {
   currentTurn: string; // uid
   status: GameStatus;
   mode: GameMode;
-  archived: boolean;
   moves: Move[];
   createdAt: number;
   updatedAt: number;

@@ -23,17 +23,15 @@ create table if not exists games (
   current_turn uuid not null,
   status text not null default 'active',
   mode text not null default 'partner',   -- 'partner' | 'friend'
-  archived boolean not null default false, -- soft-hide (Archived tab)
   moves jsonb not null default '[]',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
 -- ── Migration for existing installs (safe to re-run) ────────────────────────
--- If the games table predates the Partner/Friend + archive feature, add the
--- two columns. Existing rows default to partner / not-archived.
+-- If the games table predates the Partner/Friend feature, add the mode column.
+-- Existing rows default to partner.
 alter table games add column if not exists mode text not null default 'partner';
-alter table games add column if not exists archived boolean not null default false;
 
 -- Love Notes
 create table if not exists love_notes (

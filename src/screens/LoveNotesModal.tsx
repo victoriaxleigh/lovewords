@@ -37,25 +37,25 @@ const QUICK_NOTES = [
   "Every move I make is for you 🎯",
 ];
 
-// Friendly (non-romantic) quick-notes for Friend mode.
+// Punny (but non-romantic) quick-notes for Friend mode — word/game jokes.
 const FRIEND_QUICK_NOTES = [
-  "Nice word! 👏",
-  "Good game! 🎲",
-  "Your move! 😄",
-  "That was a sneaky play 😏",
-  "You're on fire 🔥",
-  "Rematch after this? 🤝",
-  "How'd you find that word?! 🤯",
-  "GG so far 🙌",
-  "I'm coming for that lead 👀",
-  "Big brain move 🧠",
-  "Take your time ⏳",
-  "Well played 👌",
-  "Lucky tiles! 🍀",
-  "You got this 💪",
-  "No pressure… 😅",
-  "That triple word tho 😤",
-  "Let's gooo 🚀",
+  "Tile me impressed 👏",
+  "That word was un-be-letter-able 🔤",
+  "You vowel-ed me over 😆",
+  "Triple word score? Show-off 😎",
+  "Q without a U? Bold move 🧐",
+  "You letter believe I'm winning 📖",
+  "That's a bingo! 🎉",
+  "Consonant pressure over here 😮‍💨",
+  "Making words, taking names ✍️",
+  "Spelling trouble for you 🐝",
+  "Word up! 🎤",
+  "Definitely winning… look it up 📚",
+  "Rack 'em up 🎯",
+  "You're really letter-ing me have it 😅",
+  "Big brain, bigger word 🧠",
+  "I've got a good feeling a-blank this 🎲",
+  "Playing scrabble, not scared-ble 💪",
 ];
 
 type Props = {
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   noteText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
   noteTextMine: { color: '#fff' },
   noteTime: { fontSize: 10, color: Colors.textLight, marginTop: 4, alignSelf: 'flex-end' },
-  noteTimeMine: { color: 'rgba(255,255,255,0.85)' },
+  noteTimeMine: { color: '#FFFFFF' },
   quickScroll: {
     flexGrow: 0,
     borderTopWidth: 1,
@@ -299,5 +299,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   sendBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  errorText: { color: 'red', fontSize: 12, textAlign: 'center', paddingVertical: 4 },
+  errorText: { color: Colors.errorDark, fontSize: 12, textAlign: 'center', paddingVertical: 4 },
 });

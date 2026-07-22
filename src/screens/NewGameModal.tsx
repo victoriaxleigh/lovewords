@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   modePillText: { fontSize: 16, fontWeight: '800', color: Colors.textLight },
   modePillTextActive: { color: Colors.primaryDark },
   modeSub: { fontSize: 11, color: Colors.textLight, marginTop: 4, textAlign: 'center' },
-  modeSubActive: { color: Colors.primary },
+  modeSubActive: { color: Colors.primaryDark },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: RADII.md,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFB3B3',
   },
-  errorBannerText: { fontSize: 13, color: '#C0392B', fontWeight: '600' },
+  errorBannerText: { fontSize: 13, color: Colors.errorDark, fontWeight: '600' },
   startBtn: {
     backgroundColor: Colors.primary,
     borderRadius: RADII.md,
