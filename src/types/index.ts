@@ -38,6 +38,11 @@ export type Board = Cell[][];
 
 export type GameStatus = 'waiting' | 'active' | 'finished';
 
+// Relationship mode for a game. 'partner' = the romantic experience (love notes,
+// 💕 copy); 'friend' = same game with neutral copy ("Messages" instead of "Love
+// Notes"). Smack talk stays in both. Solo games default to 'partner'.
+export type GameMode = 'partner' | 'friend';
+
 export type Move = {
   uid: string;
   tiles: PlacedTile[];
@@ -63,6 +68,8 @@ export type Game = {
   bag: Tile[];
   currentTurn: string; // uid
   status: GameStatus;
+  mode: GameMode;
+  archived: boolean;
   moves: Move[];
   createdAt: number;
   updatedAt: number;

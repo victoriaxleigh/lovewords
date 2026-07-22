@@ -86,6 +86,8 @@ export default function GameScreen() {
     requestNotificationPermission();
   }, []);
 
+  // Base smack talk (Partner mode). Two lines (index 6 and 15) are romantic and
+  // get swapped for neutral versions in Friend mode via FRIEND_SMACK_OVERRIDES.
   const SMACK_TALK = [
     "Yikes… is that really your best? 😬",
     "My grandma scores higher than that 👵",
@@ -104,6 +106,14 @@ export default function GameScreen() {
     "Bold strategy, let's see if it pays off… it won't 😂",
     "I still love you even when you play like this 💕… barely",
   ];
+  const FRIEND_SMACK_OVERRIDES: Record<number, string> = {
+    6: "Not gonna lie… that was rough 😂",
+    15: "Still rooting for you… kind of 💀",
+  };
+  const pickSmackTalk = (friend: boolean): string => {
+    const i = Math.floor(Math.random() * SMACK_TALK.length);
+    return friend && FRIEND_SMACK_OVERRIDES[i] ? FRIEND_SMACK_OVERRIDES[i] : SMACK_TALK[i];
+  };
 
   useEffect(() => {
     const unsub = subscribeToGame(gameId, (updatedGame) => {
@@ -124,8 +134,7 @@ export default function GameScreen() {
           const myPlayer = updatedGame.players.find((p) => p.uid === myUid);
           const them = updatedGame.players.find((p) => p.uid !== myUid);
           if (myPlayer && them && them.score - myPlayer.score > 10) {
-            const msg = SMACK_TALK[Math.floor(Math.random() * SMACK_TALK.length)];
-            setSmackTalk(msg);
+            setSmackTalk(pickSmackTalk(updatedGame.mode === 'friend'));
           }
         }
       } else {
@@ -158,6 +167,7 @@ export default function GameScreen() {
   }, [gameId, myUid]);
 
   const isSolo = game?.players.some((p) => p.email === 'solo') ?? false;
+  const isFriend = game?.mode === 'friend'; // neutral copy ("Messages" vs "Love Notes")
   // Solo: side alternates by moves count. Multiplayer: find my stable index in the players array.
   const currentSide = isSolo
     ? ((game?.moves.length ?? 0) % 2)
@@ -596,8 +606,8 @@ export default function GameScreen() {
           <Text style={styles.back}>← Games</Text>
         </TouchableOpacity>
         {!isSolo && (
-          <TouchableOpacity onPress={() => setShowLoveNotes(true)} style={styles.loveBtn} accessibilityLabel="Open love notes" accessibilityRole="button">
-            <Text style={styles.loveBtnText}>💌 Note</Text>
+          <TouchableOpacity onPress={() => setShowLoveNotes(true)} style={styles.loveBtn} accessibilityLabel={isFriend ? 'Open messages' : 'Open love notes'} accessibilityRole="button">
+            <Text style={styles.loveBtnText}>{isFriend ? '💬 Chat' : '💌 Note'}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -618,7 +628,7 @@ export default function GameScreen() {
           {isSolo
             ? `🎯 Playing as ${me?.displayName ?? 'Player'}`
             : isMyTurn
-            ? '💌 Your turn — place your tiles!'
+            ? `${isFriend ? '🎲' : '💌'} Your turn — place your tiles!`
             : `⏳ Waiting for ${partner?.displayName}…`}
         </Text>
         {!isSolo && !isMyTurn && game.status === 'active' && (
@@ -809,6 +819,7 @@ export default function GameScreen() {
           myUid={myUid}
           myDisplayName={myDisplayName}
           partnerUid={partner?.uid ?? ''}
+          isFriend={isFriend}
         />
       )}
 

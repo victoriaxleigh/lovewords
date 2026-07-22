@@ -1,11 +1,11 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-13 (Session 8 — updated same day)
+> Last updated: 2026-07-22 (Session 9 — Partner/Friend mode + home screen redesign)
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
-- **Partner mode** (the original): a couple plays async against each other
-- **Friends mode** (planned, same UI/smack talk): any two friends, same invite flow
+- **Partner mode** (the original): a couple plays async against each other — love notes, 💕 copy
+- **Friend mode** (built Session 9): any two friends, same game/engine, neutral copy ("Messages" instead of "Love Notes", non-romantic quick-notes). Smack talk stays in both. Chosen per-game via the New Game modal's Partner/Friend toggle; stored in `games.mode`
 - Built with **Expo ~54 / React Native 0.81 / React 19** (web-only today; native iOS/Android is the next milestone)
 - Deployed on **Netlify** with auto-deploy on push to `main`
 - Backend: **Supabase** (Postgres, Realtime, Auth)
@@ -182,9 +182,17 @@ Created on register, used by `getUserByEmail` for invites.
 | `bag` | jsonb | Remaining `Tile[]` |
 | `current_turn` | **uuid** | UID of active player |
 | `status` | text | `'waiting'` \| `'active'` \| `'finished'` |
+| `mode` | text | `'partner'` \| `'friend'` — relationship mode (Session 9). Default `'partner'` |
+| `archived` | bool | Soft-hide flag for the Archived tab (Session 9). Default `false` |
 | `moves` | jsonb | `Move[]` array |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
+
+**Migration for existing installs** (in `supabase_schema.sql`, safe to re-run):
+```sql
+alter table games add column if not exists mode text not null default 'partner';
+alter table games add column if not exists archived boolean not null default false;
+```
 
 **⚠️ CRITICAL: `current_turn` is a `uuid` column.** Writing a non-UUID string causes `invalid input syntax for type uuid`. Solo functions (`submitSoloMove`, `passSoloTurn`, `swapSoloTiles`) intentionally never write `current_turn`.
 
@@ -307,6 +315,8 @@ success: '#4CAF50'   error: '#F44336'   warning: '#FF9800'
 | `subscribeToLoveNotes(gameId, cb)` | Fetches notes ordered by created_at desc + INSERT subscription |
 | `markNoteRead(noteId)` | Sets read = true |
 | `deleteGame(gameId)` | Deletes game row; requires RLS delete policy on games table |
+| `archiveGame(gameId, archived)` | Sets the `archived` flag (soft-hide → Archived tab). Reversible with `false`. Uses the games_update RLS policy (either player) |
+| `createGame(p1, p2, mode?)` | **(updated Session 9)** now takes an optional `mode: 'partner' \| 'friend'` (default `'partner'`) written to the new `mode` column |
 
 ### Solo-only functions (NEVER touch current_turn)
 | Function | Description |
@@ -667,7 +677,7 @@ Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tes
 1. **Expo Push Notifications** — replace Web Push / VAPID (`web-push` package, `netlify/functions/notify.js`, `public/sw.js`, `src/utils/pushSubscription.ts`, `src/utils/webNotifications.ts`) with `expo-notifications` (already in `package.json`). Required for native iOS/Android push. The existing web push infra can be left in place and conditionally used for PWA, or removed entirely.
 2. **EAS Build** — set up `eas.json`, update `app.json` with bundle ID (`com.victoriaxleigh.lovewords` or similar) and Apple Team ID. Run `eas build --platform ios` to produce the `.ipa`.
 3. **App Store assets** — 1024×1024 icon (SVG already in `assets/logo/icon.svg`, PNG at `assets/icon.png`), screenshots (3–5 per device size), privacy policy URL, App Store listing copy (name, subtitle, description, keywords, category).
-4. **Friends mode** — same invite/game flow, but the lobby copy and invite prompt should say "invite a friend" not "invite your partner". No schema changes needed.
+4. **Friend mode** — ✅ **DONE (Session 9).** See the "Partner/Friend Mode + Home Screen" section below.
 
 ### Nice to fix
 5. **Push notifications end-to-end not fully verified** — the Netlify function has been deployed but the full flow (opponent receives notification when not on page) hasn't been confirmed working end-to-end.
@@ -675,6 +685,17 @@ Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tes
 6. **Pre-existing TypeScript errors** — leftover `src/firebase/` directory from an earlier abandoned Firebase attempt causes TS errors. They don't block the Expo web build (Expo uses Babel/Metro, not `tsc`). Safe to ignore or delete the `src/firebase/` folder entirely.
 
 7. **`exchangeTiles` in `tiles.ts`** — exported but never called anywhere. The swap logic in `swapTiles`/`swapSoloTiles` in `gameService.ts` is inlined. Can be cleaned up.
+
+### Built this session (Session 9) — Partner/Friend Mode + Home Screen redesign
+- **New Game modal** (`src/screens/NewGameModal.tsx`): Partner 💕 / Friend 🎲 toggle + email invite + "Practice Solo". Opened by the new **➕ New Game** button on the lobby. Passes the chosen `mode` into `createGame(p1, p2, mode)`.
+- **Home screen** (`LobbyScreen.tsx`) rewritten: segmented **Active / Past / Archived** tabs (partitioned client-side: Active = `!archived && status!=='finished'`, Past = `!archived && finished`, Archived = `archived`), per-tab counts, a mode badge (💕/🎲/🎯) on each card. Long-press a card → **Archive/Unarchive + Delete** action row (Delete still permanent).
+- **Schema**: added `games.mode` (`'partner'|'friend'`) and `games.archived` (bool) — see the games table + migration block above. No RLS change (games_update already allows either player, so `archiveGame` works).
+- **Types**: `GameMode` added; `Game` gained `mode` + `archived` (non-optional; `rowToGame` defaults them for old rows).
+- **Service**: new `archiveGame(gameId, archived)`; `createGame` takes `mode`; `createSoloGame` writes `mode:'partner'`; `createRematch` carries the mode through.
+- **Friend-mode copy (lightweight relabel, no color change)**: `LoveNotesModal` takes `isFriend` → title "Messages 💬", neutral `FRIEND_QUICK_NOTES`, "Write a message…", 💬 send emoji. `GameScreen` derives `isFriend = game.mode==='friend'` → "💬 Chat" button, neutral turn banner, and the 2 romantic smack-talk lines swapped for neutral ones (`FRIEND_SMACK_OVERRIDES`). Partner mode is unchanged.
+- **⚠️ Deploy step**: the two `alter table` statements MUST be run in Supabase before deploying (existing games default to partner/not-archived).
+- **Phase 2 (not built)**: random matchmaking — deferred; needs an RLS rewrite (current policies assume both uids known at insert) + stranger-safety design.
+- **Verified**: `tsc` introduces no new errors (4 pre-existing remain); 63/63 jest tests pass; production web bundle builds + boots clean with all new strings present. Interactive click-through of the lobby was NOT possible in-session (prod preview bundle strips the `?dev=1` mock; real login needed) — confirm in the real app after running the migration.
 
 ### Fixed this session (Session 8) — for reference
 - **Drag system** (Issues 23/29): Rewrote `TileRack.tsx` and `BoardComponent.tsx` from `PanResponder` + web pointer events to `react-native-gesture-handler` (`Gesture.Pan` + `GestureDetector`). Unblocks native builds. Also merged boyfriend's shuffle button and responsive tile sizing.

@@ -22,10 +22,18 @@ create table if not exists games (
   bag jsonb not null,
   current_turn uuid not null,
   status text not null default 'active',
+  mode text not null default 'partner',   -- 'partner' | 'friend'
+  archived boolean not null default false, -- soft-hide (Archived tab)
   moves jsonb not null default '[]',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+-- ── Migration for existing installs (safe to re-run) ────────────────────────
+-- If the games table predates the Partner/Friend + archive feature, add the
+-- two columns. Existing rows default to partner / not-archived.
+alter table games add column if not exists mode text not null default 'partner';
+alter table games add column if not exists archived boolean not null default false;
 
 -- Love Notes
 create table if not exists love_notes (
@@ -49,6 +57,29 @@ alter table love_notes enable row level security;
 create policy "profiles_read" on profiles for select using (auth.role() = 'authenticated');
 create policy "profiles_insert" on profiles for insert with check (auth.uid() = id);
 create policy "profiles_update" on profiles for update using (auth.uid() = id);
+
+-- ── Auto-create profile on signup ───────────────────────────
+-- Runs server-side with elevated rights, so it works even when
+-- email-confirmation is on and the client has no session yet.
+-- This replaces the client-side profiles insert in authService.ts.
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'display_name', new.email)
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
 
 -- Games: only players in the game can see/edit it
 create policy "games_read" on games for select

@@ -16,6 +16,7 @@ import { sendLoveNote, subscribeToLoveNotes } from '../supabase/gameService';
 import { Colors } from '../utils/colors';
 import { sendLoveNoteNotification } from '../utils/webNotifications';
 
+// Romantic quick-notes for Partner mode.
 const QUICK_NOTES = [
   "You're the best word partner 💌",
   "I love playing with you! 💕",
@@ -36,6 +37,27 @@ const QUICK_NOTES = [
   "Every move I make is for you 🎯",
 ];
 
+// Friendly (non-romantic) quick-notes for Friend mode.
+const FRIEND_QUICK_NOTES = [
+  "Nice word! 👏",
+  "Good game! 🎲",
+  "Your move! 😄",
+  "That was a sneaky play 😏",
+  "You're on fire 🔥",
+  "Rematch after this? 🤝",
+  "How'd you find that word?! 🤯",
+  "GG so far 🙌",
+  "I'm coming for that lead 👀",
+  "Big brain move 🧠",
+  "Take your time ⏳",
+  "Well played 👌",
+  "Lucky tiles! 🍀",
+  "You got this 💪",
+  "No pressure… 😅",
+  "That triple word tho 😤",
+  "Let's gooo 🚀",
+];
+
 type Props = {
   visible: boolean;
   onClose: () => void;
@@ -43,9 +65,11 @@ type Props = {
   myUid: string;
   myDisplayName: string;
   partnerUid: string;
+  isFriend?: boolean;
 };
 
-export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisplayName, partnerUid }: Props) {
+export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisplayName, partnerUid, isFriend = false }: Props) {
+  const quickNotes = isFriend ? FRIEND_QUICK_NOTES : QUICK_NOTES;
   const [notes, setNotes] = useState<LoveNote[]>([]);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -58,14 +82,14 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
       if (!visible && newNotes.length > prevNoteCountRef.current) {
         const latest = newNotes[0];
         if (latest.toUid === myUid) {
-          sendLoveNoteNotification('Your partner 💕', latest.message);
+          sendLoveNoteNotification(isFriend ? 'New message 💬' : 'Your partner 💕', latest.message);
         }
       }
       prevNoteCountRef.current = newNotes.length;
       setNotes(newNotes);
     });
     return unsub;
-  }, [gameId, visible, myUid]);
+  }, [gameId, visible, myUid, isFriend]);
 
   async function handleSend(text?: string) {
     const msg = (text ?? message).trim();
@@ -73,7 +97,7 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
     setSending(true);
     setSendError('');
     try {
-      const result = await sendLoveNote(gameId, myUid, partnerUid, msg, '💕', myDisplayName);
+      const result = await sendLoveNote(gameId, myUid, partnerUid, msg, isFriend ? '💬' : '💕', myDisplayName);
       if (!result.success) {
         setSendError(result.error ?? 'Could not send — try again');
       } else {
@@ -94,8 +118,8 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Love Notes 💌</Text>
-          <TouchableOpacity onPress={onClose} accessibilityLabel="Close love notes" accessibilityRole="button">
+          <Text style={styles.title}>{isFriend ? 'Messages 💬' : 'Love Notes 💌'}</Text>
+          <TouchableOpacity onPress={onClose} accessibilityLabel={isFriend ? 'Close messages' : 'Close love notes'} accessibilityRole="button">
             <Text style={styles.close}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -108,7 +132,9 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
           contentContainerStyle={styles.feedContent}
           inverted
           ListEmptyComponent={
-            <Text style={styles.empty}>No notes yet — send the first one! 💌</Text>
+            <Text style={styles.empty}>
+              {isFriend ? 'No messages yet — send the first one! 💬' : 'No notes yet — send the first one! 💌'}
+            </Text>
           }
           renderItem={({ item }) => {
             const isMine = item.fromUid === myUid;
@@ -126,7 +152,7 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
         {/* Quick note chips — FlatList handles tap vs scroll better than ScrollView */}
         <FlatList
           horizontal
-          data={QUICK_NOTES}
+          data={quickNotes}
           keyExtractor={(item) => item}
           showsHorizontalScrollIndicator={false}
           style={styles.quickScroll}
@@ -147,13 +173,13 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder="Write a love note..."
+            placeholder={isFriend ? 'Write a message...' : 'Write a love note...'}
             placeholderTextColor={Colors.textLight}
             value={message}
             onChangeText={setMessage}
             multiline
             returnKeyType="send"
-            accessibilityLabel="Love note message"
+            accessibilityLabel={isFriend ? 'Message' : 'Love note message'}
           />
           <TouchableOpacity
             style={[styles.sendBtn, (!message.trim() || sending) && styles.sendBtnDisabled]}

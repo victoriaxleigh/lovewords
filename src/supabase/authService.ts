@@ -11,15 +11,10 @@ export async function register(email: string, password: string, displayName: str
   });
   if (error) throw error;
 
-  // Save profile row
-  if (data.user) {
-    const { error: profileError } = await supabase.from('profiles').upsert({
-      id: data.user.id,
-      email: emailLower,
-      display_name: displayName,
-    });
-    if (profileError) throw profileError;
-  }
+  // The profiles row is created server-side by the on_auth_user_created
+  // trigger (see supabase_schema.sql). Doing it here from the client fails
+  // under RLS when email-confirmation is on, because signUp() returns no
+  // session yet and auth.uid() is null.
   return data.user;
 }
 
