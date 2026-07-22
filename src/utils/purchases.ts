@@ -2,6 +2,15 @@ import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import { supabase } from '../supabase/config';
 
+// ── Monetization switch ──────────────────────────────────────────────────────
+// v1.0 launches FREE (no in-app purchase) so the first App Store submission is
+// simple and low-risk. To turn on the "3 free games → $2.99 lifetime unlock"
+// in v1.1: set MONETIZATION_ENABLED = true, paste the real RevenueCat key, and
+// finish the RevenueCat + App Store Connect in-app-purchase setup (see SETUP.md).
+// While this is false: RevenueCat is never initialized and the paywall never
+// fires — everyone plays free.
+export const MONETIZATION_ENABLED = false;
+
 // RevenueCat dashboard setup required before this works (not done yet — see
 // SETUP.md): create a RevenueCat project, add the "lovewords_lifetime"
 // non-consumable product from App Store Connect, map it to a "lifetime"
@@ -11,15 +20,15 @@ const LIFETIME_ENTITLEMENT_ID = 'lifetime';
 
 let configured = false;
 
-// No-ops on web — IAP only exists in the native app. The web app stays free.
+// No-ops on web (IAP is native-only) and while monetization is disabled.
 export function configurePurchases(uid: string) {
-  if (Platform.OS === 'web' || configured) return;
+  if (Platform.OS === 'web' || !MONETIZATION_ENABLED || configured) return;
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS, appUserID: uid });
   configured = true;
 }
 
 export async function getHasLifetimeAccess(): Promise<boolean> {
-  if (Platform.OS === 'web') return true; // web is free/unlimited, gate never applies
+  if (Platform.OS === 'web' || !MONETIZATION_ENABLED) return true; // free — gate never applies
   try {
     const customerInfo = await Purchases.getCustomerInfo();
     return typeof customerInfo.entitlements.active[LIFETIME_ENTITLEMENT_ID] !== 'undefined';

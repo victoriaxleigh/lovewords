@@ -97,7 +97,7 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
     setSending(true);
     setSendError('');
     try {
-      const result = await sendLoveNote(gameId, myUid, partnerUid, msg, isFriend ? '💬' : '💕', myDisplayName);
+      const result = await sendLoveNote(gameId, myUid, partnerUid, msg, isFriend ? '💬' : '💕', myDisplayName, isFriend);
       if (!result.success) {
         setSendError(result.error ?? 'Could not send — try again');
       } else {

@@ -2,6 +2,22 @@
 
 ---
 
+## Session 9 — 2026-07-22
+
+### Partner / Friend mode
+Added a relationship mode chosen per game via the new **New Game modal** (`src/screens/NewGameModal.tsx`) — Partner 💕 or Friend 🎲. Stored in a new `games.mode` column (`'partner'|'friend'`, migration: `alter table games add column if not exists mode text not null default 'partner';`). Friend mode swaps romantic copy for neutral: chat titled "Messages 💬" (not "Love Notes"), punny non-romantic quick-notes, neutral turn banner + smack-talk overrides. Same engine either way.
+
+### Home + login redesign; Active/Past
+Rewrote `LobbyScreen.tsx` (avatar header, magenta "New game" hero, **Active / Past** tabs — Archived was removed — polished cards with initials avatar, mode badge, status chip) and `AuthScreen.tsx` (logo halo, floating card, Sign in / Sign up segmented toggle).
+
+### WCAG AAA
+Hardened the palette to 7:1: `primary #A8005F`, `primaryDark #7A0046`, `textLight #7A3453`, new `errorDark #9B1C1C`; recolored board bonus squares with solid AAA labels; game-card `accessibilityLabel`s so screen readers don't read raw emoji. `__tests__/contrast.test.ts` locks it in. **80 tests pass.**
+
+### App Store prep (v1.0 = free)
+Native push made mode-aware (`notify.js` + `isFriend` threaded through push calls). `MONETIZATION_ENABLED = false` (v1.1: 3 free games → $2.99 RevenueCat unlock, `FREE_GAME_LIMIT = 3`). Alpha stripped from the iOS icon (`assets/icon-ios.png`). Privacy policy at `public/privacy.html`. Full submission kit in `APP_STORE.md`. Blocked on the user's Apple Developer enrollment.
+
+---
+
 ## Session 7 — 2026-07-06
 
 ### iPhone Home Screen icon + PWA install

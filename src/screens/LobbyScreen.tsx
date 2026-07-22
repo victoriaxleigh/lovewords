@@ -23,6 +23,9 @@ type Props = {
 
 type Tab = 'active' | 'past';
 
+// Native app: number of games playable before the $2.99 lifetime unlock.
+const FREE_GAME_LIMIT = 3;
+
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -50,13 +53,13 @@ export default function LobbyScreen({ currentUser }: Props) {
     return unsub;
   }, [currentUser.uid]);
 
-  // Native app only: one free game, then a $2.99 lifetime unlock. The web app
-  // stays free/unlimited (Platform.OS === 'web' skips the gate entirely).
+  // Native app only: three free games, then a $2.99 lifetime unlock. The web
+  // app stays free/unlimited (Platform.OS === 'web' skips the gate entirely).
   async function isBlockedByPaywall(): Promise<boolean> {
     if (Platform.OS === 'web') return false;
     if (await getHasLifetimeAccess()) return false;
     const gameCount = await getUserGameCount(currentUser.uid);
-    return gameCount >= 1;
+    return gameCount >= FREE_GAME_LIMIT;
   }
 
   async function handleStartSolo() {

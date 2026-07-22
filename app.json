@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lovewords.app",
+      "icon": "./assets/icon-ios.png",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification"]
       }

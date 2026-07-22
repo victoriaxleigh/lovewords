@@ -39,7 +39,7 @@ export default function PaywallScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.emoji}>💌</Text>
-      <Text style={styles.title}>You've played your free game!</Text>
+      <Text style={styles.title}>You've used your 3 free games!</Text>
       <Text style={styles.body}>
         Unlock LoveWords for life — no ads, unlimited games, one-time payment.
       </Text>
