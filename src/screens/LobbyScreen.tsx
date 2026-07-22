@@ -6,30 +6,33 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  TextInput,
   Platform,
 } from 'react-native';
-import { createGame, createSoloGame, subscribeToUserGames, deleteGame, getUserGameCount } from '../supabase/gameService';
+import { createGame, createSoloGame, subscribeToUserGames, deleteGame, archiveGame, getUserGameCount } from '../supabase/gameService';
 import { getUserByEmail } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
-import { Game, Player } from '../types';
+import { Game, GameMode, Player } from '../types';
 import { Colors } from '../utils/colors';
-import { RADII } from '../utils/styles';
+import { RADII, SHADOWS } from '../utils/styles';
 import { useNavigation } from '@react-navigation/native';
+import NewGameModal from './NewGameModal';
 
 type Props = {
   currentUser: Player;
 };
 
+type Tab = 'active' | 'past' | 'archived';
+
 export default function LobbyScreen({ currentUser }: Props) {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('active');
+  const [showNewGame, setShowNewGame] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [startingSolo, setStartingSolo] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const navigation = useNavigation<any>();
 
   useEffect(() => {
@@ -55,10 +58,12 @@ export default function LobbyScreen({ currentUser }: Props) {
     setErrorMsg(null);
     try {
       if (await isBlockedByPaywall()) {
+        setShowNewGame(false);
         navigation.navigate('Paywall');
         return;
       }
       const gameId = await createSoloGame(currentUser);
+      setShowNewGame(false);
       navigation.navigate('Game', { gameId, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -67,16 +72,17 @@ export default function LobbyScreen({ currentUser }: Props) {
     }
   }
 
-  async function handleInvite() {
-    if (!inviteEmail.trim()) return;
+  async function handleStart(email: string, mode: GameMode) {
+    if (!email.trim()) return;
     setInviting(true);
     setErrorMsg(null);
     try {
       if (await isBlockedByPaywall()) {
+        setShowNewGame(false);
         navigation.navigate('Paywall');
         return;
       }
-      const opponentData = await getUserByEmail(inviteEmail);
+      const opponentData = await getUserByEmail(email);
       if (!opponentData) {
         setErrorMsg('No user with that email exists. Ask them to sign up!');
         return;
@@ -88,8 +94,8 @@ export default function LobbyScreen({ currentUser }: Props) {
         score: 0,
         rack: [],
       };
-      const gameId = await createGame(currentUser, opponent);
-      setInviteEmail('');
+      const gameId = await createGame(currentUser, opponent, mode);
+      setShowNewGame(false);
       navigation.navigate('Game', { gameId, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -98,14 +104,20 @@ export default function LobbyScreen({ currentUser }: Props) {
     }
   }
 
+  async function handleArchive(gameId: string, archived: boolean) {
+    setBusyId(gameId);
+    const result = await archiveGame(gameId, archived);
+    setBusyId(null);
+    setMenuId(null);
+    if (!result.success) setErrorMsg(result.error ?? 'Could not update game.');
+  }
+
   async function handleDeleteGame(gameId: string) {
-    setDeleting(true);
+    setBusyId(gameId);
     const result = await deleteGame(gameId);
-    setDeleting(false);
-    if (!result.success) {
-      setErrorMsg(result.error ?? 'Could not delete game.');
-    }
-    setDeleteConfirmId(null);
+    setBusyId(null);
+    setMenuId(null);
+    if (!result.success) setErrorMsg(result.error ?? 'Could not delete game.');
   }
 
   function isSoloGame(game: Game) {
@@ -118,6 +130,11 @@ export default function LobbyScreen({ currentUser }: Props) {
     return game.currentTurn === currentUser.uid ? '💌 Your turn' : '⏳ Their turn';
   }
 
+  function modeBadge(game: Game) {
+    if (isSoloGame(game)) return '🎯';
+    return game.mode === 'friend' ? '🎲' : '💕';
+  }
+
   function getOpponent(game: Game) {
     return game.players.find((p) => p.uid !== currentUser.uid);
   }
@@ -126,12 +143,31 @@ export default function LobbyScreen({ currentUser }: Props) {
     return game.players.find((p) => p.uid === currentUser.uid)?.score ?? 0;
   }
 
+  // Partition into the three tabs. Archived wins over status.
+  const activeGames = games.filter((g) => !g.archived && g.status !== 'finished');
+  const pastGames = games.filter((g) => !g.archived && g.status === 'finished');
+  const archivedGames = games.filter((g) => g.archived);
+  const tabGames = activeTab === 'active' ? activeGames : activeTab === 'past' ? pastGames : archivedGames;
+
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: 'active', label: 'Active', count: activeGames.length },
+    { key: 'past', label: 'Past', count: pastGames.length },
+    { key: 'archived', label: 'Archived', count: archivedGames.length },
+  ];
+
+  const emptyText =
+    activeTab === 'active'
+      ? 'No active games. Start a new one above! 🎲'
+      : activeTab === 'past'
+      ? 'No finished games yet.'
+      : 'Nothing archived.';
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hi, {currentUser.displayName} 💕</Text>
-          <Text style={styles.subtitle}>Your love word games</Text>
+          <Text style={styles.subtitle}>Your games</Text>
         </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('Settings')}
@@ -142,32 +178,21 @@ export default function LobbyScreen({ currentUser }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Invite */}
-      <View style={styles.inviteBox}>
-        <Text style={styles.inviteTitle}>Start a new game 💌</Text>
-        <View style={styles.inviteRow}>
-          <TextInput
-            style={styles.inviteInput}
-            placeholder="Friend's email"
-            placeholderTextColor={Colors.textLight}
-            value={inviteEmail}
-            onChangeText={setInviteEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            accessibilityLabel="Friend's email address"
-          />
-          <TouchableOpacity style={styles.inviteBtn} onPress={handleInvite} disabled={inviting}>
-            {inviting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.inviteBtnText}>Go!</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* New game */}
+      <TouchableOpacity
+        style={styles.newGameBtn}
+        onPress={() => {
+          setErrorMsg(null);
+          setShowNewGame(true);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Start a new game"
+      >
+        <Text style={styles.newGameBtnText}>➕ New Game</Text>
+      </TouchableOpacity>
 
-      {/* Inline error */}
-      {errorMsg && (
+      {/* Inline error (for actions outside the modal, e.g. archive/delete failures) */}
+      {errorMsg && !showNewGame && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{errorMsg}</Text>
           <TouchableOpacity onPress={() => setErrorMsg(null)} accessibilityLabel="Dismiss error" accessibilityRole="button">
@@ -176,51 +201,62 @@ export default function LobbyScreen({ currentUser }: Props) {
         </View>
       )}
 
-      {/* Solo practice */}
-      <TouchableOpacity
-        style={styles.soloBtn}
-        onPress={handleStartSolo}
-        disabled={startingSolo}
-      >
-        {startingSolo ? (
-          <ActivityIndicator color={Colors.primary} size="small" />
-        ) : (
-          <Text style={styles.soloBtnText}>🎯 Practice Solo</Text>
-        )}
-      </TouchableOpacity>
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        {tabs.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, activeTab === t.key && styles.tabActive]}
+            onPress={() => {
+              setActiveTab(t.key);
+              setMenuId(null);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === t.key }}
+          >
+            <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>
+              {t.label}{t.count > 0 ? ` (${t.count})` : ''}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Games list */}
       {loading ? (
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
-      ) : games.length === 0 ? (
+      ) : tabGames.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>🎲</Text>
-          <Text style={styles.emptyText}>No games yet! Invite a friend above.</Text>
+          <Text style={styles.emptyText}>{emptyText}</Text>
         </View>
       ) : (
         <FlatList
-          data={games}
+          data={tabGames}
           keyExtractor={(g) => g.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
           renderItem={({ item: game }) => {
             const opponent = getOpponent(game);
             const myScore = getMyScore(game);
-            const isMyTurn = game.currentTurn === currentUser.uid;
-            const confirmingDelete = deleteConfirmId === game.id;
+            const isMyTurn = game.currentTurn === currentUser.uid && game.status === 'active';
+            const showingMenu = menuId === game.id;
+            const rowBusy = busyId === game.id;
             return (
               <View>
                 <TouchableOpacity
                   style={[styles.gameCard, isMyTurn && styles.gameCardActive]}
                   onPress={() => {
-                    if (confirmingDelete) { setDeleteConfirmId(null); return; }
+                    if (showingMenu) { setMenuId(null); return; }
                     navigation.navigate('Game', { gameId: game.id, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
                   }}
-                  onLongPress={() => setDeleteConfirmId(game.id)}
+                  onLongPress={() => setMenuId(game.id)}
                   delayLongPress={500}
-                  accessibilityHint="Long press to delete this game"
+                  accessibilityHint="Long press for archive and delete options"
                 >
                   <View style={styles.gameCardLeft}>
-                    <Text style={styles.opponentName}>vs {opponent?.displayName ?? '?'}</Text>
+                    <Text style={styles.opponentName}>
+                      <Text style={styles.modeBadge}>{modeBadge(game)} </Text>
+                      vs {opponent?.displayName ?? '?'}
+                    </Text>
                     <Text style={styles.gameStatus}>{statusLabel(game)}</Text>
                   </View>
                   <View style={styles.gameCardRight}>
@@ -229,25 +265,29 @@ export default function LobbyScreen({ currentUser }: Props) {
                     </Text>
                   </View>
                 </TouchableOpacity>
-                {confirmingDelete && (
-                  <View style={styles.deleteConfirm}>
-                    <Text style={styles.deleteConfirmText}>Delete this game?</Text>
-                    <View style={styles.deleteConfirmBtns}>
-                      <TouchableOpacity style={styles.deleteCancelBtn} onPress={() => setDeleteConfirmId(null)}>
-                        <Text style={styles.deleteCancelText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteConfirmBtn}
-                        onPress={() => handleDeleteGame(game.id)}
-                        disabled={deleting}
-                      >
-                        {deleting ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          <Text style={styles.deleteConfirmBtnText}>Delete</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                {showingMenu && (
+                  <View style={styles.menu}>
+                    <TouchableOpacity
+                      style={styles.menuBtn}
+                      onPress={() => handleArchive(game.id, !game.archived)}
+                      disabled={rowBusy}
+                    >
+                      {rowBusy ? (
+                        <ActivityIndicator color={Colors.primaryDark} size="small" />
+                      ) : (
+                        <Text style={styles.menuBtnText}>{game.archived ? '↩️ Unarchive' : '🗄️ Archive'}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.menuBtn, styles.menuBtnDelete]}
+                      onPress={() => handleDeleteGame(game.id)}
+                      disabled={rowBusy}
+                    >
+                      <Text style={styles.menuBtnDeleteText}>🗑️ Delete</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuBtn} onPress={() => setMenuId(null)} disabled={rowBusy}>
+                      <Text style={styles.menuBtnText}>Cancel</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -255,6 +295,17 @@ export default function LobbyScreen({ currentUser }: Props) {
           }}
         />
       )}
+
+      <NewGameModal
+        visible={showNewGame}
+        onClose={() => setShowNewGame(false)}
+        onStart={handleStart}
+        onStartSolo={handleStartSolo}
+        inviting={inviting}
+        startingSolo={startingSolo}
+        errorMsg={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+      />
     </View>
   );
 }
@@ -271,56 +322,41 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 22, fontWeight: '800', color: Colors.text },
   subtitle: { fontSize: 14, color: Colors.textLight, marginTop: 2 },
   settingsBtn: { color: Colors.primaryDark, fontSize: 14, marginTop: 4, fontWeight: '600' },
-  inviteBox: {
-    backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inviteTitle: { fontSize: 15, fontWeight: '700', color: Colors.text, marginBottom: 10 },
-  inviteRow: { flexDirection: 'row', gap: 8 },
-  inviteInput: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  newGameBtn: {
+    backgroundColor: Colors.primary,
+    marginHorizontal: 16,
     borderRadius: RADII.md,
-    padding: 12,
-    fontSize: 14,
-    color: Colors.text,
+    paddingVertical: 15,
+    alignItems: 'center',
+    ...SHADOWS.card,
+  },
+  newGameBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: RADII.md,
+    padding: 4,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  inviteBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: RADII.md,
-    paddingHorizontal: 18,
-    justifyContent: 'center',
-  },
-  inviteBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  soloBtn: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    paddingVertical: 12,
+  tab: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: RADII.sm,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderStyle: 'dashed',
   },
-  soloBtnText: {
-    color: Colors.primaryDark,
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  tabActive: { backgroundColor: Colors.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: Colors.textLight },
+  tabTextActive: { color: '#fff' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: Colors.textLight, fontSize: 16, textAlign: 'center' },
+  emptyText: { color: Colors.textLight, fontSize: 16, textAlign: 'center', paddingHorizontal: 32 },
   gameCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: RADII.lg,
     padding: 16,
     marginBottom: 10,
     flexDirection: 'row',
@@ -340,6 +376,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   gameCardLeft: { flex: 1 },
+  modeBadge: { fontSize: 15 },
   opponentName: { fontSize: 16, fontWeight: '700', color: Colors.text },
   gameStatus: { fontSize: 13, color: Colors.textLight, marginTop: 2 },
   gameCardRight: {},
@@ -350,7 +387,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0F0',
     borderRadius: 10,
     marginHorizontal: 16,
-    marginBottom: 8,
+    marginTop: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
@@ -358,34 +395,28 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { flex: 1, fontSize: 13, color: '#C0392B', fontWeight: '600' },
   errorBannerDismiss: { fontSize: 15, color: '#C0392B', fontWeight: '700', paddingLeft: 8 },
-  deleteConfirm: {
+  menu: {
+    flexDirection: 'row',
+    gap: 8,
     backgroundColor: '#FFF5F5',
     borderRadius: 10,
     marginBottom: 10,
     marginTop: -6,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#FFB3B3',
+    borderColor: Colors.border,
   },
-  deleteConfirmText: { fontSize: 13, color: Colors.text, fontWeight: '600', marginBottom: 8 },
-  deleteConfirmBtns: { flexDirection: 'row', gap: 8 },
-  deleteCancelBtn: {
+  menuBtn: {
     flex: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: RADII.sm,
+    paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  deleteCancelText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
-  deleteConfirmBtn: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
-    backgroundColor: '#C0392B',
-  },
-  deleteConfirmBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  menuBtnText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
+  menuBtnDelete: { backgroundColor: '#C0392B', borderColor: '#C0392B' },
+  menuBtnDeleteText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });
