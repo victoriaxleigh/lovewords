@@ -457,7 +457,7 @@ export default function GameScreen() {
   // Nudge the partner — best-effort push, with a 30s cooldown so you can't spam.
   function handleNudge() {
     if (!partner || nudgeCooldown) return;
-    sendNudge(partner.uid, myDisplayName);
+    sendNudge(partner.uid, myDisplayName, isFriend);
     setNudgeSent(true);
     setNudgeCooldown(true);
     setTimeout(() => setNudgeSent(false), 3000);

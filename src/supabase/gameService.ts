@@ -25,20 +25,21 @@ function trailingPassCount(moves: Move[]): number {
 function sendPushNotification(
   recipientUid: string,
   senderName: string,
-  type: 'turn' | 'lovenote' | 'nudge'
+  type: 'turn' | 'lovenote' | 'nudge',
+  isFriend = false
 ) {
   fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recipientUid, senderName, type }),
+    body: JSON.stringify({ recipientUid, senderName, type, isFriend }),
   }).catch(() => {}); // never throw — notifications are best-effort
 }
 
 // ─── Nudge ────────────────────────────────────────────────────────────────────
-// Poke your partner when it's their turn and they're taking their sweet time.
+// Poke your partner/friend when it's their turn and they're taking their time.
 // Best-effort push only — no DB write, no game-state change.
-export function sendNudge(recipientUid: string, senderName: string) {
-  sendPushNotification(recipientUid, senderName, 'nudge');
+export function sendNudge(recipientUid: string, senderName: string, isFriend = false) {
+  sendPushNotification(recipientUid, senderName, 'nudge', isFriend);
 }
 
 // ─── Create Solo Practice Game ────────────────────────────────────────────────
@@ -362,7 +363,7 @@ export async function submitMove(
   // Send push notification to opponent
   const opponent = game.players[otherIndex];
   const myName = game.players[playerIndex].displayName;
-  sendPushNotification(opponent.uid, myName, 'turn');
+  sendPushNotification(opponent.uid, myName, 'turn', game.mode === 'friend');
 
   return { success: true };
 }
@@ -432,7 +433,8 @@ export async function sendLoveNote(
   toUid: string,
   message: string,
   emoji: string,
-  senderName: string
+  senderName: string,
+  isFriend = false
 ): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase.from('love_notes').insert({
     game_id: gameId,
@@ -444,7 +446,7 @@ export async function sendLoveNote(
   });
   if (error) return { success: false, error: error.message };
 
-  sendPushNotification(toUid, senderName, 'lovenote');
+  sendPushNotification(toUid, senderName, 'lovenote', isFriend);
   return { success: true };
 }
 

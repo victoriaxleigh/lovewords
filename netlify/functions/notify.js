@@ -32,7 +32,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { recipientUid, senderName, type } = body;
+  const { recipientUid, senderName, type, isFriend } = body;
   if (!recipientUid || !senderName || !type) {
     return { statusCode: 400, body: 'Missing fields' };
   }
@@ -69,21 +69,35 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: 'No subscription found' };
   }
 
-  // Playful, on-brand nudges — one is picked at random so it never feels naggy.
-  const NUDGES = [
-    `${senderName} misses you… and it's your turn 💕`,
-    `Psst 👀 ${senderName} is waiting on your move!`,
-    `${senderName} sent you a little love-poke 💌 your turn!`,
-    `Hey cutie — ${senderName} says it's your move 😘`,
-    `${senderName} can't win until you play 😏 your turn 💕`,
-    `Tick tock 💗 ${senderName} is waiting for your word!`,
-  ];
+  // Playful nudges — one is picked at random so it never feels naggy. Partner
+  // mode is romantic; Friend mode keeps it light but non-romantic.
+  const NUDGES = isFriend
+    ? [
+        `${senderName} is waiting on your move! 🎲`,
+        `Psst 👀 ${senderName} says it's your turn`,
+        `${senderName} played — you're up! 🔤`,
+        `Tick tock ⏳ ${senderName} wants your word`,
+        `${senderName} can't win until you play 😏 your turn`,
+        `Your move! ${senderName} is waiting 🎯`,
+      ]
+    : [
+        `${senderName} misses you… and it's your turn 💕`,
+        `Psst 👀 ${senderName} is waiting on your move!`,
+        `${senderName} sent you a little love-poke 💌 your turn!`,
+        `Hey cutie — ${senderName} says it's your move 😘`,
+        `${senderName} can't win until you play 😏 your turn 💕`,
+        `Tick tock 💗 ${senderName} is waiting for your word!`,
+      ];
 
   const title =
     type === 'turn'
-      ? '💌 Your turn on LoveWords!'
+      ? isFriend
+        ? '🎲 Your turn on LoveWords!'
+        : '💌 Your turn on LoveWords!'
       : type === 'nudge'
       ? `👉 A nudge from ${senderName}`
+      : isFriend
+      ? `💬 Message from ${senderName}`
       : `💕 Love note from ${senderName}`;
 
   const message =
@@ -91,6 +105,8 @@ exports.handler = async (event) => {
       ? `${senderName} just played — go make your move! 🎯`
       : type === 'nudge'
       ? NUDGES[Math.floor(Math.random() * NUDGES.length)]
+      : isFriend
+      ? `${senderName} sent you a message 💬`
       : `${senderName} left you a little something 💕`;
 
   const results = await Promise.allSettled([

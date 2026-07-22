@@ -1,6 +1,6 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-22 (Session 9 — Partner/Friend mode + home screen redesign)
+> Last updated: 2026-07-22 (Session 9 — Partner/Friend mode, home/login redesign, WCAG AAA, App Store prep)
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
@@ -670,11 +670,18 @@ Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tes
 
 ## Known Issues / Pending Work
 
-### App Store path (next major milestone)
-1. **Expo Push Notifications** — replace Web Push / VAPID (`web-push` package, `netlify/functions/notify.js`, `public/sw.js`, `src/utils/pushSubscription.ts`, `src/utils/webNotifications.ts`) with `expo-notifications` (already in `package.json`). Required for native iOS/Android push. The existing web push infra can be left in place and conditionally used for PWA, or removed entirely.
-2. **EAS Build** — set up `eas.json`, update `app.json` with bundle ID (`com.victoriaxleigh.lovewords` or similar) and Apple Team ID. Run `eas build --platform ios` to produce the `.ipa`.
-3. **App Store assets** — 1024×1024 icon (SVG already in `assets/logo/icon.svg`, PNG at `assets/icon.png`), screenshots (3–5 per device size), privacy policy URL, App Store listing copy (name, subtitle, description, keywords, category).
-4. **Friend mode** — ✅ **DONE (Session 9).** See the "Partner/Friend Mode + Home Screen" section below.
+### App Store path (IN PROGRESS — Session 9). See `APP_STORE.md` for the full submission kit.
+**Decision: v1.0 ships FREE** (no IAP) to keep the first submission simple; the "3 free games → $2.99 unlock" is a v1.1 fast-follow. Status:
+1. **Native push** — ✅ **DONE.** `netlify/functions/notify.js` already sent Expo push (native) alongside Web Push (PWA); Session 9 made the copy **mode-aware** (`isFriend` threaded through `sendPushNotification`/`sendLoveNote`/`sendNudge` → friend games get neutral "💬 Message"/nudge text). Client registration in `src/utils/notifications.ts`. Still needs `eas init` (fills the placeholder `projectId` in `app.json`) and an APNs key (EAS auto-configures at build time).
+2. **Free launch wiring** — ✅ `MONETIZATION_ENABLED = false` in `src/utils/purchases.ts` (RevenueCat never initializes, paywall never fires). `FREE_GAME_LIMIT = 3` set in `LobbyScreen.tsx` for v1.1. Paywall/RevenueCat code intact but dormant. **v1.1:** flip the flag to `true`, paste the real RevenueCat key, create the $2.99 non-consumable IAP in App Store Connect + RevenueCat.
+3. **App icon** — ✅ Apple rejects icons with alpha; `assets/icon.png` was opaque-but-had-an-alpha-channel, so `assets/icon-ios.png` (alpha stripped via sharp) is wired via `app.json` `ios.icon`.
+4. **Privacy policy** — ✅ `public/privacy.html` (serves at `/privacy.html`). ⚠️ Replace the `ADD-YOUR-CONTACT-EMAIL-HERE` placeholder before submit. App does NOT collect device contacts (only Contact Info = email/name) — App Privacy answers are in `APP_STORE.md`.
+5. **Listing copy / keywords / review notes / App Privacy answers / pre-submit checklist** — ✅ all in `APP_STORE.md`.
+6. **EAS Build + submit** — ⏳ blocked on the Apple Developer Program account (user enrolling; $99/yr). Then `eas init` → `eas build --platform ios --profile production` → App Store Connect app record → `eas submit`. Bundle ID is `com.lovewords.app`.
+7. **Screenshots** — ⏳ best captured from the iOS Simulator at 1290×2796 once built; framing/captions in `APP_STORE.md`.
+8. **Friend mode** — ✅ **DONE (Session 9).** See the "Partner/Friend Mode + Home Screen" section below.
+
+⚠️ **User-generated content / review risk:** players send free-text messages. v1.0 is invite-only (low risk) but Apple may ask about UGC; block/report/filter becomes mandatory once **Phase 2 random matchmaking** ships.
 
 ### Nice to fix
 5. **Push notifications end-to-end not fully verified** — the Netlify function has been deployed but the full flow (opponent receives notification when not on page) hasn't been confirmed working end-to-end.
