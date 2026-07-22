@@ -183,7 +183,6 @@ Created on register, used by `getUserByEmail` for invites.
 | `current_turn` | **uuid** | UID of active player |
 | `status` | text | `'waiting'` \| `'active'` \| `'finished'` |
 | `mode` | text | `'partner'` \| `'friend'` — relationship mode (Session 9). Default `'partner'` |
-| `archived` | bool | Soft-hide flag for the Archived tab (Session 9). Default `false` |
 | `moves` | jsonb | `Move[]` array |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
@@ -191,7 +190,6 @@ Created on register, used by `getUserByEmail` for invites.
 **Migration for existing installs** (in `supabase_schema.sql`, safe to re-run):
 ```sql
 alter table games add column if not exists mode text not null default 'partner';
-alter table games add column if not exists archived boolean not null default false;
 ```
 
 **⚠️ CRITICAL: `current_turn` is a `uuid` column.** Writing a non-UUID string causes `invalid input syntax for type uuid`. Solo functions (`submitSoloMove`, `passSoloTurn`, `swapSoloTiles`) intentionally never write `current_turn`.
@@ -315,7 +313,6 @@ success: '#4CAF50'   error: '#F44336'   warning: '#FF9800'
 | `subscribeToLoveNotes(gameId, cb)` | Fetches notes ordered by created_at desc + INSERT subscription |
 | `markNoteRead(noteId)` | Sets read = true |
 | `deleteGame(gameId)` | Deletes game row; requires RLS delete policy on games table |
-| `archiveGame(gameId, archived)` | Sets the `archived` flag (soft-hide → Archived tab). Reversible with `false`. Uses the games_update RLS policy (either player) |
 | `createGame(p1, p2, mode?)` | **(updated Session 9)** now takes an optional `mode: 'partner' \| 'friend'` (default `'partner'`) written to the new `mode` column |
 
 ### Solo-only functions (NEVER touch current_turn)
@@ -687,15 +684,19 @@ Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tes
 7. **`exchangeTiles` in `tiles.ts`** — exported but never called anywhere. The swap logic in `swapTiles`/`swapSoloTiles` in `gameService.ts` is inlined. Can be cleaned up.
 
 ### Built this session (Session 9) — Partner/Friend Mode + Home Screen redesign
-- **New Game modal** (`src/screens/NewGameModal.tsx`): Partner 💕 / Friend 🎲 toggle + email invite + "Practice Solo". Opened by the new **➕ New Game** button on the lobby. Passes the chosen `mode` into `createGame(p1, p2, mode)`.
-- **Home screen** (`LobbyScreen.tsx`) rewritten: segmented **Active / Past / Archived** tabs (partitioned client-side: Active = `!archived && status!=='finished'`, Past = `!archived && finished`, Archived = `archived`), per-tab counts, a mode badge (💕/🎲/🎯) on each card. Long-press a card → **Archive/Unarchive + Delete** action row (Delete still permanent).
-- **Schema**: added `games.mode` (`'partner'|'friend'`) and `games.archived` (bool) — see the games table + migration block above. No RLS change (games_update already allows either player, so `archiveGame` works).
-- **Types**: `GameMode` added; `Game` gained `mode` + `archived` (non-optional; `rowToGame` defaults them for old rows).
-- **Service**: new `archiveGame(gameId, archived)`; `createGame` takes `mode`; `createSoloGame` writes `mode:'partner'`; `createRematch` carries the mode through.
-- **Friend-mode copy (lightweight relabel, no color change)**: `LoveNotesModal` takes `isFriend` → title "Messages 💬", neutral `FRIEND_QUICK_NOTES`, "Write a message…", 💬 send emoji. `GameScreen` derives `isFriend = game.mode==='friend'` → "💬 Chat" button, neutral turn banner, and the 2 romantic smack-talk lines swapped for neutral ones (`FRIEND_SMACK_OVERRIDES`). Partner mode is unchanged.
-- **⚠️ Deploy step**: the two `alter table` statements MUST be run in Supabase before deploying (existing games default to partner/not-archived).
+- **New Game modal** (`src/screens/NewGameModal.tsx`): Partner 💕 / Friend 🎲 toggle + email invite + "Practice Solo". Opened by the new **➕ New game** hero button on the lobby. Passes the chosen `mode` into `createGame(p1, p2, mode)`.
+- **Home screen** (`LobbyScreen.tsx`) rewritten + redesigned: avatar+greeting header with a circular settings button, a magenta **New game** hero CTA, segmented **Active / Past** tabs (Active = `status!=='finished'`, Past = `finished`; **Archived was removed by request**), per-tab counts, and polished game cards (opponent initials avatar, mode badge 💕/🎲/🎯, a "Your turn" status chip, stacked score). Long-press a card → **Delete** (permanent) + Cancel.
+- **Login screen** (`AuthScreen.tsx`) redesigned: logo halo, floating white card, segmented **Sign in / Sign up** toggle (replaces the bottom text link), refined inputs + CTA. Same visual system as the home screen (`SHADOWS`/`RADII` tokens, rounded cards, magenta accents).
+- **Schema**: added `games.mode` (`'partner'|'friend'`) only — see the games table + migration block above. No `archived` column. No RLS change.
+- **Types**: `GameMode` added; `Game` gained `mode` (non-optional; `rowToGame` defaults it to `'partner'` for old rows).
+- **Service**: `createGame` takes `mode`; `createSoloGame` writes `mode:'partner'`; `createRematch` carries the mode through. (No `archiveGame` — archive feature was dropped.)
+- **Friend-mode copy (lightweight relabel)**: `LoveNotesModal` takes `isFriend` → title "Messages 💬", "Write a message…", 💬 send emoji, and a **punny (non-romantic) `FRIEND_QUICK_NOTES`** set (word/game jokes — "Tile me impressed 👏", "That word was un-be-letter-able 🔤", …). Partner keeps the romantic `QUICK_NOTES`. `GameScreen` derives `isFriend = game.mode==='friend'` → "💬 Chat" button, neutral 🎲 turn banner, and the 2 romantic smack-talk lines swapped for neutral ones (`FRIEND_SMACK_OVERRIDES`). Partner mode is unchanged.
+- **⚠️ Deploy step**: run the single `alter table … add column mode` statement in Supabase before deploying (existing games default to partner).
+- **WCAG AAA (contrast) — palette hardened**: the brand was deepened for 7:1 text contrast (AAA normal; 4.5:1 large). Tokens in `colors.ts`: `primary #A8005F` (white-on-fill 7.42, primary-text-on-white 7.42), `primaryDark #7A0046` (primary text on light bgs / tilePlaced ≥8.4, on white 10.96), `textLight #7A3453` (secondary text: 8.6 on white, 7.8 on pink bg — **not** to be placed on the `tilePlaced` fill, only 6.6 there), and new `errorDark #9B1C1C` (error text + delete buttons; white-on-it 8.15, text-on-banner 7.36). All hardcoded `#C0392B`/`'red'` error colors across every screen were swapped to `Colors.errorDark`. A Node contrast script verified **every text pair ≥7:1** on the redesigned screens + ScoreBoard + game chrome (the 28px score is large so its 6.75 on pink passes AAA-large). The board's brighter `dw`/`tw` bonus pinks are unchanged (see caveat).
+- **Emoji accessibility (WCAG 1.1.1 / 1.4.1, Level A)**: game cards got a single descriptive `accessibilityLabel` (e.g. "Friend game with Sam, Your turn, score 12 to 8") and their inner decorative content (avatar, badges, score) is hidden from screen readers via `accessibilityElementsHidden` + `importantForAccessibility="no-hide-descendants"` — so the mode (💕/🎲) is announced in words, not as "two hearts / game die", and emoji aren't read individually.
+- **⚠️ NOT yet AAA — the game board bonus-square labels** (`BoardComponent.tsx`): the "TW/DW/TL/DL" labels are 85%-opacity white/dark on the colorful bonus squares. Several are <7:1 and the **DW pink square fails even AA**. Making them AAA means recoloring the iconic WWF bonus squares (a deliberate design change) — deferred pending that decision.
 - **Phase 2 (not built)**: random matchmaking — deferred; needs an RLS rewrite (current policies assume both uids known at insert) + stranger-safety design.
-- **Verified**: `tsc` introduces no new errors (4 pre-existing remain); 63/63 jest tests pass; production web bundle builds + boots clean with all new strings present. Interactive click-through of the lobby was NOT possible in-session (prod preview bundle strips the `?dev=1` mock; real login needed) — confirm in the real app after running the migration.
+- **Verified (Session 9)**: `tsc` introduces no new errors (4 pre-existing remain); 63/63 jest tests pass. Driven end-to-end in the live Expo dev server via the `?dev=1` mock: redesigned home + New Game modal + Partner/Friend toggle, a Friend game created and entered, and the in-game relabel confirmed ("💬 Chat", 🎲 banner, "Messages 💬" chat with neutral quick-notes). Active/Past tabs only.
 
 ### Fixed this session (Session 8) — for reference
 - **Drag system** (Issues 23/29): Rewrote `TileRack.tsx` and `BoardComponent.tsx` from `PanResponder` + web pointer events to `react-native-gesture-handler` (`Gesture.Pan` + `GestureDetector`). Unblocks native builds. Also merged boyfriend's shuffle button and responsive tile sizing.

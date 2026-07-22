@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { createGame, createSoloGame, subscribeToUserGames, deleteGame, archiveGame, getUserGameCount } from '../supabase/gameService';
+import { createGame, createSoloGame, subscribeToUserGames, deleteGame, getUserGameCount } from '../supabase/gameService';
 import { getUserByEmail } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, GameMode, Player } from '../types';
@@ -21,7 +21,14 @@ type Props = {
   currentUser: Player;
 };
 
-type Tab = 'active' | 'past' | 'archived';
+type Tab = 'active' | 'past';
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
 
 export default function LobbyScreen({ currentUser }: Props) {
   const [games, setGames] = useState<Game[]>([]);
@@ -45,7 +52,6 @@ export default function LobbyScreen({ currentUser }: Props) {
 
   // Native app only: one free game, then a $2.99 lifetime unlock. The web app
   // stays free/unlimited (Platform.OS === 'web' skips the gate entirely).
-  // Only blocks *starting a new* game — existing games are never affected.
   async function isBlockedByPaywall(): Promise<boolean> {
     if (Platform.OS === 'web') return false;
     if (await getHasLifetimeAccess()) return false;
@@ -84,7 +90,7 @@ export default function LobbyScreen({ currentUser }: Props) {
       }
       const opponentData = await getUserByEmail(email);
       if (!opponentData) {
-        setErrorMsg('No user with that email exists. Ask them to sign up!');
+        setErrorMsg('No one with that email yet. Ask them to sign up first.');
         return;
       }
       const opponent: Player = {
@@ -104,14 +110,6 @@ export default function LobbyScreen({ currentUser }: Props) {
     }
   }
 
-  async function handleArchive(gameId: string, archived: boolean) {
-    setBusyId(gameId);
-    const result = await archiveGame(gameId, archived);
-    setBusyId(null);
-    setMenuId(null);
-    if (!result.success) setErrorMsg(result.error ?? 'Could not update game.');
-  }
-
   async function handleDeleteGame(gameId: string) {
     setBusyId(gameId);
     const result = await deleteGame(gameId);
@@ -125,9 +123,9 @@ export default function LobbyScreen({ currentUser }: Props) {
   }
 
   function statusLabel(game: Game) {
-    if (game.status === 'finished') return '🏁 Finished';
-    if (isSoloGame(game)) return '🎯 Solo practice';
-    return game.currentTurn === currentUser.uid ? '💌 Your turn' : '⏳ Their turn';
+    if (game.status === 'finished') return 'Finished';
+    if (isSoloGame(game)) return 'Solo practice';
+    return game.currentTurn === currentUser.uid ? 'Your turn' : 'Their turn';
   }
 
   function modeBadge(game: Game) {
@@ -143,42 +141,39 @@ export default function LobbyScreen({ currentUser }: Props) {
     return game.players.find((p) => p.uid === currentUser.uid)?.score ?? 0;
   }
 
-  // Partition into the three tabs. Archived wins over status.
-  const activeGames = games.filter((g) => !g.archived && g.status !== 'finished');
-  const pastGames = games.filter((g) => !g.archived && g.status === 'finished');
-  const archivedGames = games.filter((g) => g.archived);
-  const tabGames = activeTab === 'active' ? activeGames : activeTab === 'past' ? pastGames : archivedGames;
+  const activeGames = games.filter((g) => g.status !== 'finished');
+  const pastGames = games.filter((g) => g.status === 'finished');
+  const tabGames = activeTab === 'active' ? activeGames : pastGames;
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'active', label: 'Active', count: activeGames.length },
     { key: 'past', label: 'Past', count: pastGames.length },
-    { key: 'archived', label: 'Archived', count: archivedGames.length },
   ];
-
-  const emptyText =
-    activeTab === 'active'
-      ? 'No active games. Start a new one above! 🎲'
-      : activeTab === 'past'
-      ? 'No finished games yet.'
-      : 'Nothing archived.';
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hi, {currentUser.displayName} 💕</Text>
-          <Text style={styles.subtitle}>Your games</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials(currentUser.displayName)}</Text>
+          </View>
+          <View>
+            <Text style={styles.greeting}>Hi, {currentUser.displayName}</Text>
+            <Text style={styles.subtitle}>Ready to play? 💕</Text>
+          </View>
         </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('Settings')}
+          style={styles.settingsBtn}
           accessibilityLabel="Settings"
           accessibilityRole="button"
         >
-          <Text style={styles.settingsBtn}>⚙️ Settings</Text>
+          <Text style={styles.settingsIcon}>⚙️</Text>
         </TouchableOpacity>
       </View>
 
-      {/* New game */}
+      {/* New game hero */}
       <TouchableOpacity
         style={styles.newGameBtn}
         onPress={() => {
@@ -188,10 +183,14 @@ export default function LobbyScreen({ currentUser }: Props) {
         accessibilityRole="button"
         accessibilityLabel="Start a new game"
       >
-        <Text style={styles.newGameBtnText}>➕ New Game</Text>
+        <View>
+          <Text style={styles.newGameTitle}>➕ New game</Text>
+          <Text style={styles.newGameSub}>Partner 💕 or Friend 🎲</Text>
+        </View>
+        <Text style={styles.newGameArrow}>›</Text>
       </TouchableOpacity>
 
-      {/* Inline error (for actions outside the modal, e.g. archive/delete failures) */}
+      {/* Inline error (archive/delete failures etc.) */}
       {errorMsg && !showNewGame && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{errorMsg}</Text>
@@ -226,8 +225,15 @@ export default function LobbyScreen({ currentUser }: Props) {
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
       ) : tabGames.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🎲</Text>
-          <Text style={styles.emptyText}>{emptyText}</Text>
+          <Text style={styles.emptyEmoji}>{activeTab === 'active' ? '🎲' : '🏁'}</Text>
+          <Text style={styles.emptyTitle}>
+            {activeTab === 'active' ? 'No games going' : 'No finished games'}
+          </Text>
+          <Text style={styles.emptyText}>
+            {activeTab === 'active'
+              ? 'Tap “New game” to challenge someone.'
+              : 'Games you finish will show up here.'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -237,9 +243,11 @@ export default function LobbyScreen({ currentUser }: Props) {
           renderItem={({ item: game }) => {
             const opponent = getOpponent(game);
             const myScore = getMyScore(game);
-            const isMyTurn = game.currentTurn === currentUser.uid && game.status === 'active';
+            const oppScore = opponent?.score ?? 0;
+            const isMyTurn = game.currentTurn === currentUser.uid && game.status === 'active' && !isSoloGame(game);
             const showingMenu = menuId === game.id;
             const rowBusy = busyId === game.id;
+            const name = opponent?.displayName ?? 'Player';
             return (
               <View>
                 <TouchableOpacity
@@ -250,40 +258,48 @@ export default function LobbyScreen({ currentUser }: Props) {
                   }}
                   onLongPress={() => setMenuId(game.id)}
                   delayLongPress={500}
-                  accessibilityHint="Long press for archive and delete options"
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isSoloGame(game)
+                      ? `Solo practice game, ${statusLabel(game)}, your score ${myScore}`
+                      : `${game.mode === 'friend' ? 'Friend' : 'Partner'} game with ${name}, ${statusLabel(game)}, score ${myScore} to ${oppScore}`
+                  }
+                  accessibilityHint="Opens the game. Long press to delete it."
                 >
-                  <View style={styles.gameCardLeft}>
-                    <Text style={styles.opponentName}>
-                      <Text style={styles.modeBadge}>{modeBadge(game)} </Text>
-                      vs {opponent?.displayName ?? '?'}
-                    </Text>
-                    <Text style={styles.gameStatus}>{statusLabel(game)}</Text>
+                  <View style={styles.cardAvatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    <Text style={styles.cardAvatarText}>{isSoloGame(game) ? '🎯' : initials(name)}</Text>
                   </View>
-                  <View style={styles.gameCardRight}>
-                    <Text style={styles.gameScore}>
-                      {myScore} – {opponent?.score ?? 0}
+                  <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    <Text style={styles.opponentName} numberOfLines={1}>
+                      {isSoloGame(game) ? 'Solo practice' : name}
                     </Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.modeBadge}>{modeBadge(game)}</Text>
+                      <View style={[styles.statusChip, isMyTurn && styles.statusChipActive]}>
+                        <Text style={[styles.statusChipText, isMyTurn && styles.statusChipTextActive]}>
+                          {statusLabel(game)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.gameCardRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    <Text style={styles.gameScore}>{myScore}</Text>
+                    <Text style={styles.gameScoreDivider}>vs</Text>
+                    <Text style={styles.gameScoreOpp}>{oppScore}</Text>
                   </View>
                 </TouchableOpacity>
                 {showingMenu && (
                   <View style={styles.menu}>
                     <TouchableOpacity
-                      style={styles.menuBtn}
-                      onPress={() => handleArchive(game.id, !game.archived)}
-                      disabled={rowBusy}
-                    >
-                      {rowBusy ? (
-                        <ActivityIndicator color={Colors.primaryDark} size="small" />
-                      ) : (
-                        <Text style={styles.menuBtnText}>{game.archived ? '↩️ Unarchive' : '🗄️ Archive'}</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
                       style={[styles.menuBtn, styles.menuBtnDelete]}
                       onPress={() => handleDeleteGame(game.id)}
                       disabled={rowBusy}
                     >
-                      <Text style={styles.menuBtnDeleteText}>🗑️ Delete</Text>
+                      {rowBusy ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.menuBtnDeleteText}>🗑️ Delete game</Text>
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.menuBtn} onPress={() => setMenuId(null)} disabled={rowBusy}>
                       <Text style={styles.menuBtnText}>Cancel</Text>
@@ -315,77 +331,118 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 20,
-    paddingTop: 56,
-  },
-  greeting: { fontSize: 22, fontWeight: '800', color: Colors.text },
-  subtitle: { fontSize: 14, color: Colors.textLight, marginTop: 2 },
-  settingsBtn: { color: Colors.primaryDark, fontSize: 14, marginTop: 4, fontWeight: '600' },
-  newGameBtn: {
-    backgroundColor: Colors.primary,
-    marginHorizontal: 16,
-    borderRadius: RADII.md,
-    paddingVertical: 15,
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 8,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.btn,
+  },
+  avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  greeting: { fontSize: 20, fontWeight: '800', color: Colors.text },
+  subtitle: { fontSize: 13, color: Colors.textLight, marginTop: 1 },
+  settingsBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...SHADOWS.card,
   },
-  newGameBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  settingsIcon: { fontSize: 18 },
+  newGameBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.primary,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    ...SHADOWS.btn,
+  },
+  newGameTitle: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  newGameSub: { color: '#fff', fontSize: 13, marginTop: 2 },
+  newGameArrow: { color: '#fff', fontSize: 30, fontWeight: '700' },
   tabRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 18,
+    marginBottom: 10,
     backgroundColor: Colors.surface,
     borderRadius: RADII.md,
     padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    ...SHADOWS.card,
   },
   tab: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: RADII.sm,
     alignItems: 'center',
   },
   tabActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 13, fontWeight: '700', color: Colors.textLight },
+  tabText: { fontSize: 14, fontWeight: '700', color: Colors.textLight },
   tabTextActive: { color: '#fff' },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: Colors.textLight, fontSize: 16, textAlign: 'center', paddingHorizontal: 32 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50, paddingHorizontal: 40 },
+  emptyEmoji: { fontSize: 52, marginBottom: 14 },
+  emptyTitle: { color: Colors.text, fontSize: 18, fontWeight: '800', marginBottom: 6 },
+  emptyText: { color: Colors.textLight, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   gameCard: {
     backgroundColor: Colors.surface,
-    borderRadius: RADII.lg,
-    padding: 16,
-    marginBottom: 10,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     borderWidth: 1.5,
     borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    ...SHADOWS.card,
   },
   gameCardActive: {
     borderColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
   },
+  cardAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.tilePlaced,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cardAvatarText: { color: Colors.primaryDark, fontWeight: '800', fontSize: 16 },
   gameCardLeft: { flex: 1 },
-  modeBadge: { fontSize: 15 },
-  opponentName: { fontSize: 16, fontWeight: '700', color: Colors.text },
-  gameStatus: { fontSize: 13, color: Colors.textLight, marginTop: 2 },
-  gameCardRight: {},
-  gameScore: { fontSize: 20, fontWeight: '800', color: Colors.primary },
+  opponentName: { fontSize: 16, fontWeight: '800', color: Colors.text },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
+  modeBadge: { fontSize: 14 },
+  statusChip: {
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  statusChipActive: { backgroundColor: Colors.primary },
+  statusChipText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
+  statusChipTextActive: { color: '#fff' },
+  gameCardRight: { alignItems: 'center', minWidth: 52 },
+  gameScore: { fontSize: 22, fontWeight: '900', color: Colors.primary, lineHeight: 24 },
+  gameScoreDivider: { fontSize: 10, color: Colors.textLight, fontWeight: '700' },
+  gameScoreOpp: { fontSize: 16, fontWeight: '700', color: Colors.textLight, lineHeight: 18 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF0F0',
-    borderRadius: 10,
+    borderRadius: RADII.md,
     marginHorizontal: 16,
     marginTop: 12,
     paddingHorizontal: 14,
@@ -393,30 +450,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFB3B3',
   },
-  errorBannerText: { flex: 1, fontSize: 13, color: '#C0392B', fontWeight: '600' },
-  errorBannerDismiss: { fontSize: 15, color: '#C0392B', fontWeight: '700', paddingLeft: 8 },
+  errorBannerText: { flex: 1, fontSize: 13, color: Colors.errorDark, fontWeight: '600' },
+  errorBannerDismiss: { fontSize: 15, color: Colors.errorDark, fontWeight: '700', paddingLeft: 8 },
   menu: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#FFF5F5',
-    borderRadius: 10,
-    marginBottom: 10,
     marginTop: -6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   menuBtn: {
     flex: 1,
-    borderRadius: RADII.sm,
-    paddingVertical: 9,
+    borderRadius: RADII.md,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  menuBtnText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
-  menuBtnDelete: { backgroundColor: '#C0392B', borderColor: '#C0392B' },
+  menuBtnText: { color: Colors.text, fontSize: 13, fontWeight: '700' },
+  menuBtnDelete: { backgroundColor: Colors.errorDark, borderColor: Colors.errorDark },
   menuBtnDeleteText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });

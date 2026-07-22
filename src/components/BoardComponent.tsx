@@ -206,10 +206,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bonusText: {
-    color: 'rgba(255,255,255,0.85)',
+    // Solid white (not 85% opacity) so bonus labels reach WCAG AAA on the
+    // deepened bonus-square colors.
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   bonusTextDark: {
-    color: 'rgba(45,10,30,0.85)',
+    color: Colors.text,
   },
 });

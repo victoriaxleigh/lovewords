@@ -63,7 +63,6 @@ export async function createSoloGame(player: Player): Promise<string> {
     current_turn: player.uid, // stays myUid forever — turn tracked by moves.length
     status: 'active',
     mode: 'partner', // solo is always the self/romantic practice experience
-    archived: false,
     moves: [],
   };
 
@@ -200,7 +199,6 @@ export async function createGame(
     current_turn: player1.uid,
     status: 'active',
     mode,
-    archived: false,
     moves: [],
   };
 
@@ -485,21 +483,6 @@ export async function deleteGame(gameId: string): Promise<{ success: boolean; er
   return { success: true };
 }
 
-// ─── Archive / Unarchive a game ───────────────────────────────────────────────
-// Soft-hide: moves the game to the Archived tab without deleting it. Reversible
-// by passing archived=false. Relies on the games_update RLS policy (either player).
-export async function archiveGame(
-  gameId: string,
-  archived: boolean
-): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
-    .from('games')
-    .update({ archived, updated_at: new Date().toISOString() })
-    .eq('id', gameId);
-  if (error) return { success: false, error: error.message };
-  return { success: true };
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function rowToGame(row: any): Game {
   return {
@@ -510,7 +493,6 @@ function rowToGame(row: any): Game {
     currentTurn: row.current_turn,
     status: row.status,
     mode: row.mode ?? 'partner',
-    archived: row.archived ?? false,
     moves: row.moves ?? [],
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),

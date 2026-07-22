@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFB3B3',
   },
-  errorText: { fontSize: 13, color: '#C0392B', fontWeight: '600', textAlign: 'center' },
+  errorText: { fontSize: 13, color: Colors.errorDark, fontWeight: '600', textAlign: 'center' },
   buyBtn: {
     width: '100%',
     backgroundColor: Colors.primary,

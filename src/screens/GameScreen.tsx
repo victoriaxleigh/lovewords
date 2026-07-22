@@ -1053,13 +1053,13 @@ const styles = StyleSheet.create({
   errorBannerText: {
     flex: 1,
     fontSize: 12,
-    color: '#C0392B',
+    color: Colors.errorDark,
     fontWeight: '600',
     lineHeight: 16,
   },
   errorBannerDismiss: {
     fontSize: 14,
-    color: '#C0392B',
+    color: Colors.errorDark,
     fontWeight: '700',
     paddingLeft: 8,
   },
