@@ -32,6 +32,13 @@
   status = 200
   force = true
 
+# AI coaching for a finished game. Keep ahead of the SPA fallback.
+[[redirects]]
+  from = "/api/games/:gameId/coach"
+  to = "/.netlify/functions/game-coach?gameId=:gameId"
+  status = 200
+  force = true
+
 # SPA fallback — all routes serve index.html
 [[redirects]]
   from = "/*"

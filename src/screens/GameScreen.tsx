@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, createGameAnalysisToken } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -58,8 +58,7 @@ export default function GameScreen() {
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
-  const [analysisCurl, setAnalysisCurl] = useState<string | null>(null);
-  const [analysisExpiresAt, setAnalysisExpiresAt] = useState<string | null>(null);
+  const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -565,17 +564,16 @@ export default function GameScreen() {
         setRematching(false);
       }
     };
-    const handleAnalysisToken = async () => {
+    const handleAnalyze = async () => {
       if (analysisLoading) return;
       setAnalysisLoading(true);
       setAnalysisError(null);
       try {
-        const result = await createGameAnalysisToken(gameId);
-        setAnalysisCurl(result.curl);
-        setAnalysisExpiresAt(result.expiresAt);
+        const result = await requestGameCoaching(gameId);
+        setAnalysisText(result.analysis);
         setAnalysisPreview(result.preview === true);
       } catch (e: any) {
-        setAnalysisError(e?.message ?? 'Could not generate an analysis command.');
+        setAnalysisError(e?.message ?? 'Could not analyze this game.');
       } finally {
         setAnalysisLoading(false);
       }
@@ -605,35 +603,31 @@ export default function GameScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.analysisBtn, analysisLoading && styles.actionBtnDisabled]}
-          onPress={handleAnalysisToken}
+          onPress={handleAnalyze}
           disabled={analysisLoading}
-          accessibilityLabel="Generate game analysis command"
+          accessibilityLabel="Get AI coaching for this game"
           accessibilityRole="button"
         >
           {analysisLoading ? (
-            <ActivityIndicator color={Colors.primary} size="small" />
+            <View style={styles.analysisLoadingRow}>
+              <ActivityIndicator color={Colors.primary} size="small" />
+              <Text style={styles.analysisBtnText}>Coaching…</Text>
+            </View>
           ) : (
             <Text style={styles.analysisBtnText}>
-              {analysisCurl ? 'Refresh analysis command' : '🤖 Analyze this game'}
+              {analysisText ? '🤖 Coach me again' : '🤖 Coach me on this game'}
             </Text>
           )}
         </TouchableOpacity>
         {analysisError && <Text style={styles.analysisError}>⚠️ {analysisError}</Text>}
-        {analysisCurl && (
+        {analysisText && (
           <View style={styles.analysisCommandCard}>
             <Text style={styles.analysisCommandLabel}>
-              {analysisPreview
-                ? 'Local preview — this returns mock game JSON:'
-                : 'Select and share this command with your AI:'}
+              {analysisPreview ? '🤖 Coach (local preview)' : '🤖 Your coach says'}
             </Text>
-            <Text selectable style={styles.analysisCommand}>
-              {analysisCurl}
+            <Text selectable style={styles.analysisCoachText}>
+              {analysisText}
             </Text>
-            {analysisExpiresAt && (
-              <Text style={styles.analysisExpiry}>
-                Expires {new Date(analysisExpiresAt).toLocaleString()}
-              </Text>
-            )}
           </View>
         )}
         {rematchError && <Text style={styles.rematchError}>⚠️ {rematchError}</Text>}
@@ -1032,6 +1026,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   analysisBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
+  analysisLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   analysisError: { color: Colors.error, fontSize: 14, marginBottom: 12, textAlign: 'center' },
   analysisCommandCard: {
     width: '100%',
@@ -1049,15 +1044,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  analysisCommand: {
+  analysisCoachText: {
     color: Colors.text,
-    backgroundColor: Colors.background,
-    borderRadius: 8,
-    padding: 10,
-    fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  analysisExpiry: { color: Colors.textLight, fontSize: 11, marginTop: 8 },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   rematchBtn: {

@@ -1,6 +1,6 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-22 (Session 9 — Partner/Friend mode, home/login redesign, WCAG AAA, App Store prep)
+> Last updated: 2026-07-24 (Session 10 — finished-game analysis export deployed; in-app AI coaching added. Also refreshed the Colors/Types/structure/test references, which had lagged since Session 9.)
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
@@ -42,17 +42,32 @@ C:\Users\victo\lovewords\
 ├── AGENT_HANDOFF.md                 ← This file
 ├── RELEASE_NOTES.md                 ← Changelog by session
 ├── ISSUES.md                        ← Active bug tracker (update each session)
+├── APP_STORE.md                     ← App Store submission kit (listing, privacy, checklist)
 ├── public/
-│   └── sw.js                        ← Service worker (background push, notificationclick)
+│   ├── sw.js                        ← Service worker (background push, notificationclick)
+│   └── privacy.html                 ← Privacy policy (served at /privacy.html)
+├── supabase/
+│   └── migrations/
+│       └── 20260723000100_private_game_analysis_events.sql  ← analysis events table + scrub trigger
+├── scripts/
+│   ├── generate-icons.js            ← rasterizes assets/logo/icon.svg → PNGs
+│   ├── inject-web-meta.js           ← injects PWA/iOS meta into dist/index.html
+│   └── dev-analysis-server.js       ← local mock analysis endpoint (npm run dev:analysis)
 ├── netlify/
 │   └── functions/
-│       └── notify.js                ← Serverless: receives POST, sends Web Push
+│       ├── notify.js                ← Serverless: receives POST, sends Web/Expo push
+│       ├── delete-account.js        ← Account deletion
+│       ├── game-analysis-common.js  ← Shared auth + sanitizeGameExport helpers
+│       ├── game-analysis-token.js   ← Issues 1-hour analysis capability tokens
+│       ├── game-analysis.js         ← Returns sanitized game JSON for a token
+│       └── game-coach.js            ← AI coaching via Claude (@anthropic-ai/sdk)
 └── src/
     ├── screens/
     │   ├── AuthScreen.tsx           ← Login / Register form
-    │   ├── LobbyScreen.tsx          ← Game list, invite partner, solo button, delete game
-    │   ├── GameScreen.tsx           ← Main game (~820 lines, the core)
-    │   └── LoveNotesModal.tsx       ← In-game chat/love notes
+    │   ├── LobbyScreen.tsx          ← Home: game list, New game hero, Active/Past tabs, delete
+    │   ├── NewGameModal.tsx         ← Partner/Friend toggle + email invite + Practice Solo
+    │   ├── GameScreen.tsx           ← Main game + finished-game coaching (the core)
+    │   └── LoveNotesModal.tsx       ← In-game chat/love notes (mode-aware copy)
     ├── components/
     │   ├── BoardComponent.tsx       ← 15×15 board, exports getCellSize(); uses Gesture.Pan
     │   ├── TileRack.tsx             ← Drag rack with react-native-gesture-handler (drag + tap)
@@ -72,10 +87,16 @@ C:\Users\victo\lovewords\
     ├── types/
     │   └── index.ts                 ← All shared TypeScript types
     └── utils/
-        ├── colors.ts                ← Color palette (light pink/rose theme)
+        ├── colors.ts                ← Color palette (WCAG AAA light pink/rose theme)
         ├── styles.ts                ← Shared design tokens: RADII (sm/md/lg/xl) and SHADOWS (card/btn)
-        ├── webNotifications.ts      ← requestNotificationPermission, sendTurnNotification, sendLoveNoteNotification
-        └── pushSubscription.ts      ← SW registration + Supabase push_subscriptions upsert
+        ├── apiBase.ts               ← FUNCTIONS_BASE for calling the Netlify functions
+        ├── webNotifications.ts      ← in-tab Notification() helpers
+        ├── notifications.ts         ← native Expo push registration
+        ├── pushSubscription.ts      ← Web Push SW registration + push_subscriptions upsert
+        ├── appBadge.ts              ← setupBadgeClearing() (Badging API, iOS PWA)
+        └── purchases.ts             ← MONETIZATION_ENABLED flag (RevenueCat, dormant for v1.0)
+
+(Not shown: __tests__/ — 11 Jest suites; assets/ — icons/logo.)
 ```
 
 ---
@@ -99,14 +120,23 @@ flag them on deploy unless they're listed in `SECRETS_SCAN_OMIT_KEYS` (see
   update the public key in `pushSubscription.ts`, and update both VAPID env
   vars in Netlify.
 
-### Netlify Environment Variables (for `notify.js` serverless function)
+### Netlify Environment Variables (for the serverless functions)
 ```
 VAPID_PUBLIC_KEY=<public key — same value as in pushSubscription.ts>
 VAPID_PRIVATE_KEY=<private key — REDACTED, see Netlify env settings>
 VAPID_EMAIL=<any email, identifies sender to push services>
 SUPABASE_URL=<same as src/supabase/config.ts>
 SUPABASE_SERVICE_KEY=<service role key, NOT anon key — has full DB access>
+ANALYSIS_TOKEN_SECRET=<HMAC secret for finished-game analysis-export tokens; openssl rand -base64 32; ≥32 bytes>
+ANTHROPIC_API_KEY=<Claude API key for the AI game-coach function (game-coach.js)>
 ```
+
+**All server-only — Functions-scoped, Production context.** Set them so the
+`Functions` scope is enabled (not Builds-only), or the running function returns
+a 500 ("… is not configured"). Never add `SUPABASE_SERVICE_KEY`,
+`ANALYSIS_TOKEN_SECRET`, or `ANTHROPIC_API_KEY` to `SECRETS_SCAN_OMIT_KEYS` —
+they're server-only and must never appear in the client bundle. New env vars
+bind at **deploy time**: after adding one, redeploy (Clear cache and deploy).
 
 ### Local `.env` (only needed for running Netlify functions locally)
 ```
@@ -258,6 +288,8 @@ type LoveNote = {
   message: string; emoji: string; timestamp: number; read: boolean;
 };
 
+type GameMode = 'partner' | 'friend';  // relationship mode (Session 9)
+
 type Game = {
   id: string;
   players: [Player, Player];
@@ -265,6 +297,7 @@ type Game = {
   bag: Tile[];
   currentTurn: string;  // uid
   status: GameStatus;
+  mode: GameMode;       // non-optional; rowToGame defaults old rows to 'partner'
   moves: Move[];
   createdAt: number;
   updatedAt: number;
@@ -275,16 +308,19 @@ type Game = {
 ---
 
 ## Colors (`src/utils/colors.ts`)
-This is a **light pink/rose theme** (NOT dark):
+This is a **light pink/rose theme** (NOT dark). Deepened for **WCAG 2.1 AAA**
+(7:1 normal text / 4.5:1 large) in Session 9 — the values below are the current,
+hardened palette (`colors.ts` is the source of truth):
 ```ts
-primary: '#E91E8C'       // bright magenta/rose
+primary: '#A8005F'       // deep rose — fills behind white text; primary text on white
 primaryLight: '#FF6EB4'
-primaryDark: '#B5006E'
+primaryDark: '#7A0046'   // primary-colored TEXT on light bgs (titles, links, initials)
 accent: '#FF4081'
-background: '#FFF0F5'    // very light pink
+background: '#FFF0F5'     // very light pink
 surface: '#FFFFFF'
 text: '#2D0A1E'          // near-black
-textLight: '#8C4D6A'
+textLight: '#7A3453'     // secondary text (do NOT place on tilePlaced fill)
+errorDark: '#9B1C1C'     // error text + delete buttons (white-on-it 8.2:1)
 border: '#F0A8C8'
 boardBg: '#1A0A12'       // dark board background
 emptyCell: '#2D1420'
@@ -292,7 +328,8 @@ tileDefault: '#FFFFFF'
 tileText: '#2D0A1E'
 tileSelected: '#FF6EB4'
 tilePlaced: '#FFD6EC'
-tw: '#C62828'   dw: '#E91E8C'   tl: '#1565C0'   dl: '#64B5F6'   start: '#AD1457'
+// Bonus squares deepened so their labels hit AAA (TW/DW/TL/START white, DL dark):
+tw: '#A01818'   dw: '#A8005F'   tl: '#124C8F'   dl: '#7DC2F7'   start: '#8E1050'
 success: '#4CAF50'   error: '#F44336'   warning: '#FF9800'
 ```
 
@@ -658,13 +695,53 @@ When it's the user's turn (normal games only, not solo) and they're losing by mo
 
 ---
 
+## Finished-Game Analysis & AI Coaching
+
+Two serverless features let a player review a **finished** game. Both authenticate
+the caller's Supabase session and confirm they're a player of a `status:'finished'`
+game before doing anything. Shared server helpers live in
+`netlify/functions/game-analysis-common.js` (`fetchSupabaseUser`, `fetchGame`,
+`fetchAnalysisEvents`, `sanitizeGameExport`, `jsonResponse`, `parseBearer`, `isUuid`).
+
+### 1. Analysis export (PR #3, `finished-game-analysis-export`)
+A sanitized, versioned JSON export designed to be fed to an external AI via `curl`.
+- **`game-analysis-token.js`** — `POST /api/games/:id/analysis-token`; auth via Supabase
+  session → returns a 1-hour, game-scoped HMAC capability token (signed with
+  `ANALYSIS_TOKEN_SECRET`).
+- **`game-analysis.js`** — `GET /api/game-analysis` with `Authorization: Bearer <token>`
+  → returns `sanitizeGameExport(...)` (players, per-move words/scores, `recordingQuality:
+  'full'|'basic'`). Never exposes the raw `games` row.
+- **DB**: `game_analysis_events` table + a `before update` trigger
+  (`supabase/migrations/20260723000100_private_game_analysis_events.sql`) that captures
+  v2 event private fields (`rackBefore`/`drawnTiles`/`returnedTiles`) into that table and
+  scrubs them from participant-readable `games.moves`. **Run this migration before the
+  functions go live** (it's transactional + idempotent).
+- Local review: `npm run dev:analysis` (mock server on :8088) + `?dev=1`.
+
+### 2. AI coaching (in-app) — `game-coach.js`
+Turns that same export into a written coaching note shown **inside the app** (no curl).
+- **`game-coach.js`** — `POST /api/games/:id/coach`; auth via Supabase session → builds
+  `sanitizeGameExport(...)` → calls the **Claude API** (`@anthropic-ai/sdk`,
+  `COACH_MODEL = 'claude-haiku-4-5'` — cheapest/fastest, good for a short note) → returns
+  `{ analysis, recordingQuality }`. Requires **`ANTHROPIC_API_KEY`** in Netlify.
+  Switching `COACH_MODEL` to `claude-sonnet-5`/`claude-opus-5` also lets you add
+  `thinking:{type:'adaptive'}` + `output_config:{effort:'low'}` (Haiku 4.5 rejects both).
+- **Client**: `requestGameCoaching(gameId)` in `gameService.ts` (has a `?dev=1` canned
+  mock). Wired into the finished-game screen in `GameScreen.tsx` — the "🤖 Coach me on
+  this game" button renders the returned text in a card. (This replaced the old
+  curl-command UI; the analysis-token/export endpoints above still exist for power users.)
+- **Latency note**: Haiku returns well within the Netlify sync-function timeout. If you
+  switch `COACH_MODEL` to opus-5, coaching on a long game can approach the timeout.
+
+---
+
 ## Tests
 
-**66 unit tests**, all passing (last run Session 8). Run with:
+**129 unit tests across 11 suites**, all passing. Run with:
 ```bash
-npx jest
+npx jest            # (package.json "test" script runs jest --coverage)
 ```
-Suites: `board`, `scoring`, `tiles`, `swap`, `dictionary`. All located in `__tests__/`. Always run after touching anything in `src/engine/` or `src/supabase/gameService.ts`.
+Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysisStorage`, `analysisExport`, `analysisHandlers`, `contrast`. All located in `__tests__/` (not shown in the structure tree above). Always run after touching anything in `src/engine/`, `src/supabase/gameService.ts`, or the analysis functions.
 
 ---
 

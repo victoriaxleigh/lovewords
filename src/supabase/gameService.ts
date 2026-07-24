@@ -100,6 +100,65 @@ export async function createGameAnalysisToken(gameId: string): Promise<GameAnaly
   return body as GameAnalysisToken;
 }
 
+// ─── AI game coaching ─────────────────────────────────────────────────────────
+// Sends the finished game to our serverless coach (which calls Claude) and
+// returns the written analysis to show in-app. Same auth model as the token
+// endpoint: the caller must be a signed-in player of a finished game.
+export type GameCoaching = {
+  analysis: string;
+  recordingQuality?: 'full' | 'basic';
+  preview?: boolean;
+};
+
+export async function requestGameCoaching(gameId: string): Promise<GameCoaching> {
+  // Expo's web dev server does not run Netlify Functions. Give ?dev=1 a canned
+  // coaching note so the finished-game UI can be reviewed without a backend.
+  if (
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('dev')
+  ) {
+    return {
+      analysis:
+        "Nice game! Your standout play was QUARTZ for 48 points — parking the Q on a triple was the turning point. " +
+        "You kept your rack balanced and never got stuck with too many consonants. " +
+        "Next time, watch for bingo chances when your rack is vowel-heavy — you were one tile from a 35-point play on turn 6.",
+      recordingQuality: 'full',
+      preview: true,
+    };
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) throw new Error('Sign in again to analyze this game.');
+
+  const response = await fetch(
+    `${FUNCTIONS_BASE}/api/games/${encodeURIComponent(gameId)}/coach`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
+
+  let body: Partial<GameCoaching> & { error?: string } = {};
+  try {
+    body = await response.json();
+  } catch {
+    // Keep the fallback below for platform/proxy errors that return plain text.
+  }
+  if (!response.ok) {
+    throw new Error(body.error || 'Could not analyze this game.');
+  }
+  if (!body.analysis) {
+    throw new Error('The coach returned an empty analysis.');
+  }
+  return body as GameCoaching;
+}
+
 // ─── Create Solo Practice Game ────────────────────────────────────────────────
 // Solo games NEVER change current_turn — it stays as the real user's UID forever.
 // Whose turn it is gets tracked by moves.length % 2 (even = player 1, odd = player 2).
