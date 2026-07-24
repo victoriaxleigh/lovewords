@@ -1,7 +1,7 @@
-import { Board, PlacedTile } from '../types';
+import { Board, PlacedTile, ScoredWord } from '../types';
 import { getCell, BOARD_SIZE } from './board';
 
-type ScoredWord = { word: string; score: number };
+export type { ScoredWord } from '../types';
 
 /**
  * Score a move. Returns total score and a list of words formed.

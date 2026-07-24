@@ -13,11 +13,16 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, createGameAnalysisToken } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
 import { isValidPlacement, BOARD_SIZE } from '../engine/board';
+import {
+  getMoveAction,
+  getMovePlacements,
+  hasAnyPlacements,
+} from '../engine/gameHistory';
 import BoardComponent, { getCellSize } from '../components/BoardComponent';
 import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
@@ -53,6 +58,11 @@ export default function GameScreen() {
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
+  const [analysisCurl, setAnalysisCurl] = useState<string | null>(null);
+  const [analysisExpiresAt, setAnalysisExpiresAt] = useState<string | null>(null);
+  const [analysisPreview, setAnalysisPreview] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
@@ -236,7 +246,7 @@ export default function GameScreen() {
   }, [me?.rack, currentSide]);
   // activeUid for non-solo submit calls only
   const activeUid = game?.currentTurn ?? myUid;
-  const isFirstMove = game?.moves.length === 0;
+  const isFirstMove = game ? !hasAnyPlacements(game.moves) : true;
 
   // Live score preview — recalculates whenever tiles are placed
   const previewScore = useMemo(() => {
@@ -252,8 +262,12 @@ export default function GameScreen() {
   // Highlight the tiles from the most recent committed word move
   const lastMoveTiles = useMemo(() => {
     if (!game) return new Set<string>();
-    const lastWordMove = game.moves.slice().reverse().find((m) => m.tiles.length > 0);
-    return new Set(lastWordMove?.tiles.map((t) => `${t.row},${t.col}`) ?? []);
+    const lastWordMove = game.moves
+      .slice()
+      .reverse()
+      .find((move) => getMovePlacements(move).length > 0);
+    const placements = lastWordMove ? getMovePlacements(lastWordMove) : [];
+    return new Set(placements.map((tile) => `${tile.row},${tile.col}`));
   }, [game?.moves]);
 
   // Rack tap selects/deselects a tile (click-to-place for web; drag still works on mobile)
@@ -530,8 +544,9 @@ export default function GameScreen() {
 
   if (game.status === 'finished') {
     const isSoloFinished = game.players.some((p) => p.email === 'solo');
-    const endedByPasses = game.moves.length >= 4 &&
-      game.moves.slice(-4).every((m) => m.uid === 'pass');
+    const endedByPasses =
+      game.moves.length >= 4 &&
+      game.moves.slice(-4).every((move) => getMoveAction(move) === 'pass');
     const winner =
       game.players[0].score > game.players[1].score
         ? game.players[0]
@@ -550,8 +565,26 @@ export default function GameScreen() {
         setRematching(false);
       }
     };
+    const handleAnalysisToken = async () => {
+      if (analysisLoading) return;
+      setAnalysisLoading(true);
+      setAnalysisError(null);
+      try {
+        const result = await createGameAnalysisToken(gameId);
+        setAnalysisCurl(result.curl);
+        setAnalysisExpiresAt(result.expiresAt);
+        setAnalysisPreview(result.preview === true);
+      } catch (e: any) {
+        setAnalysisError(e?.message ?? 'Could not generate an analysis command.');
+      } finally {
+        setAnalysisLoading(false);
+      }
+    };
     return (
-      <View style={styles.loading}>
+      <ScrollView
+        style={styles.finishedScreen}
+        contentContainerStyle={styles.finishedContainer}
+      >
         <Text style={styles.finishedEmoji}>
           {isSoloFinished ? '🎯' : winner?.uid === myUid ? '🏆' : '💕'}
         </Text>
@@ -570,6 +603,39 @@ export default function GameScreen() {
         <Text style={styles.finishedScores}>
           {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
         </Text>
+        <TouchableOpacity
+          style={[styles.analysisBtn, analysisLoading && styles.actionBtnDisabled]}
+          onPress={handleAnalysisToken}
+          disabled={analysisLoading}
+          accessibilityLabel="Generate game analysis command"
+          accessibilityRole="button"
+        >
+          {analysisLoading ? (
+            <ActivityIndicator color={Colors.primary} size="small" />
+          ) : (
+            <Text style={styles.analysisBtnText}>
+              {analysisCurl ? 'Refresh analysis command' : '🤖 Analyze this game'}
+            </Text>
+          )}
+        </TouchableOpacity>
+        {analysisError && <Text style={styles.analysisError}>⚠️ {analysisError}</Text>}
+        {analysisCurl && (
+          <View style={styles.analysisCommandCard}>
+            <Text style={styles.analysisCommandLabel}>
+              {analysisPreview
+                ? 'Local preview — this returns mock game JSON:'
+                : 'Select and share this command with your AI:'}
+            </Text>
+            <Text selectable style={styles.analysisCommand}>
+              {analysisCurl}
+            </Text>
+            {analysisExpiresAt && (
+              <Text style={styles.analysisExpiry}>
+                Expires {new Date(analysisExpiresAt).toLocaleString()}
+              </Text>
+            )}
+          </View>
+        )}
         {rematchError && <Text style={styles.rematchError}>⚠️ {rematchError}</Text>}
         <TouchableOpacity
           style={[styles.rematchBtn, rematching && styles.actionBtnDisabled]}
@@ -589,7 +655,7 @@ export default function GameScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>Back to games</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -945,7 +1011,53 @@ const styles = StyleSheet.create({
   finishedEmoji: { fontSize: 64, marginBottom: 12 },
   finishedText: { fontSize: 28, fontWeight: '900', color: Colors.primary, marginBottom: 8 },
   finishedReason: { fontSize: 13, color: Colors.textLight, marginBottom: 8, fontStyle: 'italic' },
-  finishedScores: { fontSize: 16, color: Colors.textLight, marginBottom: 32 },
+  finishedScores: { fontSize: 16, color: Colors.textLight, marginBottom: 24 },
+  finishedScreen: { flex: 1, backgroundColor: Colors.background },
+  finishedContainer: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 32,
+  },
+  analysisBtn: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.primary,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    minWidth: 220,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  analysisBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
+  analysisError: { color: Colors.error, fontSize: 14, marginBottom: 12, textAlign: 'center' },
+  analysisCommandCard: {
+    width: '100%',
+    maxWidth: 560,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  analysisCommandLabel: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  analysisCommand: {
+    color: Colors.text,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    padding: 10,
+    fontFamily: 'monospace',
+    fontSize: 12,
+  },
+  analysisExpiry: { color: Colors.textLight, fontSize: 11, marginTop: 8 },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   rematchBtn: {

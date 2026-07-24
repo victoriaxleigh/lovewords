@@ -33,6 +33,12 @@ function fireChannel(table: string, payload: any) {
   }
 }
 
+// After mutating __lwMockStores in the browser console, call
+// __lwMockNotify('games') to make active subscriptions refetch immediately.
+(globalThis as any).__lwMockNotify = (table = 'games') => {
+  fireChannel(table, { eventType: 'UPDATE' });
+};
+
 class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private table: string;
   private op: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';

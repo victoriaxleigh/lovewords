@@ -19,6 +19,19 @@
   directory = "netlify/functions"
   node_bundler = "nft"
 
+# Finished-game analysis export. Keep these ahead of the SPA fallback.
+[[redirects]]
+  from = "/api/games/:gameId/analysis-token"
+  to = "/.netlify/functions/game-analysis-token?gameId=:gameId"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/game-analysis"
+  to = "/.netlify/functions/game-analysis"
+  status = 200
+  force = true
+
 # SPA fallback — all routes serve index.html
 [[redirects]]
   from = "/*"

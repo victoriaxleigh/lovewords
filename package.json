@@ -7,6 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "dev:analysis": "node scripts/dev-analysis-server.js",
     "icons": "node scripts/generate-icons.js",
     "build:web": "node scripts/generate-icons.js && expo export --platform web && node scripts/inject-web-meta.js",
     "test": "jest --coverage"

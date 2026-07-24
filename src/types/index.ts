@@ -4,6 +4,7 @@ export type Player = {
   email: string;
   score: number;
   rack: Tile[];
+  historyVersion?: 2;
 };
 
 export type Tile = {
@@ -43,12 +44,44 @@ export type GameStatus = 'waiting' | 'active' | 'finished';
 // Notes"). Smack talk stays in both. Solo games default to 'partner'.
 export type GameMode = 'partner' | 'friend';
 
+export type RecordedTile = {
+  letter: string;
+  value: number;
+  isBlank?: boolean;
+};
+
+export type RecordedPlacement = RecordedTile & {
+  row: number;
+  col: number;
+};
+
+export type ScoredWord = {
+  word: string;
+  score: number;
+};
+
+export type MoveAction = 'play' | 'swap' | 'pass';
+export type PlayerIndex = 0 | 1;
+
 export type Move = {
+  // Legacy fields remain required because existing UI and stored rows use them.
   uid: string;
   tiles: PlacedTile[];
   score: number;
   timestamp: number;
   word?: string;
+
+  // Analysis-quality fields recorded on all new events.
+  version?: 2;
+  action?: MoveAction;
+  playerIndex?: PlayerIndex;
+  rackBefore?: RecordedTile[];
+  placements?: RecordedPlacement[];
+  words?: ScoredWord[];
+  resultingScore?: number;
+  drawnTiles?: RecordedTile[];
+  returnedTiles?: RecordedTile[];
+  bagCount?: number;
 };
 
 export type LoveNote = {
