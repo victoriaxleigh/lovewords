@@ -1,6 +1,6 @@
 # Lovewords — Active Bug & UX Issues
 
-> Updated 2026-07-06 (Session 7). Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> Updated 2026-07-23. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
 > All file paths are relative to `C:\Users\victo\lovewords\`.
 > ✅ = resolved  🔴 = critical  🟠 = high  🟡 = medium
 
@@ -187,6 +187,32 @@ The submit path (`handleSubmit`) still uses `holdForRealtime` / `soloWaitingReal
 
 ---
 
+### Issue 33 — Game state and completion are client-authoritative (Accepted backlog)
+
+**Risk:** Either participant can update the shared `games` row directly under the current RLS
+policy, including `players`, `bag`, `moves`, and `status`. A determined opponent can therefore
+rewrite game state or temporarily mark an active game `finished` and mint a finished-game analysis
+token.
+
+**Current mitigation:** Analysis-only rack/draw/return events are stored in
+`game_analysis_events`, which grants no access to `anon` or `authenticated`; only the backend
+service role can read it. This blocks direct client table reads but does not make the analysis
+endpoint's completion check server-authoritative.
+
+**Accepted scope:** This is a casual word game, and the current product accepts the broader
+client-authoritative threat model. The analysis-history feature does not expand into a gameplay
+backend rewrite.
+
+**Future hardening:** Move play/swap/pass/finish transitions into validated server-side RPCs or
+functions, revoke direct participant updates to authoritative game columns, and derive completion
+inside that trusted path.
+
+**Severity:** 🟡 Medium
+
+**Status:** Open — accepted technical debt
+
+---
+
 ## Summary Table
 
 | # | Issue | File(s) | Severity | Status |
@@ -223,6 +249,7 @@ The submit path (`handleSubmit`) still uses `holdForRealtime` / `soloWaitingReal
 | 30 | Supabase anon key split across two lines — build syntax error | `src/supabase/config.ts` | ✅ Fixed | Session 7 |
 | 31 | No Home Screen icon / not installable as a PWA | `assets/logo/`, `public/manifest.json`, `scripts/` | ✅ Added | Session 7 |
 | 32 | No notification badge on Home Screen icon | `public/sw.js`, `src/utils/appBadge.ts`, `App.tsx` | ✅ Added | Session 7 |
+| 33 | Game state/completion are client-authoritative | `supabase_schema.sql`, gameplay backend | 🟡 Medium | Open — accepted |
 
 ---
 

@@ -26,6 +26,33 @@ netlify deploy --prod --dir=dist --no-build
 See `AGENT_HANDOFF.md` → Deployment for the full pitfalls list (rate limits,
 required Netlify env vars, etc).
 
+### Finished-game analysis export
+
+Deploy the database migration before the client/functions that write version-2 events:
+
+1. Open Supabase **SQL Editor → New query**.
+2. Paste and run
+   `supabase/migrations/20260723000100_private_game_analysis_events.sql`.
+   Run this standalone migration—not the full `supabase_schema.sql`—against an existing project.
+   It is transactional and safe to rerun.
+3. Configure the three Netlify server-only variables below.
+4. Run `npm run build:web`, then deploy the site/functions.
+
+This order prevents a newly deployed client from leaving hidden rack/draw/return history in the
+participant-readable `games.moves` JSON while the database is still on the old schema. The
+migration backfills any pre-migration version-2 events before scrubbing those hidden fields.
+
+The analysis-token functions require these server-only Netlify environment variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `ANALYSIS_TOKEN_SECRET` — a random secret of at least 32 bytes, used to sign
+  one-hour game export tokens
+
+Generate the signing secret with `openssl rand -base64 32` and add it in
+**Netlify → Site configuration → Environment variables**. Never expose the service key or
+analysis signing secret through `EXPO_PUBLIC_*` variables or client code.
+
 ---
 
 ## Manual steps still needed before the native App Store build works

@@ -1,22 +1,19 @@
 import { supabase } from './config';
-import { Game, Player, PlacedTile, LoveNote, Move, GameMode } from '../types';
+import { Game, Player, PlacedTile, LoveNote, GameMode } from '../types';
 import { createEmptyBoard, applyMoveToBoard } from '../engine/board';
 import { createTileBag, drawTiles, shuffle } from '../engine/tiles';
 import { scoreMove } from '../engine/scoring';
+import {
+  buildPassEvent,
+  buildPlayEvent,
+  buildSwapEvent,
+  trailingPassCount,
+} from '../engine/gameHistory';
 import { FUNCTIONS_BASE } from '../utils/apiBase';
 
 // Game ends after this many consecutive passes (2 each in a 2-player game).
 // Covers the "stuck" case where neither player has a valid play.
 const CONSECUTIVE_PASS_LIMIT = 4;
-
-function trailingPassCount(moves: Move[]): number {
-  let count = 0;
-  for (let i = moves.length - 1; i >= 0; i--) {
-    if (moves[i].uid === 'pass') count++;
-    else break;
-  }
-  return count;
-}
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // Calls our Netlify serverless function, which sends a Web Push (browser) and/or
@@ -42,6 +39,67 @@ export function sendNudge(recipientUid: string, senderName: string, isFriend = f
   sendPushNotification(recipientUid, senderName, 'nudge', isFriend);
 }
 
+export type GameAnalysisToken = {
+  token: string;
+  expiresAt: string;
+  endpoint: string;
+  curl: string;
+  preview?: boolean;
+};
+
+// ─── Finished-game analysis export ───────────────────────────────────────────
+// Creates a short-lived capability token through the authenticated endpoint.
+// The returned curl command can be shared without exposing the Supabase session.
+export async function createGameAnalysisToken(gameId: string): Promise<GameAnalysisToken> {
+  // Expo's web dev server does not run Netlify Functions. Keep ?dev=1 useful
+  // for UI review without pretending the generated capability is real.
+  if (
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('dev')
+  ) {
+    const token = 'lw_analysis_local_preview';
+    const endpoint = 'http://127.0.0.1:8088/api/game-analysis';
+    return {
+      token,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      endpoint,
+      curl: `curl -H "Authorization: Bearer ${token}" "${endpoint}"`,
+      preview: true,
+    };
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) throw new Error('Sign in again to export this game.');
+
+  const response = await fetch(
+    `${FUNCTIONS_BASE}/api/games/${encodeURIComponent(gameId)}/analysis-token`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
+
+  let body: Partial<GameAnalysisToken> & { error?: string } = {};
+  try {
+    body = await response.json();
+  } catch {
+    // Keep the fallback below for platform/proxy errors that return plain text.
+  }
+  if (!response.ok) {
+    throw new Error(body.error || 'Could not generate an analysis link.');
+  }
+  if (!body.token || !body.expiresAt || !body.endpoint || !body.curl) {
+    throw new Error('The analysis service returned an invalid response.');
+  }
+  return body as GameAnalysisToken;
+}
+
 // ─── Create Solo Practice Game ────────────────────────────────────────────────
 // Solo games NEVER change current_turn — it stays as the real user's UID forever.
 // Whose turn it is gets tracked by moves.length % 2 (even = player 1, odd = player 2).
@@ -56,8 +114,15 @@ export async function createSoloGame(player: Player): Promise<string> {
     player1_uid: player.uid,
     player2_uid: player.uid,
     players: [
-      { ...player, rack: rack1, score: 0 },
-      { uid: player.uid, displayName: 'Player 2 🎯', email: 'solo', rack: rack2, score: 0 },
+      { ...player, rack: rack1, score: 0, historyVersion: 2 },
+      {
+        uid: player.uid,
+        displayName: 'Player 2 🎯',
+        email: 'solo',
+        rack: rack2,
+        score: 0,
+        historyVersion: 2,
+      },
     ],
     board: createEmptyBoard(),
     bag: finalBag,
@@ -81,7 +146,7 @@ export async function submitSoloMove(
   playerIndex: number,
   placedTiles: PlacedTile[]
 ): Promise<{ success: boolean; error?: string }> {
-  const { total } = scoreMove(game.board, placedTiles);
+  const { total, words } = scoreMove(game.board, placedTiles);
   const newBoard = applyMoveToBoard(game.board, placedTiles);
 
   const usedIds = new Set(placedTiles.map((t) => t.id));
@@ -96,12 +161,17 @@ export async function submitSoloMove(
     rack: newRack,
   };
 
-  const move: Move = {
+  const move = buildPlayEvent({
     uid: game.players[playerIndex].uid,
-    tiles: placedTiles,
+    playerIndex: playerIndex as 0 | 1,
+    rackBefore: game.players[playerIndex].rack,
+    placements: placedTiles,
+    words,
     score: total,
-    timestamp: Date.now(),
-  };
+    resultingScore: updatedPlayers[playerIndex].score,
+    drawnTiles: drawn,
+    bagCount: newBag.length,
+  });
 
   const isFinished = newBag.length === 0 && newRack.length === 0;
 
@@ -124,7 +194,13 @@ export async function submitSoloMove(
 
 // ─── Solo: Pass Turn ──────────────────────────────────────────────────────────
 export async function passSoloTurn(gameId: string, game: Game): Promise<void> {
-  const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
+  const playerIndex = (game.moves.length % 2) as 0 | 1;
+  const move = buildPassEvent({
+    uid: game.players[playerIndex].uid,
+    playerIndex,
+    rackBefore: game.players[playerIndex].rack,
+    bagCount: game.bag.length,
+  });
   const isFinished = trailingPassCount(game.moves) + 1 >= CONSECUTIVE_PASS_LIMIT;
   const { error } = await supabase
     .from('games')
@@ -158,7 +234,14 @@ export async function swapSoloTiles(
   const updatedPlayers = [...game.players] as [Player, Player];
   updatedPlayers[playerIndex] = { ...player, rack: newRack };
 
-  const move: Move = { uid: 'swap', tiles: [], score: 0, timestamp: Date.now() };
+  const move = buildSwapEvent({
+    uid: player.uid,
+    playerIndex: playerIndex as 0 | 1,
+    rackBefore: player.rack,
+    returnedTiles: tilesToReturn,
+    drawnTiles: drawn,
+    bagCount: remaining.length,
+  });
   const newMoves = [...game.moves, move];
 
   const { error } = await supabase
@@ -192,8 +275,8 @@ export async function createGame(
     player1_uid: player1.uid,
     player2_uid: player2.uid,
     players: [
-      { ...player1, rack: rack1, score: 0 },
-      { ...player2, rack: rack2, score: 0 },
+      { ...player1, rack: rack1, score: 0, historyVersion: 2 },
+      { ...player2, rack: rack2, score: 0, historyVersion: 2 },
     ],
     board: createEmptyBoard(),
     bag: finalBag,
@@ -318,7 +401,7 @@ export async function submitMove(
 ): Promise<{ success: boolean; error?: string }> {
   if (game.currentTurn !== playerUid) return { success: false, error: 'Not your turn' };
 
-  const { total } = scoreMove(game.board, placedTiles);
+  const { total, words } = scoreMove(game.board, placedTiles);
   const newBoard = applyMoveToBoard(game.board, placedTiles);
 
   const playerIndex = game.players.findIndex((p) => p.uid === playerUid);
@@ -336,12 +419,17 @@ export async function submitMove(
     rack: newRack,
   };
 
-  const move: Move = {
+  const move = buildPlayEvent({
     uid: playerUid,
-    tiles: placedTiles,
+    playerIndex: playerIndex as 0 | 1,
+    rackBefore: game.players[playerIndex].rack,
+    placements: placedTiles,
+    words,
     score: total,
-    timestamp: Date.now(),
-  };
+    resultingScore: updatedPlayers[playerIndex].score,
+    drawnTiles: drawn,
+    bagCount: newBag.length,
+  });
 
   const isFinished = newBag.length === 0 && newRack.length === 0;
 
@@ -394,11 +482,21 @@ export async function swapTiles(
   const updatedPlayers = [...game.players];
   updatedPlayers[playerIndex] = { ...player, rack: newRack };
 
+  const move = buildSwapEvent({
+    uid: playerUid,
+    playerIndex: playerIndex as 0 | 1,
+    rackBefore: player.rack,
+    returnedTiles: tilesToReturn,
+    drawnTiles: drawn,
+    bagCount: remaining.length,
+  });
+
   const { error } = await supabase
     .from('games')
     .update({
       players: updatedPlayers,
       bag: remaining,
+      moves: [...game.moves, move],
       current_turn: game.players[otherIndex].uid,
       updated_at: new Date().toISOString(),
     })
@@ -411,8 +509,14 @@ export async function swapTiles(
 // ─── Pass turn ────────────────────────────────────────────────────────────────
 export async function passTurn(gameId: string, game: Game, playerUid: string) {
   if (game.currentTurn !== playerUid) throw new Error('Not your turn');
-  const otherIndex = game.players[0].uid === playerUid ? 1 : 0;
-  const move: Move = { uid: 'pass', tiles: [], score: 0, timestamp: Date.now() };
+  const playerIndex = game.players[0].uid === playerUid ? 0 : 1;
+  const otherIndex = 1 - playerIndex;
+  const move = buildPassEvent({
+    uid: playerUid,
+    playerIndex,
+    rackBefore: game.players[playerIndex].rack,
+    bagCount: game.bag.length,
+  });
   const isFinished = trailingPassCount(game.moves) + 1 >= CONSECUTIVE_PASS_LIMIT;
   const { error } = await supabase
     .from('games')
