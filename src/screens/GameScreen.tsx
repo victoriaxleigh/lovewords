@@ -50,6 +50,7 @@ export default function GameScreen() {
   const [showPassConfirm, setShowPassConfirm] = useState(false);
   const [swapMode, setSwapMode] = useState(false);
   const [swapSelectedIds, setSwapSelectedIds] = useState<string[]>([]);
+  const [swapConfirm, setSwapConfirm] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [smackTalk, setSmackTalk] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -156,6 +157,7 @@ export default function GameScreen() {
           setSelectedTile(null);
           setSwapMode(false);
           setSwapSelectedIds([]);
+          setSwapConfirm(false);
           setShowPassConfirm(false);
           setSubmitError(null);
           if (soloWaitingRealtimeRef.current) {
@@ -492,6 +494,7 @@ export default function GameScreen() {
     setPendingTiles([]);
     setSelectedTile(null);
     setSwapSelectedIds([]);
+    setSwapConfirm(false);
     setSwapMode(true);
   }
 
@@ -530,6 +533,7 @@ export default function GameScreen() {
       setSwapping(false);
       setSwapMode(false);
       setSwapSelectedIds([]);
+      setSwapConfirm(false);
     }
   }
 
@@ -779,38 +783,60 @@ export default function GameScreen() {
               <Text style={styles.hint}>
                 {swapping
                   ? 'Drawing your new tiles…'
+                  : swapConfirm
+                  ? `Swap ${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'}? This trades them and ends your turn.`
                   : swapSelectedIds.length === 0
                   ? 'Tap tiles to mark them for swap, then Confirm. Swapping trades tiles and ends your turn.'
                   : `${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'} selected — tap again to deselect`}
               </Text>
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
-                  onPress={() => {
-                    setSwapMode(false);
-                    setSwapSelectedIds([]);
-                  }}
-                  disabled={swapping}
-                >
-                  <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    (swapSelectedIds.length === 0 || swapping) && styles.actionBtnDisabled,
-                  ]}
-                  onPress={handleConfirmSwap}
-                  disabled={swapSelectedIds.length === 0 || swapping}
-                >
-                  {swapping ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
+              {swapConfirm ? (
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
+                    onPress={() => setSwapConfirm(false)}
+                    disabled={swapping}
+                  >
+                    <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSwap, swapping && styles.actionBtnDisabled]}
+                    onPress={handleConfirmSwap}
+                    disabled={swapping}
+                    accessibilityLabel={`Yes, swap ${swapSelectedIds.length} tiles`}
+                  >
+                    {swapping ? (
+                      <ActivityIndicator color={'#0E3D74'} size="small" />
+                    ) : (
+                      <Text style={styles.actionBtnSwapText}>🔄 Yes, Swap</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
+                    onPress={() => {
+                      setSwapMode(false);
+                      setSwapSelectedIds([]);
+                    }}
+                    disabled={swapping}
+                  >
+                    <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      (swapSelectedIds.length === 0 || swapping) && styles.actionBtnDisabled,
+                    ]}
+                    onPress={() => setSwapConfirm(true)}
+                    disabled={swapSelectedIds.length === 0 || swapping}
+                  >
                     <Text style={styles.actionBtnText}>
                       Confirm{swapSelectedIds.length > 0 ? ` (${swapSelectedIds.length})` : ''}
                     </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ) : showPassConfirm ? (
             <View style={styles.actions}>
