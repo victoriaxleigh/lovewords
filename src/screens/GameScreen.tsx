@@ -780,7 +780,7 @@ export default function GameScreen() {
                 {swapping
                   ? 'Drawing your new tiles…'
                   : swapSelectedIds.length === 0
-                  ? 'Tap tiles to mark them for swap, then Confirm'
+                  ? 'Tap tiles to mark them for swap, then Confirm. Swapping trades tiles and ends your turn.'
                   : `${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'} selected — tap again to deselect`}
               </Text>
               <View style={styles.actions}>
@@ -827,11 +827,19 @@ export default function GameScreen() {
               <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
                 <Text style={styles.actionBtnSecondaryText}>Recall</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleEnterSwapMode}>
-                <Text style={styles.actionBtnSecondaryText}>Swap</Text>
+              <TouchableOpacity
+                style={styles.actionBtnSwap}
+                onPress={handleEnterSwapMode}
+                accessibilityLabel="Swap tiles (uses your turn)"
+              >
+                <Text style={styles.actionBtnSwapText}>🔄 Swap</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => setShowPassConfirm(true)}>
-                <Text style={styles.actionBtnSecondaryText}>Pass</Text>
+              <TouchableOpacity
+                style={styles.actionBtnPass}
+                onPress={() => setShowPassConfirm(true)}
+                accessibilityLabel="Pass your turn"
+              >
+                <Text style={styles.actionBtnPassText}>⏭ Pass</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
@@ -1002,6 +1010,28 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   actionBtnSecondaryText: { color: Colors.text, fontWeight: '600', fontSize: 14 },
+  // Swap and Pass are tinted differently (and carry icons) so they can't be
+  // mistaken for each other — swap = blue "exchange", pass = amber "skip".
+  actionBtnSwap: {
+    flex: 1,
+    backgroundColor: '#EAF2FB',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#124C8F',
+  },
+  actionBtnSwapText: { color: '#0E3D74', fontWeight: '700', fontSize: 14 },
+  actionBtnPass: {
+    flex: 1,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#B25000',
+  },
+  actionBtnPassText: { color: '#8A3D00', fontWeight: '700', fontSize: 14 },
   finishedEmoji: { fontSize: 64, marginBottom: 12 },
   finishedText: { fontSize: 28, fontWeight: '900', color: Colors.primary, marginBottom: 8 },
   finishedReason: { fontSize: 13, color: Colors.textLight, marginBottom: 8, fontStyle: 'italic' },
