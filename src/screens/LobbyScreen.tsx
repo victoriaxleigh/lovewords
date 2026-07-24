@@ -251,6 +251,11 @@ export default function LobbyScreen({ currentUser }: Props) {
             const showingMenu = menuId === game.id;
             const rowBusy = busyId === game.id;
             const name = opponent?.displayName ?? 'Player';
+            const soloG = isSoloGame(game);
+            const myLabel = soloG ? 'P1' : 'You';
+            const oppLabel = soloG ? 'P2' : name;
+            const myWins = myScore > oppScore;
+            const oppWins = oppScore > myScore;
             return (
               <View>
                 <TouchableOpacity
@@ -264,8 +269,8 @@ export default function LobbyScreen({ currentUser }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel={
                     isSoloGame(game)
-                      ? `Solo practice game, ${statusLabel(game)}, your score ${myScore}`
-                      : `${game.mode === 'friend' ? 'Friend' : 'Partner'} game with ${name}, ${statusLabel(game)}, score ${myScore} to ${oppScore}`
+                      ? `Solo practice game, ${statusLabel(game)}, P1 ${myScore}, P2 ${oppScore}`
+                      : `${game.mode === 'friend' ? 'Friend' : 'Partner'} game with ${name}, ${statusLabel(game)}, you ${myScore}, ${name} ${oppScore}`
                   }
                   accessibilityHint="Opens the game. Long press to delete it."
                 >
@@ -286,9 +291,14 @@ export default function LobbyScreen({ currentUser }: Props) {
                     </View>
                   </View>
                   <View style={styles.gameCardRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    <Text style={styles.gameScore}>{myScore}</Text>
-                    <Text style={styles.gameScoreDivider}>vs</Text>
-                    <Text style={styles.gameScoreOpp}>{oppScore}</Text>
+                    <View style={styles.scoreRow}>
+                      <Text style={[styles.scoreName, myWins && styles.scoreNameWin]} numberOfLines={1}>{myLabel}</Text>
+                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]}>{myScore}</Text>
+                    </View>
+                    <View style={styles.scoreRow}>
+                      <Text style={[styles.scoreName, oppWins && styles.scoreNameWin]} numberOfLines={1}>{oppLabel}</Text>
+                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]}>{oppScore}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
                 {showingMenu && (
@@ -437,10 +447,12 @@ const styles = StyleSheet.create({
   statusChipActive: { backgroundColor: Colors.primary },
   statusChipText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
   statusChipTextActive: { color: '#fff' },
-  gameCardRight: { alignItems: 'center', minWidth: 52 },
-  gameScore: { fontSize: 22, fontWeight: '900', color: Colors.primary, lineHeight: 24 },
-  gameScoreDivider: { fontSize: 10, color: Colors.textLight, fontWeight: '700' },
-  gameScoreOpp: { fontSize: 16, fontWeight: '700', color: Colors.textLight, lineHeight: 18 },
+  gameCardRight: { minWidth: 84, maxWidth: 132, gap: 3, marginLeft: 8 },
+  scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6 },
+  scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, textAlign: 'right' },
+  scoreNameWin: { color: Colors.text, fontWeight: '800' },
+  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 24, textAlign: 'right' },
+  scoreValueWin: { fontSize: 20, fontWeight: '900', color: Colors.primary },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',

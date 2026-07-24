@@ -97,7 +97,7 @@ export default function NewGameModal({
           <Text style={[styles.label, { marginTop: 20 }]}>Their email</Text>
           <TextInput
             style={styles.input}
-            placeholder="Friend's email"
+            placeholder="Email address"
             placeholderTextColor={Colors.textLight}
             value={email}
             onChangeText={(t) => {
