@@ -61,6 +61,7 @@ export default function GameScreen() {
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
   const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState(false);
+  const [analysisQuality, setAnalysisQuality] = useState<'full' | 'basic' | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
@@ -576,6 +577,7 @@ export default function GameScreen() {
         const result = await requestGameCoaching(gameId);
         setAnalysisText(result.analysis);
         setAnalysisPreview(result.preview === true);
+        setAnalysisQuality(result.recordingQuality ?? null);
       } catch (e: any) {
         setAnalysisError(e?.message ?? 'Could not analyze this game.');
       } finally {
@@ -629,6 +631,12 @@ export default function GameScreen() {
             <Text style={styles.analysisCommandLabel}>
               {analysisPreview ? '🤖 Coach (local preview)' : '🤖 Your coach says'}
             </Text>
+            {analysisQuality === 'basic' && (
+              <Text style={styles.analysisBasicNote}>
+                ℹ️ This game was played before full move tracking, so tile-by-tile tips
+                aren’t available for it. New games get the complete review.
+              </Text>
+            )}
             <Text selectable style={styles.analysisCoachText}>
               {analysisText}
             </Text>
@@ -1099,6 +1107,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 8,
+  },
+  analysisBasicNote: {
+    color: Colors.textLight,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 10,
   },
   analysisCoachText: {
     color: Colors.text,

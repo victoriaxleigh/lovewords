@@ -1,8 +1,30 @@
 # Lovewords — Active Bug & UX Issues
 
-> Updated 2026-07-23. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> Updated 2026-07-25. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
 > All file paths are relative to `C:\Users\victo\lovewords\`.
 > ✅ = resolved  🔴 = critical  🟠 = high  🟡 = medium
+
+---
+
+## ✅ Issue — "Swap passes my turn" mis-tap (FIXED — Session 10)
+
+**Symptom (user report):** a player kept passing when they meant to swap.
+**Root cause:** not a bug — Swap and Pass were identical adjacent grey buttons, easy to mis-tap. Swapping correctly ends your turn (WWF rules).
+**Fix — `GameScreen.tsx`:** Swap is now a blue 🔄 button, Pass an amber ⏭ button (distinct colors + icons), and Swap gained a "Yes, Swap" confirmation step mirroring Pass. New colors verified WCAG AAA in `contrast.test.ts`.
+
+## ✅ Issue — "Same vowels every game" (FIXED — Session 10)
+
+**Symptom (user report):** players repeatedly drew the same vowels.
+**Root cause:** not the RNG (Fisher-Yates shuffle verified unbiased) — the distribution: E at 13 was the most common tile, appearing in ~62% of opening racks.
+**Fix — `src/engine/tiles.ts`:** trimmed E 13→11 (→ R 6→7, T 7→8). Bag stays 104; avg vowels/rack ~2.82→~2.69. New games only.
+
+## 🟡 Known limitation — AI coach on pre-analysis games (by design)
+
+The coach is only rack-aware for **v2 games** (created after the analysis feature shipped). Older games never recorded `rackBefore`, so they return `recordingQuality: 'basic'` and get higher-level feedback only — the card shows a "played before full move tracking" note. Not recoverable; not a bug.
+
+## 🟡 TODO — gate AI coach behind premium before App Store launch
+
+The coach is free/ungated today. Before launch, wire the "🤖 Coach me on this game" button to the dormant `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts` so it's a premium feature. Cost is ~4¢/game (Sonnet), only on finished-game taps. See `DEPLOY.md` → §6.
 
 ---
 

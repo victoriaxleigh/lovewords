@@ -23,8 +23,10 @@ npm run build:web
 netlify deploy --prod --dir=dist --no-build
 ```
 
-See `AGENT_HANDOFF.md` → Deployment for the full pitfalls list (rate limits,
-required Netlify env vars, etc).
+**➡️ See `DEPLOY.md` for the full deployment runbook** — every environment
+variable (and the secret-scope rules), Supabase migrations, auto vs manual
+deploy, post-deploy smoke tests, and rollback. The quick notes below are a
+summary; `DEPLOY.md` is the source of truth.
 
 ### Finished-game analysis export
 

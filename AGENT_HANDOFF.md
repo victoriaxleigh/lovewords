@@ -1,6 +1,8 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-24 (Session 10 — finished-game analysis export deployed; in-app AI coaching added. Also refreshed the Colors/Types/structure/test references, which had lagged since Session 9.)
+> Last updated: 2026-07-25 (Session 10 — finished-game analysis export deployed; in-app AI coaching (move-by-move, Sonnet); home-screen score labels + winner highlight; distinct Swap/Pass + swap confirm; tile-bag rebalance (E 13→11); WCAG re-verification. Also refreshed the Colors/Types/structure/test references, which had lagged since Session 9.)
+>
+> **Deploying?** See `DEPLOY.md` for the full runbook (env vars + scopes, migrations, verify, rollback).
 
 ## What This App Is
 **LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
@@ -731,6 +733,11 @@ Turns that same export into a written coaching note shown **inside the app** (no
   mock). Wired into the finished-game screen in `GameScreen.tsx` — the "🤖 Coach me on
   this game" button renders the returned text in a card. (This replaced the old
   curl-command UI; the analysis-token/export endpoints above still exist for power users.)
+- **Recording quality**: coaching is only rack-aware for **v2 games** (created after the
+  analysis feature shipped) — those return `recordingQuality: 'full'` and get concrete
+  "you should have played X" advice. Older games return `'basic'` (no per-turn rack was
+  ever recorded — unrecoverable); the card shows an "played before full move tracking" note
+  and the coach gives higher-level feedback only. This is expected, not a bug.
 - **Latency note**: Sonnet + adaptive thinking on a long game can approach the Netlify
   sync-function timeout; if that shows up, drop the `thinking` param, lower effort, or stream.
 - **App Store TODO**: gate the coach behind premium — wire the "Coach me" button to the
