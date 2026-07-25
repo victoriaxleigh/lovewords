@@ -2,6 +2,25 @@
 
 ---
 
+## Session 10 — 2026-07-25
+
+### In-app AI coach (move-by-move)
+The finished-game screen now shows a written, turn-by-turn review instead of a curl command. New serverless function `netlify/functions/game-coach.js` authenticates the player's Supabase session, reuses the PR #3 sanitized export (`sanitizeGameExport`), reconstructs the board, and calls Claude (`COACH_MODEL = 'claude-sonnet-5'`, adaptive thinking + `effort:'low'`) for per-turn feedback with the specific better play you could have made and an estimated score. Client: `requestGameCoaching()` in `gameService.ts` + the "🤖 Coach me on this game" button in `GameScreen.tsx`. **Requires `ANTHROPIC_API_KEY` (secret, Functions-scoped).** Rack-aware only for v2 games (post analysis feature); older games show a "played before full move tracking" note and get higher-level feedback. Cost ~4¢/game; App Store TODO: gate behind `MONETIZATION_ENABLED`.
+
+### Home-screen score labels + winner highlight
+Game cards now label each score (You / opponent, or P1 / P2 for solo) instead of a bare "N vs N", and highlight the winning score (brand-pink, bolder). Screen-reader labels updated to match.
+
+### Swap/Pass clarity + swap confirm
+Reported mis-taps (players pressing Pass when meaning Swap). Swap and Pass are now visually distinct (blue 🔄 / amber ⏭ with icons) instead of identical grey buttons, and **Swap now has a "Yes, Swap" confirmation step** mirroring Pass, so an accidental swap is impossible. No gameplay logic changed (swapping still trades tiles and ends your turn, per WWF rules).
+
+### Tile-bag rebalance
+Players reported drawing the same vowels repeatedly. The RNG was already correct (verified Fisher-Yates, no bias) — the cause was distribution: E at 13 appeared in ~62% of opening racks. Trimmed **E 13→11** (→ R 6→7, T 7→8); bag stays 104 tiles, avg vowels/rack ~2.82→~2.69. New games only.
+
+### New Game email + WCAG + docs
+Email placeholder "Friend's email" → "Email address" (reads right for partner and friend games). New Swap/Pass button colors verified at WCAG AAA (7:1 text / 3:1 borders) and added to `contrast.test.ts`. Added `DEPLOY.md` (deploy runbook) and refreshed `AGENT_HANDOFF.md` references (Colors/Types/structure/tests) that had lagged since Session 9. **135 tests pass.**
+
+---
+
 ## Session 9 — 2026-07-22
 
 ### Partner / Friend mode
