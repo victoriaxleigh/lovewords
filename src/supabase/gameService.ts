@@ -120,9 +120,14 @@ export async function requestGameCoaching(gameId: string): Promise<GameCoaching>
   ) {
     return {
       analysis:
-        "Nice game! Your standout play was QUARTZ for 48 points — parking the Q on a triple was the turning point. " +
-        "You kept your rack balanced and never got stuck with too many consonants. " +
-        "Next time, watch for bingo chances when your rack is vowel-heavy — you were one tile from a 35-point play on turn 6.",
+        "Here's your game, turn by turn:\n\n" +
+        "Turn 1 — FIND (12): Solid opener across the center star.\n" +
+        "Turn 3 — CAT (5): A bit safe. You held Q, U, A, R, T, Z, E — QUARTZ down the H-column triple was worth ~48. Big one to remember.\n" +
+        "Turn 5 — GOAT (9): Good value, and you kept a balanced rack.\n" +
+        "Turn 7 — QUARTZ (48): There it is — the turning point. Perfect use of the triple.\n" +
+        "Turn 9 — pass: Understandable with that rack, but a 1–2 tile swap would've kept you moving.\n\n" +
+        "Takeaways: (1) When you're holding a Q with a U, hunt for a premium square before settling. " +
+        "(2) Swap instead of passing when you're stuck. (3) Great endgame board control.",
       recordingQuality: 'full',
       preview: true,
     };
