@@ -42,11 +42,31 @@ const NORMAL_TEXT_AAA: [string, string, string][] = [
   ['white on TL square', WHITE, Colors.tl],
   ['dark text on DL square', Colors.text, Colors.dl],
   ['white on START square', WHITE, Colors.start],
+  // Action buttons — Swap (blue) / Pass (amber) label text on their tinted fills
+  ['swap label on swap fill', Colors.swapText, Colors.swapBg],
+  ['pass label on pass fill', Colors.passText, Colors.passBg],
+];
+
+// Non-text UI components must clear 3:1 (WCAG 2.1 AA 1.4.11). The Swap/Pass
+// button borders are what set them apart, so they're checked against both their
+// own fill and the pink page background the bar sits on.
+// [label, foreground, background]
+const NON_TEXT_AA: [string, string, string][] = [
+  ['swap border on swap fill', Colors.swapBorder, Colors.swapBg],
+  ['swap border on page bg', Colors.swapBorder, Colors.background],
+  ['pass border on pass fill', Colors.passBorder, Colors.passBg],
+  ['pass border on page bg', Colors.passBorder, Colors.background],
 ];
 
 describe('WCAG AAA contrast (normal text, 7:1)', () => {
   test.each(NORMAL_TEXT_AAA)('%s', (_label, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe('WCAG AA non-text contrast (UI components, 3:1)', () => {
+  test.each(NON_TEXT_AA)('%s', (_label, fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3);
   });
 });
 

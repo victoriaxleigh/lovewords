@@ -805,7 +805,7 @@ export default function GameScreen() {
                     accessibilityLabel={`Yes, swap ${swapSelectedIds.length} tiles`}
                   >
                     {swapping ? (
-                      <ActivityIndicator color={'#0E3D74'} size="small" />
+                      <ActivityIndicator color={Colors.swapText} size="small" />
                     ) : (
                       <Text style={styles.actionBtnSwapText}>🔄 Yes, Swap</Text>
                     )}
@@ -1040,24 +1040,24 @@ const styles = StyleSheet.create({
   // mistaken for each other — swap = blue "exchange", pass = amber "skip".
   actionBtnSwap: {
     flex: 1,
-    backgroundColor: '#EAF2FB',
+    backgroundColor: Colors.swapBg,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#124C8F',
+    borderColor: Colors.swapBorder,
   },
-  actionBtnSwapText: { color: '#0E3D74', fontWeight: '700', fontSize: 14 },
+  actionBtnSwapText: { color: Colors.swapText, fontWeight: '700', fontSize: 14 },
   actionBtnPass: {
     flex: 1,
-    backgroundColor: '#FFF3E0',
+    backgroundColor: Colors.passBg,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#B25000',
+    borderColor: Colors.passBorder,
   },
-  actionBtnPassText: { color: '#8A3D00', fontWeight: '700', fontSize: 14 },
+  actionBtnPassText: { color: Colors.passText, fontWeight: '700', fontSize: 14 },
   finishedEmoji: { fontSize: 64, marginBottom: 12 },
   finishedText: { fontSize: 28, fontWeight: '900', color: Colors.primary, marginBottom: 8 },
   finishedReason: { fontSize: 13, color: Colors.textLight, marginBottom: 8, fontStyle: 'italic' },
