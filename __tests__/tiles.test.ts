@@ -12,10 +12,10 @@ describe('Tile Bag', () => {
     expect(blanks).toHaveLength(2);
   });
 
-  test('contains exactly 13 E tiles (WWF distribution)', () => {
+  test('contains exactly 11 E tiles (trimmed to reduce vowel-heavy racks)', () => {
     const bag = createTileBag();
     const eTiles = bag.filter((t) => t.letter === 'E');
-    expect(eTiles).toHaveLength(13);
+    expect(eTiles).toHaveLength(11);
   });
 
   test('contains exactly 1 Z tile worth 10 points', () => {

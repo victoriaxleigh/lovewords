@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, createGameAnalysisToken } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -50,6 +50,7 @@ export default function GameScreen() {
   const [showPassConfirm, setShowPassConfirm] = useState(false);
   const [swapMode, setSwapMode] = useState(false);
   const [swapSelectedIds, setSwapSelectedIds] = useState<string[]>([]);
+  const [swapConfirm, setSwapConfirm] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [smackTalk, setSmackTalk] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -58,8 +59,7 @@ export default function GameScreen() {
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
-  const [analysisCurl, setAnalysisCurl] = useState<string | null>(null);
-  const [analysisExpiresAt, setAnalysisExpiresAt] = useState<string | null>(null);
+  const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -157,6 +157,7 @@ export default function GameScreen() {
           setSelectedTile(null);
           setSwapMode(false);
           setSwapSelectedIds([]);
+          setSwapConfirm(false);
           setShowPassConfirm(false);
           setSubmitError(null);
           if (soloWaitingRealtimeRef.current) {
@@ -493,6 +494,7 @@ export default function GameScreen() {
     setPendingTiles([]);
     setSelectedTile(null);
     setSwapSelectedIds([]);
+    setSwapConfirm(false);
     setSwapMode(true);
   }
 
@@ -531,6 +533,7 @@ export default function GameScreen() {
       setSwapping(false);
       setSwapMode(false);
       setSwapSelectedIds([]);
+      setSwapConfirm(false);
     }
   }
 
@@ -565,17 +568,16 @@ export default function GameScreen() {
         setRematching(false);
       }
     };
-    const handleAnalysisToken = async () => {
+    const handleAnalyze = async () => {
       if (analysisLoading) return;
       setAnalysisLoading(true);
       setAnalysisError(null);
       try {
-        const result = await createGameAnalysisToken(gameId);
-        setAnalysisCurl(result.curl);
-        setAnalysisExpiresAt(result.expiresAt);
+        const result = await requestGameCoaching(gameId);
+        setAnalysisText(result.analysis);
         setAnalysisPreview(result.preview === true);
       } catch (e: any) {
-        setAnalysisError(e?.message ?? 'Could not generate an analysis command.');
+        setAnalysisError(e?.message ?? 'Could not analyze this game.');
       } finally {
         setAnalysisLoading(false);
       }
@@ -605,35 +607,31 @@ export default function GameScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.analysisBtn, analysisLoading && styles.actionBtnDisabled]}
-          onPress={handleAnalysisToken}
+          onPress={handleAnalyze}
           disabled={analysisLoading}
-          accessibilityLabel="Generate game analysis command"
+          accessibilityLabel="Get AI coaching for this game"
           accessibilityRole="button"
         >
           {analysisLoading ? (
-            <ActivityIndicator color={Colors.primary} size="small" />
+            <View style={styles.analysisLoadingRow}>
+              <ActivityIndicator color={Colors.primary} size="small" />
+              <Text style={styles.analysisBtnText}>Coaching…</Text>
+            </View>
           ) : (
             <Text style={styles.analysisBtnText}>
-              {analysisCurl ? 'Refresh analysis command' : '🤖 Analyze this game'}
+              {analysisText ? '🤖 Coach me again' : '🤖 Coach me on this game'}
             </Text>
           )}
         </TouchableOpacity>
         {analysisError && <Text style={styles.analysisError}>⚠️ {analysisError}</Text>}
-        {analysisCurl && (
+        {analysisText && (
           <View style={styles.analysisCommandCard}>
             <Text style={styles.analysisCommandLabel}>
-              {analysisPreview
-                ? 'Local preview — this returns mock game JSON:'
-                : 'Select and share this command with your AI:'}
+              {analysisPreview ? '🤖 Coach (local preview)' : '🤖 Your coach says'}
             </Text>
-            <Text selectable style={styles.analysisCommand}>
-              {analysisCurl}
+            <Text selectable style={styles.analysisCoachText}>
+              {analysisText}
             </Text>
-            {analysisExpiresAt && (
-              <Text style={styles.analysisExpiry}>
-                Expires {new Date(analysisExpiresAt).toLocaleString()}
-              </Text>
-            )}
           </View>
         )}
         {rematchError && <Text style={styles.rematchError}>⚠️ {rematchError}</Text>}
@@ -785,38 +783,60 @@ export default function GameScreen() {
               <Text style={styles.hint}>
                 {swapping
                   ? 'Drawing your new tiles…'
+                  : swapConfirm
+                  ? `Swap ${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'}? This trades them and ends your turn.`
                   : swapSelectedIds.length === 0
-                  ? 'Tap tiles to mark them for swap, then Confirm'
+                  ? 'Tap tiles to mark them for swap, then Confirm. Swapping trades tiles and ends your turn.'
                   : `${swapSelectedIds.length} tile${swapSelectedIds.length === 1 ? '' : 's'} selected — tap again to deselect`}
               </Text>
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
-                  onPress={() => {
-                    setSwapMode(false);
-                    setSwapSelectedIds([]);
-                  }}
-                  disabled={swapping}
-                >
-                  <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    (swapSelectedIds.length === 0 || swapping) && styles.actionBtnDisabled,
-                  ]}
-                  onPress={handleConfirmSwap}
-                  disabled={swapSelectedIds.length === 0 || swapping}
-                >
-                  {swapping ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
+              {swapConfirm ? (
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
+                    onPress={() => setSwapConfirm(false)}
+                    disabled={swapping}
+                  >
+                    <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSwap, swapping && styles.actionBtnDisabled]}
+                    onPress={handleConfirmSwap}
+                    disabled={swapping}
+                    accessibilityLabel={`Yes, swap ${swapSelectedIds.length} tiles`}
+                  >
+                    {swapping ? (
+                      <ActivityIndicator color={Colors.swapText} size="small" />
+                    ) : (
+                      <Text style={styles.actionBtnSwapText}>🔄 Yes, Swap</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtnSecondary, swapping && styles.actionBtnDisabled]}
+                    onPress={() => {
+                      setSwapMode(false);
+                      setSwapSelectedIds([]);
+                    }}
+                    disabled={swapping}
+                  >
+                    <Text style={styles.actionBtnSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      (swapSelectedIds.length === 0 || swapping) && styles.actionBtnDisabled,
+                    ]}
+                    onPress={() => setSwapConfirm(true)}
+                    disabled={swapSelectedIds.length === 0 || swapping}
+                  >
                     <Text style={styles.actionBtnText}>
                       Confirm{swapSelectedIds.length > 0 ? ` (${swapSelectedIds.length})` : ''}
                     </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ) : showPassConfirm ? (
             <View style={styles.actions}>
@@ -833,11 +853,19 @@ export default function GameScreen() {
               <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
                 <Text style={styles.actionBtnSecondaryText}>Recall</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleEnterSwapMode}>
-                <Text style={styles.actionBtnSecondaryText}>Swap</Text>
+              <TouchableOpacity
+                style={styles.actionBtnSwap}
+                onPress={handleEnterSwapMode}
+                accessibilityLabel="Swap tiles (uses your turn)"
+              >
+                <Text style={styles.actionBtnSwapText}>🔄 Swap</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => setShowPassConfirm(true)}>
-                <Text style={styles.actionBtnSecondaryText}>Pass</Text>
+              <TouchableOpacity
+                style={styles.actionBtnPass}
+                onPress={() => setShowPassConfirm(true)}
+                accessibilityLabel="Pass your turn"
+              >
+                <Text style={styles.actionBtnPassText}>⏭ Pass</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
@@ -1008,6 +1036,28 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   actionBtnSecondaryText: { color: Colors.text, fontWeight: '600', fontSize: 14 },
+  // Swap and Pass are tinted differently (and carry icons) so they can't be
+  // mistaken for each other — swap = blue "exchange", pass = amber "skip".
+  actionBtnSwap: {
+    flex: 1,
+    backgroundColor: Colors.swapBg,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.swapBorder,
+  },
+  actionBtnSwapText: { color: Colors.swapText, fontWeight: '700', fontSize: 14 },
+  actionBtnPass: {
+    flex: 1,
+    backgroundColor: Colors.passBg,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.passBorder,
+  },
+  actionBtnPassText: { color: Colors.passText, fontWeight: '700', fontSize: 14 },
   finishedEmoji: { fontSize: 64, marginBottom: 12 },
   finishedText: { fontSize: 28, fontWeight: '900', color: Colors.primary, marginBottom: 8 },
   finishedReason: { fontSize: 13, color: Colors.textLight, marginBottom: 8, fontStyle: 'italic' },
@@ -1032,6 +1082,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   analysisBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
+  analysisLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   analysisError: { color: Colors.error, fontSize: 14, marginBottom: 12, textAlign: 'center' },
   analysisCommandCard: {
     width: '100%',
@@ -1049,15 +1100,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  analysisCommand: {
+  analysisCoachText: {
     color: Colors.text,
-    backgroundColor: Colors.background,
-    borderRadius: 8,
-    padding: 10,
-    fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  analysisExpiry: { color: Colors.textLight, fontSize: 11, marginTop: 8 },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   rematchBtn: {

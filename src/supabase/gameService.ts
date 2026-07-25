@@ -100,6 +100,70 @@ export async function createGameAnalysisToken(gameId: string): Promise<GameAnaly
   return body as GameAnalysisToken;
 }
 
+// ─── AI game coaching ─────────────────────────────────────────────────────────
+// Sends the finished game to our serverless coach (which calls Claude) and
+// returns the written analysis to show in-app. Same auth model as the token
+// endpoint: the caller must be a signed-in player of a finished game.
+export type GameCoaching = {
+  analysis: string;
+  recordingQuality?: 'full' | 'basic';
+  preview?: boolean;
+};
+
+export async function requestGameCoaching(gameId: string): Promise<GameCoaching> {
+  // Expo's web dev server does not run Netlify Functions. Give ?dev=1 a canned
+  // coaching note so the finished-game UI can be reviewed without a backend.
+  if (
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('dev')
+  ) {
+    return {
+      analysis:
+        "Here's your game, turn by turn:\n\n" +
+        "Turn 1 — FIND (12): Solid opener across the center star.\n" +
+        "Turn 3 — CAT (5): A bit safe. You held Q, U, A, R, T, Z, E — QUARTZ down the H-column triple was worth ~48. Big one to remember.\n" +
+        "Turn 5 — GOAT (9): Good value, and you kept a balanced rack.\n" +
+        "Turn 7 — QUARTZ (48): There it is — the turning point. Perfect use of the triple.\n" +
+        "Turn 9 — pass: Understandable with that rack, but a 1–2 tile swap would've kept you moving.\n\n" +
+        "Takeaways: (1) When you're holding a Q with a U, hunt for a premium square before settling. " +
+        "(2) Swap instead of passing when you're stuck. (3) Great endgame board control.",
+      recordingQuality: 'full',
+      preview: true,
+    };
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) throw new Error('Sign in again to analyze this game.');
+
+  const response = await fetch(
+    `${FUNCTIONS_BASE}/api/games/${encodeURIComponent(gameId)}/coach`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
+
+  let body: Partial<GameCoaching> & { error?: string } = {};
+  try {
+    body = await response.json();
+  } catch {
+    // Keep the fallback below for platform/proxy errors that return plain text.
+  }
+  if (!response.ok) {
+    throw new Error(body.error || 'Could not analyze this game.');
+  }
+  if (!body.analysis) {
+    throw new Error('The coach returned an empty analysis.');
+  }
+  return body as GameCoaching;
+}
+
 // ─── Create Solo Practice Game ────────────────────────────────────────────────
 // Solo games NEVER change current_turn — it stays as the real user's UID forever.
 // Whose turn it is gets tracked by moves.length % 2 (even = player 1, odd = player 2).

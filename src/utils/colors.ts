@@ -38,6 +38,18 @@ export const Colors = {
   dl: '#7DC2F7',   // double letter — light blue (dark label 8.07:1)
   start: '#8E1050', // star center — deep rose  (white label 8.97:1)
 
+  // Action buttons — Swap (blue) and Pass (amber) are tinted differently so they
+  // can't be confused. Text hits WCAG AAA (7:1) on its own fill; borders hit the
+  // non-text 3:1 bar (1.4.11) on both the fill and the pink page bg.
+  //   swapText #0E3D74 on swapBg 9.59:1 · swapBorder 7.57:1 on fill / 7.75:1 on pink
+  //   passText #7A3600 on passBg 8.13:1 · passBorder 4.74:1 on fill / 4.71:1 on pink
+  swapBg: '#EAF2FB',
+  swapBorder: '#124C8F',
+  swapText: '#0E3D74',
+  passBg: '#FFF3E0',
+  passBorder: '#B25000',
+  passText: '#7A3600',
+
   // Status
   success: '#4CAF50',
   error: '#F44336',
