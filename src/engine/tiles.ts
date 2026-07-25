@@ -1,18 +1,19 @@
 import { Tile } from '../types';
 
-// Words With Friends tile distribution + values (104 tiles total).
-// Previously this was a hybrid (Scrabble counts + WWF values), which felt
-// punishing — too few S/T/H/D combined with high penalty values on rough
-// letters. Pure WWF gives more common letters so racks build words more
-// easily; the WWF values (V=5, J/Z=10, B/C/F/M=4) still reward landing
-// the rare tiles. Difference from Scrabble: D 4→5, E 12→13, H 2→4,
-// I 9→8, N 6→5, S 4→5, T 6→7.
+// Words With Friends-style tile distribution + values (104 tiles total).
+// WWF values (V=5, J/Z=10, B/C/F/M=4) reward landing the rare tiles, and the
+// bag is consonant-topped so racks build words easily. E was trimmed from 13→11
+// (it's the most common tile and was showing up in ~62% of opening racks, which
+// read as "always the same vowels"); those 2 tiles went to R and T. That drops
+// the average vowels-per-rack from ~2.82 to ~2.69 without making racks
+// consonant-heavy. Difference from Scrabble: D 4→5, E 12→11, H 2→4, I 9→8,
+// N 6→5, R 6→7, S 4→5, T 6→8.
 const TILE_DISTRIBUTION: { letter: string; value: number; count: number }[] = [
   { letter: 'A', value: 1, count: 9 },
   { letter: 'B', value: 4, count: 2 },
   { letter: 'C', value: 4, count: 2 },
   { letter: 'D', value: 2, count: 5 },
-  { letter: 'E', value: 1, count: 13 },
+  { letter: 'E', value: 1, count: 11 },
   { letter: 'F', value: 4, count: 2 },
   { letter: 'G', value: 3, count: 3 },
   { letter: 'H', value: 3, count: 4 },
@@ -25,9 +26,9 @@ const TILE_DISTRIBUTION: { letter: string; value: number; count: number }[] = [
   { letter: 'O', value: 1, count: 8 },
   { letter: 'P', value: 4, count: 2 },
   { letter: 'Q', value: 10, count: 1 },
-  { letter: 'R', value: 1, count: 6 },
+  { letter: 'R', value: 1, count: 7 },
   { letter: 'S', value: 1, count: 5 },
-  { letter: 'T', value: 1, count: 7 },
+  { letter: 'T', value: 1, count: 8 },
   { letter: 'U', value: 2, count: 4 },
   { letter: 'V', value: 5, count: 2 },
   { letter: 'W', value: 4, count: 2 },
