@@ -722,16 +722,20 @@ A sanitized, versioned JSON export designed to be fed to an external AI via `cur
 Turns that same export into a written coaching note shown **inside the app** (no curl).
 - **`game-coach.js`** — `POST /api/games/:id/coach`; auth via Supabase session → builds
   `sanitizeGameExport(...)` → calls the **Claude API** (`@anthropic-ai/sdk`,
-  `COACH_MODEL = 'claude-haiku-4-5'` — cheapest/fastest, good for a short note) → returns
-  `{ analysis, recordingQuality }`. Requires **`ANTHROPIC_API_KEY`** in Netlify.
-  Switching `COACH_MODEL` to `claude-sonnet-5`/`claude-opus-5` also lets you add
-  `thinking:{type:'adaptive'}` + `output_config:{effort:'low'}` (Haiku 4.5 rejects both).
+  `COACH_MODEL = 'claude-sonnet-5'`, `thinking:{type:'adaptive'}` + `output_config:{effort:'low'}`)
+  → returns `{ analysis, recordingQuality }`. Requires **`ANTHROPIC_API_KEY`** in Netlify
+  (secret, **Functions**-scoped — not "All scopes", since secrets can't use Post-processing).
+  ~4¢/game. `claude-opus-5` is more precise but pricier/slower; `claude-haiku-4-5` is cheapest
+  but too vague for concrete better-play advice (and rejects the thinking/effort params).
 - **Client**: `requestGameCoaching(gameId)` in `gameService.ts` (has a `?dev=1` canned
   mock). Wired into the finished-game screen in `GameScreen.tsx` — the "🤖 Coach me on
   this game" button renders the returned text in a card. (This replaced the old
   curl-command UI; the analysis-token/export endpoints above still exist for power users.)
-- **Latency note**: Haiku returns well within the Netlify sync-function timeout. If you
-  switch `COACH_MODEL` to opus-5, coaching on a long game can approach the timeout.
+- **Latency note**: Sonnet + adaptive thinking on a long game can approach the Netlify
+  sync-function timeout; if that shows up, drop the `thinking` param, lower effort, or stream.
+- **App Store TODO**: gate the coach behind premium — wire the "Coach me" button to the
+  dormant `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts` so it's premium-only when
+  monetization is turned on. Not gated today (free for everyone).
 
 ---
 
