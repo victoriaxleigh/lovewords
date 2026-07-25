@@ -9,12 +9,12 @@ const {
   sanitizeGameExport,
 } = require('./game-analysis-common');
 
-// Which model writes the coaching. Haiku is the cheapest and fastest — a good
-// fit for a short, casual coaching note. If you switch to a newer model
-// (claude-sonnet-5 / claude-opus-5) you can also add `thinking: {type:
-// 'adaptive'}` and `output_config: {effort: 'low'}` to the create() call below;
-// Haiku 4.5 rejects both of those params, so they're omitted here.
-const COACH_MODEL = 'claude-haiku-4-5';
+// Which model writes the coaching. Sonnet reliably reconstructs the board and
+// names legal better plays with sensible score estimates (~4¢/game) — worth it
+// for the "what you should have done" review. claude-opus-5 is more precise but
+// pricier/slower; claude-haiku-4-5 is cheapest but too vague for concrete plays
+// (and rejects the thinking/effort params below — drop them if you switch back).
+const COACH_MODEL = 'claude-sonnet-5';
 
 const COACH_SYSTEM = `You are a sharp but encouraging Words With Friends coach giving a
 MOVE-BY-MOVE review of a finished game.
@@ -143,6 +143,8 @@ exports.handler = async (event) => {
     const message = await client.messages.create({
       model: COACH_MODEL,
       max_tokens: 4000,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
       system: COACH_SYSTEM,
       messages: [
         {
