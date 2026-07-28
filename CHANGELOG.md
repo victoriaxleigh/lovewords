@@ -26,6 +26,8 @@
 
 - Declined invitations are filtered by PostgREST and removed after 30 days; private discovery,
   notification, lookup-limit, and creation-grant bookkeeping now has scheduled retention.
+- Rack dragging now previews insertion slots and smoothly transitions between reordering and board
+  placement without jittery direction switching.
 - **Swap and Pass** buttons are now visually distinct (blue 🔄 / amber ⏭ with icons) to prevent
   mis-taps; new colors verified at WCAG AAA and guarded by `contrast.test.ts`.
 - **Tile bag rebalanced**: E trimmed 13→11 (→ R, T) to reduce vowel-heavy racks. New games only.

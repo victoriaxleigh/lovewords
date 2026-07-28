@@ -1,29 +1,34 @@
 import {
-  getRackDragDirection,
-  getRackDragVisualOffset,
+  BOARD_MODE_ENTER_DY,
+  BOARD_MODE_EXIT_DY,
+  getRackDragMode,
   getRackGestureEndAction,
   getRackReorderTarget,
+  getRackSiblingPreviewOffset,
 } from '../src/components/tileRackGesture';
 
-describe('TileRack gesture direction', () => {
-  test('waits for the drag threshold before choosing a direction', () => {
-    expect(getRackDragDirection(5, 5)).toBeNull();
-    expect(getRackDragDirection(6, 2)).toBe('horizontal');
-    expect(getRackDragDirection(2, -6)).toBe('vertical');
+describe('TileRack drag mode', () => {
+  test('waits for the existing movement threshold before lifting into rack mode', () => {
+    expect(getRackDragMode(null, 5, 5, true)).toBeNull();
+    expect(getRackDragMode(null, 6, 2, true)).toBe('rack');
+    expect(getRackDragMode(null, 2, -6, true)).toBe('rack');
   });
 
-  test('can return from vertical movement to horizontal organization', () => {
-    expect([
-      getRackDragDirection(0, -40),
-      getRackDragDirection(3, -3),
-      getRackDragDirection(40, -3),
-    ]).toEqual(['vertical', null, 'horizontal']);
+  test('enters board mode only after moving far enough upward', () => {
+    expect(getRackDragMode('rack', 0, BOARD_MODE_ENTER_DY + 1, true)).toBe('rack');
+    expect(getRackDragMode('rack', 0, BOARD_MODE_ENTER_DY, true)).toBe('board');
   });
 
-  test('uses the dominant axis and favors horizontal on a tie', () => {
-    expect(getRackDragDirection(-20, 10)).toBe('horizontal');
-    expect(getRackDragDirection(10, 20)).toBe('vertical');
-    expect(getRackDragDirection(10, -10)).toBe('horizontal');
+  test('uses hysteresis to avoid flipping modes in the boundary band', () => {
+    const boundaryDy = (BOARD_MODE_ENTER_DY + BOARD_MODE_EXIT_DY) / 2;
+    expect(getRackDragMode('rack', 12, boundaryDy, true)).toBe('rack');
+    expect(getRackDragMode('board', 12, boundaryDy, true)).toBe('board');
+    expect(getRackDragMode('board', 12, BOARD_MODE_EXIT_DY, true)).toBe('rack');
+  });
+
+  test('never enters board mode without actual board drag callbacks', () => {
+    expect(getRackDragMode('rack', 0, -100, false)).toBe('rack');
+    expect(getRackDragMode('board', 0, -100, false)).toBe('rack');
   });
 
   test('translates horizontal movement into a rack target index', () => {
@@ -31,41 +36,51 @@ describe('TileRack gesture direction', () => {
     expect(getRackReorderTarget(2, -101, 50)).toBe(0);
   });
 
-  test('only horizontal drags move the rack tile visual', () => {
-    expect(getRackDragVisualOffset('horizontal', 37)).toBe(37);
-    expect(getRackDragVisualOffset('vertical', 37)).toBe(0);
-    expect(getRackDragVisualOffset(null, 37)).toBe(0);
+  test('shifts siblings out of the previewed insertion slot', () => {
+    expect([0, 1, 2, 3, 4].map((index) =>
+      getRackSiblingPreviewOffset(index, 1, 4, 50)
+    )).toEqual([0, 0, -50, -50, -50]);
+    expect([0, 1, 2, 3, 4].map((index) =>
+      getRackSiblingPreviewOffset(index, 4, 1, 50)
+    )).toEqual([0, 50, 50, 50, 0]);
   });
 });
 
 describe('TileRack turn gating', () => {
-  test('while waiting, only horizontal organization is enabled', () => {
-    const gameplayEnabled = false;
+  test('while waiting, only organization is enabled', () => {
+    const boardDragEnabled = false;
     const organizationEnabled = true;
+    const pressEnabled = false;
 
-    expect(getRackGestureEndAction('horizontal', gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction('rack', boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('reorder');
-    expect(getRackGestureEndAction('vertical', gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction('board', boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('none');
-    expect(getRackGestureEndAction(null, gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction(null, boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('none');
   });
 
-  test("during the player's turn, horizontal, vertical, and tap actions stay distinct", () => {
-    const gameplayEnabled = true;
+  test("during the player's turn, rack, board, and tap releases stay distinct", () => {
+    const boardDragEnabled = true;
     const organizationEnabled = true;
+    const pressEnabled = true;
 
-    expect(getRackGestureEndAction('horizontal', gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction('rack', boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('reorder');
-    expect(getRackGestureEndAction('vertical', gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction('board', boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('board-drag');
-    expect(getRackGestureEndAction(null, gameplayEnabled, organizationEnabled))
+    expect(getRackGestureEndAction(null, boardDragEnabled, organizationEnabled, pressEnabled))
       .toBe('press');
   });
 
   test('when the game is inactive, rack gestures are inert', () => {
-    expect(getRackGestureEndAction('horizontal', false, false)).toBe('none');
-    expect(getRackGestureEndAction('vertical', false, false)).toBe('none');
-    expect(getRackGestureEndAction(null, false, false)).toBe('none');
+    expect(getRackGestureEndAction('rack', false, false, false)).toBe('none');
+    expect(getRackGestureEndAction('board', false, false, false)).toBe('none');
+    expect(getRackGestureEndAction(null, false, false, false)).toBe('none');
+  });
+
+  test('tap handling does not imply board drag availability', () => {
+    expect(getRackGestureEndAction(null, false, true, true)).toBe('press');
+    expect(getRackGestureEndAction('board', false, true, true)).toBe('none');
   });
 });
