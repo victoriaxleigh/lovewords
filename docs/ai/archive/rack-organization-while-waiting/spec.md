@@ -73,6 +73,8 @@ and no-op inputs. Run the full Jest suite and production web build.
 
 - [x] Rack reordering needs live visual feedback while dragging; the tile currently appears
   stationary and only jumps to its new position after release.
+- [x] Drag intent should be reversible within one gesture: dragging upward and then returning to
+  the rack must switch back from board-placement mode to horizontal reorder mode.
 
 ## Pipeline Log
 
@@ -89,5 +91,6 @@ and no-op inputs. Run the full Jest suite and production web build.
 ## Outcome
 
 Players can reorder their rack during either player's turn with the dragged tile following the
-pointer and lifting visually until release. The order stays local and realtime-safe, while taps
-and vertical board placement remain locked to the active player.
+pointer and lifting visually until release. Drag intent can switch between board placement and
+rack reordering within one gesture; the order stays local and realtime-safe while turn gating
+remains intact.

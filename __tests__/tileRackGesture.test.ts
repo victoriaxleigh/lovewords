@@ -6,10 +6,18 @@ import {
 } from '../src/components/tileRackGesture';
 
 describe('TileRack gesture direction', () => {
-  test('waits for the drag threshold before locking a direction', () => {
+  test('waits for the drag threshold before choosing a direction', () => {
     expect(getRackDragDirection(5, 5)).toBeNull();
     expect(getRackDragDirection(6, 2)).toBe('horizontal');
     expect(getRackDragDirection(2, -6)).toBe('vertical');
+  });
+
+  test('can return from vertical movement to horizontal organization', () => {
+    expect([
+      getRackDragDirection(0, -40),
+      getRackDragDirection(3, -3),
+      getRackDragDirection(40, -3),
+    ]).toEqual(['vertical', null, 'horizontal']);
   });
 
   test('uses the dominant axis and favors horizontal on a tie', () => {

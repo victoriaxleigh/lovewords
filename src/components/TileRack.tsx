@@ -102,11 +102,21 @@ function DraggableTile({
         const dx = e.absoluteX - startXRef.current;
         const dy = e.absoluteY - startYRef.current;
 
-        if (!dragDirectionRef.current) {
-          dragDirectionRef.current = getRackDragDirection(dx, dy);
+        const nextDirection = getRackDragDirection(dx, dy);
+        if (nextDirection !== dragDirectionRef.current) {
+          if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
+            dragCallbacksRef.current?.onDragCancel();
+            boardDragStartedRef.current = false;
+          }
           if (dragDirectionRef.current === 'horizontal') {
+            horizontalDragX.setValue(0);
+            setIsHorizontalDragging(false);
+          }
+
+          dragDirectionRef.current = nextDirection;
+          if (nextDirection === 'horizontal') {
             setIsHorizontalDragging(true);
-          } else if (dragDirectionRef.current === 'vertical' && !disabledRef.current) {
+          } else if (nextDirection === 'vertical' && !disabledRef.current) {
             boardDragStartedRef.current = true;
             dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
           }
