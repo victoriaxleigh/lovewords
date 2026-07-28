@@ -9,6 +9,7 @@ import { createEmptyBoard } from '../src/engine/board';
 import { buildPassEvent } from '../src/engine/gameHistory';
 import {
   createGame,
+  createRematch,
   createSoloGame,
   passSoloTurn,
   passTurn,
@@ -133,6 +134,39 @@ describe('game service version-2 recording', () => {
       expect.objectContaining({ uid: PLAYER_1, historyVersion: 2 }),
       expect.objectContaining({ uid: PLAYER_2, historyVersion: 2 }),
     ]);
+  });
+
+  test('rematch keeps the tapper as player1 (RLS) and still gives the loser the first turn', async () => {
+    const base = gameFixture();
+    // Winner (PLAYER_2, higher score) taps Rematch; loser is PLAYER_1.
+    const game: Game = {
+      ...base,
+      status: 'finished',
+      players: [
+        { ...base.players[0], score: 264 },
+        { ...base.players[1], score: 372 },
+      ],
+    };
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: { user: { id: PLAYER_2 } } },
+    });
+    let insertPayload: Record<string, any> = {};
+    const single = jest.fn().mockResolvedValue({ data: { id: 'rematch' }, error: null });
+    const select = jest.fn().mockReturnValue({ single });
+    const insert = jest.fn((payload) => {
+      insertPayload = payload;
+      return { select };
+    });
+    (supabase.from as jest.Mock).mockReturnValue({ insert });
+
+    await createRematch(game);
+
+    // games_insert policy is `with check (auth.uid() = player1_uid)`, so the
+    // player who taps Rematch must be player1 or the DB rejects the row.
+    expect(insertPayload.player1_uid).toBe(PLAYER_2);
+    expect(insertPayload.player2_uid).toBe(PLAYER_1);
+    // Loser (lower score) still opens the rematch.
+    expect(insertPayload.current_turn).toBe(PLAYER_1);
   });
 
   test('new solo games mark both sides with complete-from-creation provenance', async () => {
