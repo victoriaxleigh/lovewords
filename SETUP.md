@@ -44,6 +44,15 @@ This order prevents a newly deployed client from leaving hidden rack/draw/return
 participant-readable `games.moves` JSON while the database is still on the old schema. The
 migration backfills any pre-migration version-2 events before scrubbing those hidden fields.
 
+### Player discovery and invitations
+
+Before deploying a client with display-name discovery, run the standalone
+`supabase/migrations/20260728000100_player_discovery_invites.sql` migration in the Supabase SQL
+Editor. It is transactional and safe to rerun. This must be deployed first: it removes broad
+authenticated profile reads, adds opt-in discovery, and installs the privacy-safe search and exact
+email lookup functions used by the client. Use the standalone migration for an existing project,
+not the full `supabase_schema.sql`.
+
 The analysis-token functions require these server-only Netlify environment variables:
 
 - `SUPABASE_URL`
@@ -81,6 +90,10 @@ ALTER TABLE profiles ADD COLUMN expo_push_token text;
 4. Copy the RevenueCat **public iOS API key** into
    `src/utils/purchases.ts` (`REVENUECAT_API_KEY_IOS`, currently a
    placeholder).
+
+RevenueCat remains the source of truth for access. The app also mirrors successful purchase and
+restore results to `profiles.has_paid` for admin/support visibility. That client-writable mirror is
+not used to unlock the app and must not be treated as an entitlement or authorization signal.
 
 ### Apple Developer Program
 1. Enroll ($99/year) at developer.apple.com.

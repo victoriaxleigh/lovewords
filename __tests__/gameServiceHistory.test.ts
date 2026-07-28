@@ -1,6 +1,7 @@
 jest.mock('../src/supabase/config', () => ({
   supabase: {
     from: jest.fn(),
+    rpc: jest.fn(),
     auth: { getSession: jest.fn() },
   },
 }));
@@ -86,6 +87,7 @@ describe('game service version-2 recording', () => {
   let updateMock: jest.Mock;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     updatePayload = {};
     const eq = jest.fn().mockResolvedValue({ error: null });
     updateMock = jest.fn((payload) => {
@@ -93,6 +95,7 @@ describe('game service version-2 recording', () => {
       return { eq };
     });
     (supabase.from as jest.Mock).mockReturnValue({ update: updateMock });
+    (supabase.rpc as jest.Mock).mockResolvedValue({ data: 'new-game', error: null });
     global.fetch = jest.fn().mockResolvedValue({ ok: true });
   });
 
@@ -119,77 +122,53 @@ describe('game service version-2 recording', () => {
 
   test('new multiplayer games carry complete-from-creation provenance', async () => {
     const game = gameFixture();
-    let insertPayload: Record<string, any> = {};
-    const single = jest.fn().mockResolvedValue({ data: { id: 'new-game' }, error: null });
-    const select = jest.fn().mockReturnValue({ single });
-    const insert = jest.fn((payload) => {
-      insertPayload = payload;
-      return { select };
+    await createGame(game.players[0], game.players[1], 'partner', {
+      kind: 'email',
     });
-    (supabase.from as jest.Mock).mockReturnValue({ insert });
 
-    await createGame(game.players[0], game.players[1]);
-
-    expect(insertPayload.players).toEqual([
+    const rpcPayload = (supabase.rpc as jest.Mock).mock.calls[0][1];
+    expect(rpcPayload.game_players).toEqual([
       expect.objectContaining({ uid: PLAYER_1, historyVersion: 2 }),
       expect.objectContaining({ uid: PLAYER_2, historyVersion: 2 }),
     ]);
-  });
-
-  test('rematch keeps the tapper as player1 (RLS) and still gives the loser the first turn', async () => {
-    const base = gameFixture();
-    // Winner (PLAYER_2, higher score) taps Rematch; loser is PLAYER_1.
-    const game: Game = {
-      ...base,
-      status: 'finished',
-      players: [
-        { ...base.players[0], score: 264 },
-        { ...base.players[1], score: 372 },
-      ],
-    };
-    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
-      data: { session: { user: { id: PLAYER_2 } } },
-    });
-    let insertPayload: Record<string, any> = {};
-    const single = jest.fn().mockResolvedValue({ data: { id: 'rematch' }, error: null });
-    const select = jest.fn().mockReturnValue({ single });
-    const insert = jest.fn((payload) => {
-      insertPayload = payload;
-      return { select };
-    });
-    (supabase.from as jest.Mock).mockReturnValue({ insert });
-
-    await createRematch(game);
-
-    // games_insert policy is `with check (auth.uid() = player1_uid)`, so the
-    // player who taps Rematch must be player1 or the DB rejects the row.
-    expect(insertPayload.player1_uid).toBe(PLAYER_2);
-    expect(insertPayload.player2_uid).toBe(PLAYER_1);
-    // Loser (lower score) still opens the rematch.
-    expect(insertPayload.current_turn).toBe(PLAYER_1);
+    expect(rpcPayload.game_players[0]).not.toHaveProperty('email');
+    expect(rpcPayload.game_players[1]).not.toHaveProperty('email');
+    expect(rpcPayload.email_grant).toBe(true);
   });
 
   test('new solo games mark both sides with complete-from-creation provenance', async () => {
     const game = gameFixture(true);
-    let insertPayload: Record<string, any> = {};
-    const single = jest.fn().mockResolvedValue({ data: { id: 'new-solo' }, error: null });
-    const select = jest.fn().mockReturnValue({ single });
-    const insert = jest.fn((payload) => {
-      insertPayload = payload;
-      return { select };
-    });
-    (supabase.from as jest.Mock).mockReturnValue({ insert });
-
     await createSoloGame(game.players[0]);
 
-    expect(insertPayload.players).toEqual([
+    const rpcPayload = (supabase.rpc as jest.Mock).mock.calls[0][1];
+    expect(rpcPayload.game_players).toEqual([
       expect.objectContaining({ uid: PLAYER_1, historyVersion: 2 }),
       expect.objectContaining({
         uid: PLAYER_1,
-        email: 'solo',
         historyVersion: 2,
       }),
     ]);
+    expect(rpcPayload.game_players[0]).not.toHaveProperty('email');
+    expect(rpcPayload.game_players[1]).not.toHaveProperty('email');
+    expect(rpcPayload.solo_game).toBe(true);
+  });
+
+  test('discovery rematches authorize by source game instead of player email', async () => {
+    const game = gameFixture();
+    game.status = 'finished';
+    game.players[0].email = '';
+    game.players[1].email = '';
+    game.players[0].score = 10;
+    game.players[1].score = 20;
+
+    await expect(createRematch(game)).resolves.toBe('new-game');
+
+    const rpcPayload = (supabase.rpc as jest.Mock).mock.calls[0][1];
+    expect(rpcPayload.source_game_id).toBe(game.id);
+    expect(rpcPayload.email_grant).toBe(false);
+    expect(
+      rpcPayload.game_players.every((entry: Record<string, unknown>) => !('email' in entry))
+    ).toBe(true);
   });
 
   test('solo play records the selected side explicitly', async () => {

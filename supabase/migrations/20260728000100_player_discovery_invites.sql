@@ -1,53 +1,21 @@
--- ============================================================
--- LoveWords — paste this entire file into:
--- Supabase Dashboard → SQL Editor → New query → Run
--- ============================================================
+begin;
 
--- Profiles (one row per user, auto-linked to auth)
-create table if not exists profiles (
-  id uuid primary key references auth.users on delete cascade,
-  email text not null,
-  display_name text not null,
-  discoverable boolean not null default false,
-  has_paid boolean not null default false,
-  expo_push_token text,
-  created_at timestamptz default now()
-);
-
--- Games
-create table if not exists games (
-  id uuid primary key default gen_random_uuid(),
-  player1_uid uuid not null references profiles(id),
-  player2_uid uuid not null references profiles(id),
-  players jsonb not null,
-  board jsonb not null,
-  bag jsonb not null,
-  current_turn uuid not null,
-  status text not null default 'active',
-  mode text not null default 'partner',   -- 'partner' | 'friend'
-  moves jsonb not null default '[]',
-  rematch_of uuid references games(id) on delete set null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
--- ── Migration for existing installs (safe to re-run) ────────────────────────
--- If the games table predates the Partner/Friend feature, add the mode column.
--- Existing rows default to partner.
-alter table games add column if not exists mode text not null default 'partner';
-alter table profiles add column if not exists discoverable boolean not null default false;
-alter table profiles add column if not exists has_paid boolean not null default false;
-alter table games add column if not exists rematch_of uuid references games(id) on delete set null;
+alter table public.profiles
+  add column if not exists discoverable boolean not null default false;
+alter table public.profiles
+  add column if not exists has_paid boolean not null default false;
+alter table public.games
+  add column if not exists rematch_of uuid references public.games(id) on delete set null;
 
 create unique index if not exists games_one_rematch_per_source_idx
-  on games (rematch_of)
+  on public.games (rematch_of)
   where rematch_of is not null;
 
 create index if not exists profiles_discoverable_display_name_prefix_idx
-  on profiles (lower(display_name) text_pattern_ops)
+  on public.profiles (lower(display_name) text_pattern_ops)
   where discoverable;
 
-create table if not exists profile_email_lookup_limits (
+create table if not exists public.profile_email_lookup_limits (
   caller_id uuid primary key references auth.users(id) on delete cascade,
   window_started timestamptz not null default now(),
   attempts integer not null default 0 check (attempts >= 0)
@@ -57,7 +25,7 @@ alter table public.profile_email_lookup_limits enable row level security;
 revoke all on table public.profile_email_lookup_limits from public, anon, authenticated;
 grant all on table public.profile_email_lookup_limits to service_role;
 
-create table if not exists game_creation_grants (
+create table if not exists public.game_creation_grants (
   creator_uid uuid not null references auth.users(id) on delete cascade,
   opponent_uid uuid not null references auth.users(id) on delete cascade,
   expires_at timestamptz not null,
@@ -68,7 +36,7 @@ alter table public.game_creation_grants enable row level security;
 revoke all on table public.game_creation_grants from public, anon, authenticated;
 grant all on table public.game_creation_grants to service_role;
 
-create table if not exists notification_rate_limits (
+create table if not exists public.notification_rate_limits (
   sender_uid uuid not null references auth.users(id) on delete cascade,
   recipient_uid uuid not null references auth.users(id) on delete cascade,
   notification_type text not null
@@ -79,7 +47,7 @@ create table if not exists notification_rate_limits (
   primary key (sender_uid, recipient_uid, notification_type)
 );
 
-create table if not exists notification_delivery_events (
+create table if not exists public.notification_delivery_events (
   sender_uid uuid not null references auth.users(id) on delete cascade,
   recipient_uid uuid not null references auth.users(id) on delete cascade,
   notification_type text not null
@@ -96,155 +64,28 @@ revoke all on table public.notification_delivery_events from public, anon, authe
 grant all on table public.notification_rate_limits to service_role;
 grant all on table public.notification_delivery_events to service_role;
 
--- Analysis-only event details are captured here before hidden rack/draw/return
--- fields are removed from participant-readable games.moves. event_index is
--- zero-based so it matches the JSON array position exactly.
-create table if not exists game_analysis_events (
-  game_id uuid not null references games(id) on delete cascade,
-  event_index integer not null check (event_index >= 0),
-  event jsonb not null,
-  created_at timestamptz not null default now(),
-  primary key (game_id, event_index)
-);
+alter table public.profiles enable row level security;
 
--- Capture full newly appended v2 events and sanitize the public copy in the
--- same transaction. Provenance is immutable: only games created with both
--- player entries marked historyVersion=2 may retain that marker.
-create or replace function public.capture_game_analysis_events()
-returns trigger
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $$
-declare
-  old_event_count integer;
-  new_event_count integer;
-  new_event_index integer;
-  full_event jsonb;
-begin
-  if jsonb_typeof(new.moves) <> 'array' then
-    raise exception 'games.moves must be a JSON array';
-  end if;
+drop policy if exists "profiles_read" on public.profiles;
+drop policy if exists "profiles_owner_read" on public.profiles;
+drop policy if exists "profiles_insert" on public.profiles;
+drop policy if exists "profiles_update" on public.profiles;
 
-  old_event_count := jsonb_array_length(coalesce(old.moves, '[]'::jsonb));
-  new_event_count := jsonb_array_length(new.moves);
-
-  if new_event_count > old_event_count then
-    for new_event_index in old_event_count..new_event_count - 1 loop
-      full_event := new.moves -> new_event_index;
-      if full_event ->> 'version' = '2' then
-        insert into public.game_analysis_events (game_id, event_index, event)
-        values (new.id, new_event_index, full_event)
-        on conflict (game_id, event_index) do nothing;
-      end if;
-    end loop;
-  end if;
-
-  select coalesce(
-    jsonb_agg(
-      item - 'rackBefore' - 'drawnTiles' - 'returnedTiles'
-      order by ordinal
-    ),
-    '[]'::jsonb
-  )
-  into new.moves
-  from jsonb_array_elements(new.moves) with ordinality as public_events(item, ordinal);
-
-  if
-    old.players #>> '{0,historyVersion}' = '2'
-    and old.players #>> '{1,historyVersion}' = '2'
-  then
-    new.players := jsonb_set(
-      jsonb_set(new.players, '{0,historyVersion}', '2'::jsonb, true),
-      '{1,historyVersion}',
-      '2'::jsonb,
-      true
-    );
-  else
-    new.players := jsonb_build_array(
-      (new.players -> 0) - 'historyVersion',
-      (new.players -> 1) - 'historyVersion'
-    );
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists capture_game_analysis_events_before_update on games;
-create trigger capture_game_analysis_events_before_update
-  before update of moves, players on games
-  for each row execute function public.capture_game_analysis_events();
-
--- One-time/idempotent backfill for games that recorded v2 events before this
--- private table existed. These games intentionally keep no provenance marker,
--- so their exports remain conservative `basic` histories.
-insert into game_analysis_events (game_id, event_index, event)
-select
-  games.id,
-  (events.ordinal - 1)::integer,
-  events.item
-from games
-cross join lateral jsonb_array_elements(games.moves)
-  with ordinality as events(item, ordinal)
-where events.item ->> 'version' = '2'
-on conflict (game_id, event_index) do nothing;
-
-update games
-set moves = (
-  select coalesce(
-    jsonb_agg(
-      item - 'rackBefore' - 'drawnTiles' - 'returnedTiles'
-      order by ordinal
-    ),
-    '[]'::jsonb
-  )
-  from jsonb_array_elements(games.moves)
-    with ordinality as public_events(item, ordinal)
-)
-where exists (
-  select 1
-  from jsonb_array_elements(games.moves) as existing_events(item)
-  where existing_events.item ?| array['rackBefore', 'drawnTiles', 'returnedTiles']
-);
-
--- Love Notes
-create table if not exists love_notes (
-  id uuid primary key default gen_random_uuid(),
-  game_id uuid not null references games(id) on delete cascade,
-  from_uid uuid not null references profiles(id),
-  to_uid uuid not null references profiles(id),
-  message text not null,
-  emoji text not null default '💕',
-  read boolean not null default false,
-  created_at timestamptz default now()
-);
-
--- ── Row Level Security ──────────────────────────────────────
-
-alter table profiles enable row level security;
-alter table games enable row level security;
-alter table game_analysis_events enable row level security;
-alter table love_notes enable row level security;
-
--- Profiles are private by default. Public discovery and exact-email lookup
--- expose narrowly scoped fields through the security-definer functions below.
-drop policy if exists "profiles_read" on profiles;
-drop policy if exists "profiles_owner_read" on profiles;
-drop policy if exists "profiles_insert" on profiles;
-drop policy if exists "profiles_update" on profiles;
-create policy "profiles_owner_read" on profiles for select using (auth.uid() = id);
-create policy "profiles_insert" on profiles for insert with check (auth.uid() = id);
-create policy "profiles_update" on profiles for update
-  using (auth.uid() = id)
+create policy "profiles_owner_read" on public.profiles
+  for select using (auth.uid() = id);
+create policy "profiles_insert" on public.profiles
+  for insert with check (auth.uid() = id);
+create policy "profiles_update" on public.profiles
+  for update using (auth.uid() = id)
   with check (auth.uid() = id);
 
-revoke update on table profiles from public, anon, authenticated;
-grant update (discoverable, expo_push_token, has_paid) on table profiles to authenticated;
+revoke update on table public.profiles from public, anon, authenticated;
+grant update (discoverable, expo_push_token, has_paid) on table public.profiles to authenticated;
 
--- Love-note identity/content is immutable because its ID authorizes one push.
-revoke update on table love_notes from public, anon, authenticated;
-grant update ("read") on table love_notes to authenticated;
+-- A love-note ID is used as an immutable notification event. Recipients may
+-- acknowledge a note, but cannot rewrite its sender, recipient, game, or body.
+revoke update on table public.love_notes from public, anon, authenticated;
+grant update ("read") on table public.love_notes to authenticated;
 
 create or replace function public.search_profiles(search_query text)
 returns table (profile_id uuid, display_name text, player_code text)
@@ -299,6 +140,7 @@ begin
   if char_length(claim_event_key) not between 1 and 160 then
     return false;
   end if;
+
   cooldown := case claim_notification_type
     when 'invite' then interval '5 seconds'
     when 'nudge' then interval '1 hour'
@@ -340,12 +182,20 @@ begin
 
   if not found then
     insert into public.notification_rate_limits (
-      sender_uid, recipient_uid, notification_type,
-      window_started, last_delivered_at, deliveries
+      sender_uid,
+      recipient_uid,
+      notification_type,
+      window_started,
+      last_delivered_at,
+      deliveries
     )
     values (
-      claim_sender_uid, claim_recipient_uid, claim_notification_type,
-      current_time, current_time, 1
+      claim_sender_uid,
+      claim_recipient_uid,
+      claim_notification_type,
+      current_time,
+      current_time,
+      1
     );
   else
     if rate_state.last_delivered_at > current_time - cooldown then
@@ -412,6 +262,8 @@ begin
     end
   returning attempts into lookup_attempts;
 
+  -- Return the same empty result as an unknown email once the private
+  -- per-account allowance is exhausted, so the throttle reveals no new signal.
   if lookup_attempts > 20 then
     return;
   end if;
@@ -504,7 +356,9 @@ begin
       raise exception 'Email lookup grant does not authorize these participants';
     end if;
   else
-    select * into source_game from public.games where id = source_game_id;
+    select * into source_game
+    from public.games
+    where id = source_game_id;
     if not found
       or source_game.status <> 'finished'
       or caller_id not in (source_game.player1_uid, source_game.player2_uid)
@@ -527,7 +381,11 @@ begin
 
   sanitized_players := jsonb_build_array(
     (game_players -> 0) - 'uid' - 'displayName' - 'email' ||
-      jsonb_build_object('uid', player1_id, 'displayName', player1_name, 'email', ''),
+      jsonb_build_object(
+        'uid', player1_id,
+        'displayName', player1_name,
+        'email', ''
+      ),
     (game_players -> 1) - 'uid' - 'displayName' - 'email' ||
       jsonb_build_object(
         'uid', player2_id,
@@ -539,12 +397,28 @@ begin
   perform set_config('app.active_game_creation', 'authorized', true);
   begin
     insert into public.games (
-      player1_uid, player2_uid, players, board, bag, current_turn,
-      status, mode, moves, rematch_of
+      player1_uid,
+      player2_uid,
+      players,
+      board,
+      bag,
+      current_turn,
+      status,
+      mode,
+      moves,
+      rematch_of
     )
     values (
-      player1_id, player2_id, sanitized_players, game_board, game_bag, game_current_turn,
-      'active', game_mode, '[]'::jsonb, source_game_id
+      player1_id,
+      player2_id,
+      sanitized_players,
+      game_board,
+      game_bag,
+      game_current_turn,
+      'active',
+      game_mode,
+      '[]'::jsonb,
+      source_game_id
     )
     returning id into created_game_id;
   exception when unique_violation then
@@ -567,9 +441,9 @@ begin
 end;
 $$;
 
-drop index if exists games_outgoing_invite_rate_idx;
+drop index if exists public.games_outgoing_invite_rate_idx;
 create index games_outgoing_invite_rate_idx
-  on games (player1_uid, created_at)
+  on public.games (player1_uid, created_at)
   where players #>> '{0,email}' = '';
 
 create or replace function public.enforce_game_invitation_rules()
@@ -590,6 +464,7 @@ begin
       if new.player1_uid = new.player2_uid then
         raise exception 'Cannot invite yourself';
       end if;
+
       sender_lock := hashtextextended('invite-sender:' || new.player1_uid::text, 0);
       perform pg_advisory_xact_lock(sender_lock);
       pair_lock := hashtextextended(
@@ -598,6 +473,7 @@ begin
         0
       );
       perform pg_advisory_xact_lock(pair_lock);
+
       if exists (
         select 1 from public.games g
         where g.status = 'waiting'
@@ -761,9 +637,9 @@ begin
 end;
 $$;
 
-drop trigger if exists enforce_game_invitation_rules_trigger on games;
+drop trigger if exists enforce_game_invitation_rules_trigger on public.games;
 create trigger enforce_game_invitation_rules_trigger
-  before insert or update on games
+  before insert or update on public.games
   for each row execute function public.enforce_game_invitation_rules();
 
 create or replace function public.cleanup_player_discovery_bookkeeping()
@@ -832,9 +708,10 @@ $$;
 
 -- Schedule the daily bookkeeping cleanup, best-effort. pg_cron requires
 -- superuser to install, so on Supabase it must be enabled from the dashboard
--- (Database > Extensions). When it is unavailable the rest of this schema still
--- applies; enable pg_cron and re-run (or schedule
--- public.cleanup_player_discovery_bookkeeping() by hand) to activate the sweep.
+-- (Database > Extensions). When it is unavailable the core discovery and
+-- invitation migration still applies; enable pg_cron and re-run this file (or
+-- schedule public.cleanup_player_discovery_bookkeeping() by hand) to activate
+-- the nightly sweep.
 do $$
 begin
   begin
@@ -871,58 +748,4 @@ grant execute on function public.create_active_game(jsonb, jsonb, jsonb, uuid, t
 grant execute on function public.claim_notification_delivery(uuid, uuid, text, text)
   to service_role;
 
--- ── Auto-create profile on signup ───────────────────────────
--- Runs server-side with elevated rights, so it works even when
--- email-confirmation is on and the client has no session yet.
--- This replaces the client-side profiles insert in authService.ts.
-create or replace function public.handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, email, display_name)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'display_name', new.email)
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$ language plpgsql security definer set search_path = public;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
--- Games: only players in the game can see/edit it
-create policy "games_read" on games for select
-  using (auth.uid() = player1_uid or auth.uid() = player2_uid);
-
-create policy "games_insert" on games for insert
-  with check (auth.uid() = player1_uid);
-
-create policy "games_update" on games for update
-  using (auth.uid() = player1_uid or auth.uid() = player2_uid);
-
--- Analysis events are backend-only. No client role receives a policy or table
--- privilege; the service-role export function is the only reader.
-drop policy if exists "finished_game_analysis_events_read" on game_analysis_events;
-revoke all on table game_analysis_events from public, anon, authenticated;
-grant select on table game_analysis_events to service_role;
-revoke execute on function public.capture_game_analysis_events()
-  from public, anon, authenticated;
-
--- Love notes: only players in the related game
-create policy "notes_read" on love_notes for select
-  using (auth.uid() = from_uid or auth.uid() = to_uid);
-
-create policy "notes_insert" on love_notes for insert
-  with check (auth.uid() = from_uid);
-
-create policy "notes_update" on love_notes for update
-  using (auth.uid() = to_uid);
-
--- ── Realtime ────────────────────────────────────────────────
--- Enable realtime for live game updates and love notes
-alter publication supabase_realtime add table games;
-alter publication supabase_realtime add table love_notes;
+commit;

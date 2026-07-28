@@ -32,8 +32,16 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { recipientUid, senderName, type, isFriend } = body;
-  if (!recipientUid || !senderName || !type) {
+  const { recipientUid, type, gameId, eventId } = body;
+  const allowedTypes = new Set(['invite', 'turn', 'lovenote', 'nudge']);
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (
+    !uuidPattern.test(recipientUid || '') ||
+    !uuidPattern.test(gameId || '') ||
+    !allowedTypes.has(type) ||
+    (type !== 'nudge' && typeof eventId !== 'string')
+  ) {
     return { statusCode: 400, body: 'Missing fields' };
   }
 
@@ -44,11 +52,120 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: 'Supabase env vars not set' };
   }
 
+  const authorization = event.headers?.authorization || event.headers?.Authorization;
+  const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) {
+    return { statusCode: 401, body: 'Missing Authorization header' };
+  }
+
   const supabaseHeaders = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: supabaseKey, Authorization: `Bearer ${accessToken}` },
+  });
+  if (!authRes.ok) {
+    return { statusCode: 401, body: 'Invalid or expired session' };
+  }
+  const authenticatedUser = await authRes.json();
+  const senderUid = authenticatedUser?.id;
+  if (!uuidPattern.test(senderUid || '') || senderUid === recipientUid) {
+    return { statusCode: 403, body: 'Notification is not authorized' };
+  }
+
+  const gameRes = await fetch(
+    `${supabaseUrl}/rest/v1/games?id=eq.${encodeURIComponent(gameId)}` +
+      '&select=player1_uid,player2_uid,status,current_turn,mode,moves&limit=1',
+    { headers: supabaseHeaders }
+  );
+  if (!gameRes.ok) {
+    return { statusCode: 502, body: 'Could not verify game' };
+  }
+  const gameRows = await gameRes.json();
+  const game = gameRows && gameRows[0];
+  if (!game) {
+    return { statusCode: 404, body: 'Game not found' };
+  }
+
+  const senderIsPlayer1 = game.player1_uid === senderUid && game.player2_uid === recipientUid;
+  const senderIsPlayer2 = game.player2_uid === senderUid && game.player1_uid === recipientUid;
+  const participantsMatch = senderIsPlayer1 || senderIsPlayer2;
+  let eventKey;
+  let authorized = false;
+  if (type === 'invite') {
+    authorized = game.status === 'waiting' && senderIsPlayer1 && eventId === gameId;
+    eventKey = `invite:${gameId}`;
+  } else if (type === 'turn') {
+    const moves = Array.isArray(game.moves) ? game.moves : [];
+    const moveIndex = moves.length - 1;
+    const lastMove = moves[moveIndex];
+    authorized =
+      game.status === 'active' &&
+      participantsMatch &&
+      game.current_turn === recipientUid &&
+      eventId === String(moveIndex) &&
+      lastMove?.uid === senderUid;
+    eventKey = `turn:${gameId}:${eventId}`;
+  } else if (type === 'nudge') {
+    authorized =
+      game.status === 'active' && participantsMatch && game.current_turn === recipientUid;
+    eventKey = 'nudge';
+  } else {
+    if (!uuidPattern.test(eventId || '')) {
+      return { statusCode: 400, body: 'Invalid notification event' };
+    }
+    const noteRes = await fetch(
+      `${supabaseUrl}/rest/v1/love_notes?id=eq.${encodeURIComponent(eventId)}` +
+        '&select=id,game_id,from_uid,to_uid&limit=1',
+      { headers: supabaseHeaders }
+    );
+    if (!noteRes.ok) {
+      return { statusCode: 502, body: 'Could not verify notification event' };
+    }
+    const noteRows = await noteRes.json();
+    const note = noteRows && noteRows[0];
+    authorized =
+      game.status === 'active' &&
+      participantsMatch &&
+      note?.game_id === gameId &&
+      note?.from_uid === senderUid &&
+      note?.to_uid === recipientUid;
+    eventKey = `lovenote:${eventId}`;
+  }
+  if (!authorized) {
+    return { statusCode: 403, body: 'Notification is not authorized' };
+  }
+  const isFriend = game.mode === 'friend';
+
+  // Claim this delivery atomically before reading push tokens. The SQL
+  // function deduplicates immutable events and applies a sender/recipient/type
+  // limit across every game. It is executable only by the service role.
+  const deliveryClaimRes = await fetch(
+    `${supabaseUrl}/rest/v1/rpc/claim_notification_delivery`,
+    {
+      method: 'POST',
+      headers: { ...supabaseHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        claim_sender_uid: senderUid,
+        claim_recipient_uid: recipientUid,
+        claim_notification_type: type,
+        claim_event_key: eventKey,
+      }),
+    }
+  );
+  if (!deliveryClaimRes.ok) {
+    return { statusCode: 502, body: 'Could not reserve notification delivery' };
+  }
+  const deliveryClaimed = await deliveryClaimRes.json();
+  if (deliveryClaimed !== true) {
+    return { statusCode: 429, body: 'Notification cooldown active' };
+  }
 
   // Web Push subscription (browser/PWA) and Expo push token (native app) are
   // independent — a user may have one, both, or neither depending on platform.
-  const [webPushRes, expoTokenRes] = await Promise.all([
+  const [senderProfileRes, webPushRes, expoTokenRes] = await Promise.all([
+    fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(senderUid)}&select=display_name`,
+      { headers: supabaseHeaders }
+    ),
     fetch(
       `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(recipientUid)}&select=endpoint,p256dh,auth`,
       { headers: supabaseHeaders }
@@ -59,8 +176,10 @@ exports.handler = async (event) => {
     ),
   ]);
 
+  const senderProfileRows = await senderProfileRes.json();
   const webPushRows = await webPushRes.json();
   const profileRows = await expoTokenRes.json();
+  const senderName = senderProfileRows?.[0]?.display_name || 'Someone';
   const webPushSub = webPushRows && webPushRows[0];
   const expoPushToken = profileRows && profileRows[0] && profileRows[0].expo_push_token;
 
@@ -90,7 +209,9 @@ exports.handler = async (event) => {
       ];
 
   const title =
-    type === 'turn'
+    type === 'invite'
+      ? `${isFriend ? '🎲' : '💌'} Game invite from ${senderName}`
+      : type === 'turn'
       ? isFriend
         ? '🎲 Your turn on LoveWords!'
         : '💌 Your turn on LoveWords!'
@@ -101,7 +222,9 @@ exports.handler = async (event) => {
       : `💕 Love note from ${senderName}`;
 
   const message =
-    type === 'turn'
+    type === 'invite'
+      ? `${senderName} invited you to play LoveWords.`
+      : type === 'turn'
       ? `${senderName} just played — go make your move! 🎯`
       : type === 'nudge'
       ? NUDGES[Math.floor(Math.random() * NUDGES.length)]

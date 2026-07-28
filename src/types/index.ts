@@ -37,7 +37,7 @@ export type Cell = {
 
 export type Board = Cell[][];
 
-export type GameStatus = 'waiting' | 'active' | 'finished';
+export type GameStatus = 'waiting' | 'active' | 'finished' | 'declined';
 
 // Relationship mode for a game. 'partner' = the romantic experience (love notes,
 // 💕 copy); 'friend' = same game with neutral copy ("Messages" instead of "Love

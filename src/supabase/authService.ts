@@ -69,11 +69,49 @@ export async function deleteAccount(): Promise<{ success: boolean; error?: strin
 }
 
 export async function getUserByEmail(email: string) {
+  const { data, error } = await supabase.rpc('find_profile_by_email', {
+    lookup_email: email.toLowerCase().trim(),
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] ?? null : data;
+  return row ? { id: row.id, display_name: row.display_name } : null;
+}
+
+export type PublicProfile = {
+  profileId: string;
+  displayName: string;
+  playerCode: string;
+};
+
+export async function searchProfiles(query: string): Promise<PublicProfile[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+  const { data, error } = await supabase.rpc('search_profiles', { search_query: trimmed });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    profileId: row.profile_id,
+    displayName: row.display_name,
+    playerCode: row.player_code,
+  }));
+}
+
+export async function getDiscoverability(): Promise<boolean> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
-    .eq('email', email.toLowerCase().trim())
+    .select('discoverable')
     .single();
-  if (error) return null;
-  return data;
+  if (error) throw error;
+  return Boolean(data?.discoverable);
+}
+
+export async function setDiscoverability(discoverable: boolean): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) throw new Error('Not signed in');
+  const { error } = await supabase
+    .from('profiles')
+    .update({ discoverable })
+    .eq('id', session.user.id);
+  if (error) throw error;
 }

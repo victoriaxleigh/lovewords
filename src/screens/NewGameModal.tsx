@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,18 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { GameMode } from '../types';
 import { Colors } from '../utils/colors';
 import { RADII } from '../utils/styles';
+import { PublicProfile, searchProfiles } from '../supabase/authService';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onStart: (email: string, mode: GameMode) => void;
+  onInvite: (profile: PublicProfile, mode: GameMode) => void;
   onStartSolo: () => void;
   inviting: boolean;
   startingSolo: boolean;
@@ -29,6 +32,7 @@ export default function NewGameModal({
   visible,
   onClose,
   onStart,
+  onInvite,
   onStartSolo,
   inviting,
   startingSolo,
@@ -37,12 +41,55 @@ export default function NewGameModal({
 }: Props) {
   const [mode, setMode] = useState<GameMode>('partner');
   const [email, setEmail] = useState('');
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<PublicProfile[]>([]);
+  const [useEmail, setUseEmail] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
 
   const busy = inviting || startingSolo;
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!visible || useEmail || trimmed.length < 3) {
+      setResults([]);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    setSearchError(null);
+    setResults([]);
+    const timer = setTimeout(() => {
+      searchProfiles(trimmed)
+        .then((profiles) => {
+          if (!cancelled) setResults(profiles);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setResults([]);
+            setSearchError('Search is unavailable right now. Check your connection and try again.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, useEmail, visible, searchAttempt]);
 
   function handleClose() {
     if (busy) return;
     setEmail('');
+    setQuery('');
+    setResults([]);
+    setUseEmail(false);
+    setSearchError(null);
     onClearError();
     onClose();
   }
@@ -61,7 +108,7 @@ export default function NewGameModal({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {/* Mode toggle */}
           <Text style={styles.label}>Who are you playing with?</Text>
           <View style={styles.modeRow}>
@@ -93,40 +140,97 @@ export default function NewGameModal({
             </TouchableOpacity>
           </View>
 
-          {/* Email invite */}
-          <Text style={[styles.label, { marginTop: 20 }]}>Their email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            placeholderTextColor={Colors.textLight}
-            value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              if (errorMsg) onClearError();
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Their email address"
-          />
+          {!useEmail ? (
+            <>
+              <Text style={[styles.label, { marginTop: 20 }]}>Find by display name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Type at least 3 characters"
+                placeholderTextColor={Colors.textLight}
+                value={query}
+                onChangeText={(text) => {
+                  setQuery(text);
+                  if (errorMsg) onClearError();
+                }}
+                autoCapitalize="words"
+                autoCorrect={false}
+                accessibilityLabel="Search players by display name"
+              />
+              {searching && <ActivityIndicator color={Colors.primary} style={styles.searchSpinner} />}
+              {!searching && !searchError && query.trim().length >= 3 && results.length === 0 && (
+                <Text style={styles.searchHint}>No discoverable players found.</Text>
+              )}
+              {searchError && (
+                <View style={styles.searchError}>
+                  <Text style={styles.searchErrorText}>{searchError}</Text>
+                  <TouchableOpacity
+                    onPress={() => setSearchAttempt((attempt) => attempt + 1)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry player search"
+                  >
+                    <Text style={styles.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {results.map((profile) => (
+                <TouchableOpacity
+                  key={profile.profileId}
+                  style={styles.result}
+                  onPress={() => onInvite(profile, mode)}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Invite ${profile.displayName}, player code ${profile.playerCode}`}
+                >
+                  <View>
+                    <Text style={styles.resultName}>{profile.displayName}</Text>
+                    <Text style={styles.resultCode}>Player #{profile.playerCode}</Text>
+                  </View>
+                  <Text style={styles.resultAction}>Invite</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setUseEmail(true)} disabled={busy}>
+                <Text style={styles.fallbackLink}>Know their email? Invite that way</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.label, { marginTop: 20 }]}>Their exact email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Email address"
+                placeholderTextColor={Colors.textLight}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errorMsg) onClearError();
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Their email address"
+              />
+              <TouchableOpacity
+                style={[styles.startBtn, (!email.trim() || busy) && styles.startBtnDisabled]}
+                onPress={() => onStart(email, mode)}
+                disabled={!email.trim() || busy}
+              >
+                {inviting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.startBtnText}>Start Game</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setUseEmail(false)} disabled={busy}>
+                <Text style={styles.fallbackLink}>← Back to player search</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           {errorMsg ? (
             <View style={styles.errorBanner}>
               <Text style={styles.errorBannerText}>{errorMsg}</Text>
             </View>
           ) : null}
-
-          <TouchableOpacity
-            style={[styles.startBtn, (!email.trim() || busy) && styles.startBtnDisabled]}
-            onPress={() => onStart(email, mode)}
-            disabled={!email.trim() || busy}
-          >
-            {inviting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.startBtnText}>Start Game</Text>
-            )}
-          </TouchableOpacity>
 
           {/* Solo practice */}
           <View style={styles.divider}>
@@ -147,7 +251,7 @@ export default function NewGameModal({
               <Text style={styles.soloBtnText}>🎯 Practice Solo</Text>
             )}
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -217,6 +321,40 @@ const styles = StyleSheet.create({
   },
   startBtnDisabled: { backgroundColor: Colors.border },
   startBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  searchSpinner: { marginTop: 14 },
+  searchHint: { color: Colors.textLight, fontSize: 13, marginTop: 12, textAlign: 'center' },
+  searchError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFF0F0',
+    borderRadius: RADII.md,
+    padding: 10,
+    marginTop: 12,
+  },
+  searchErrorText: { flex: 1, color: Colors.errorDark, fontSize: 13 },
+  retryText: { color: Colors.primaryDark, fontSize: 13, fontWeight: '800' },
+  result: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    padding: 12,
+    borderRadius: RADII.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  resultName: { color: Colors.text, fontSize: 15, fontWeight: '800' },
+  resultCode: { color: Colors.textLight, fontSize: 12, marginTop: 2 },
+  resultAction: { color: Colors.primaryDark, fontSize: 14, fontWeight: '800' },
+  fallbackLink: {
+    color: Colors.primaryDark,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 14,
+  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',

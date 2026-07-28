@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Modal, Platform, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { logout, deleteAccount } from '../supabase/authService';
+import {
+  deleteAccount,
+  getDiscoverability,
+  logout,
+  setDiscoverability,
+} from '../supabase/authService';
 import { restorePurchases } from '../utils/purchases';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
@@ -19,6 +24,41 @@ export default function SettingsScreen({ currentUser }: Props) {
   const [restoring, setRestoring] = useState(false);
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [discoverable, setDiscoverableState] = useState(false);
+  const [loadingDiscovery, setLoadingDiscovery] = useState(true);
+  const [savingDiscovery, setSavingDiscovery] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getDiscoverability()
+      .then((value) => {
+        if (active) setDiscoverableState(value);
+      })
+      .catch((err) => {
+        if (active) setError(err.message ?? 'Could not load discovery setting.');
+      })
+      .finally(() => {
+        if (active) setLoadingDiscovery(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleDiscoverability(value: boolean) {
+    const previous = discoverable;
+    setDiscoverableState(value);
+    setSavingDiscovery(true);
+    setError(null);
+    try {
+      await setDiscoverability(value);
+    } catch (err: any) {
+      setDiscoverableState(previous);
+      setError(err.message ?? 'Could not update discovery setting.');
+    } finally {
+      setSavingDiscovery(false);
+    }
+  }
 
   async function handleRestore() {
     setRestoring(true);
@@ -56,6 +96,29 @@ export default function SettingsScreen({ currentUser }: Props) {
       <View style={styles.section}>
         <Text style={styles.label}>Signed in as</Text>
         <Text style={styles.email}>{currentUser.email}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.discoveryRow}>
+          <View style={styles.discoveryCopy}>
+            <Text style={styles.discoveryTitle}>Find me by display name</Text>
+            <Text style={styles.discoveryHint}>
+              Off by default. When on, signed-in players can find your display name and player
+              code. Your email stays private.
+            </Text>
+          </View>
+          {loadingDiscovery ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : (
+            <Switch
+              value={discoverable}
+              onValueChange={handleDiscoverability}
+              disabled={savingDiscovery}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
+              accessibilityLabel="Allow players to find me by display name"
+            />
+          )}
+        </View>
       </View>
 
       {Platform.OS !== 'web' && (
@@ -176,6 +239,10 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 12, color: Colors.textLight, marginBottom: 4 },
   email: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  discoveryRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  discoveryCopy: { flex: 1 },
+  discoveryTitle: { color: Colors.text, fontSize: 15, fontWeight: '800' },
+  discoveryHint: { color: Colors.textLight, fontSize: 12, lineHeight: 17, marginTop: 4 },
   actionBtn: {
     borderRadius: RADII.md,
     paddingVertical: 12,

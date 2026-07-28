@@ -4,6 +4,9 @@
 
 ### Added
 
+- Opt-in player discovery by display name with privacy-safe player codes and
+  accept/decline/cancel game invitations.
+- Server-authorized game creation and event-bound, abuse-limited push notifications.
 - Local rack organization during either player's turn: tiles follow horizontal drags without
   changing shared game state, while board placement remains turn-gated.
 - In-app **AI game coach**: a move-by-move review on the finished-game screen (Claude Sonnet
@@ -21,6 +24,8 @@
 
 ### Changed
 
+- Declined invitations are filtered by PostgREST and removed after 30 days; private discovery,
+  notification, lookup-limit, and creation-grant bookkeeping now has scheduled retention.
 - Rack dragging now previews insertion slots and smoothly transitions between reordering and board
   placement without jittery direction switching.
 - **Swap and Pass** buttons are now visually distinct (blue 🔄 / amber ⏭ with icons) to prevent
