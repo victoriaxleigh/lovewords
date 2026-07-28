@@ -397,31 +397,47 @@ begin
   );
 
   perform set_config('app.active_game_creation', 'authorized', true);
-  insert into public.games (
-    player1_uid,
-    player2_uid,
-    players,
-    board,
-    bag,
-    current_turn,
-    status,
-    mode,
-    moves,
-    rematch_of
-  )
-  values (
-    player1_id,
-    player2_id,
-    sanitized_players,
-    game_board,
-    game_bag,
-    game_current_turn,
-    'active',
-    game_mode,
-    '[]'::jsonb,
-    source_game_id
-  )
-  returning id into created_game_id;
+  begin
+    insert into public.games (
+      player1_uid,
+      player2_uid,
+      players,
+      board,
+      bag,
+      current_turn,
+      status,
+      mode,
+      moves,
+      rematch_of
+    )
+    values (
+      player1_id,
+      player2_id,
+      sanitized_players,
+      game_board,
+      game_bag,
+      game_current_turn,
+      'active',
+      game_mode,
+      '[]'::jsonb,
+      source_game_id
+    )
+    returning id into created_game_id;
+  exception when unique_violation then
+    -- Both players can tap Rematch on the same finished game. Only one rematch
+    -- per source is allowed (games_one_rematch_per_source_idx); route the loser
+    -- of that race into the rematch that already exists rather than surfacing a
+    -- duplicate-key error to the client.
+    if source_game_id is null then
+      raise;
+    end if;
+    select id into created_game_id
+    from public.games
+    where rematch_of = source_game_id;
+    if created_game_id is null then
+      raise;
+    end if;
+  end;
 
   return created_game_id;
 end;

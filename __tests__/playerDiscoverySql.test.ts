@@ -86,6 +86,14 @@ describe.each([
     expect(sql).toContain('invalid active game shape');
   });
 
+  test('routes a concurrent rematch of the same finished game to the existing one', () => {
+    // Both players can tap Rematch at once; the unique index allows one rematch
+    // per source, so the losing race must return the existing rematch rather
+    // than raise a duplicate-key error to the client.
+    expect(sql).toContain('exception when unique_violation then');
+    expect(sql).toContain('where rematch_of = source_game_id');
+  });
+
   test('uses null-safe waiting checks and serializes each sender rate bucket', () => {
     expect(sql).toContain("'invite-sender:' || new.player1_uid::text");
     expect(sql).toContain("new.players #>> '{0,email}' is distinct from ''");
