@@ -112,4 +112,36 @@ describe.each([
     expect(sql).toContain('to service_role');
     expect(sql).toContain('grant update ("read") on table');
   });
+
+  test('schedules bounded retention for private bookkeeping and declined invitations', () => {
+    expect(sql).toContain('create extension if not exists pg_cron');
+    expect(sql).toContain('function public.cleanup_player_discovery_bookkeeping()');
+    expect(sql).toContain("delivered_at < clock_timestamp() - interval '7 days'");
+    expect(sql).toContain("last_delivered_at < clock_timestamp() - interval '2 days'");
+    expect(sql).toContain("window_started < clock_timestamp() - interval '2 days'");
+    expect(sql).toContain('where expires_at < clock_timestamp()');
+    expect(sql).toContain("where status = 'declined'");
+    expect(sql).toContain("updated_at < clock_timestamp() - interval '30 days'");
+    expect(sql).toContain("'lovewords-player-discovery-cleanup'");
+    expect(sql).toContain(
+      'revoke execute on function public.cleanup_player_discovery_bookkeeping()'
+    );
+    expect(sql).toContain('and not exists (');
+    expect(sql).toContain("delivery.event_key = 'invite:' || game.id::text");
+    expect(sql).toContain("'turn:' || game.id::text || ':'");
+    expect(sql).toContain("delivery.event_key = 'lovenote:' || note.id::text");
+  });
+
+  test('server-stamps declined invitation retention time', () => {
+    expect(sql).toContain("elsif new.status = 'declined' then");
+    expect(sql).toContain('new.updated_at := clock_timestamp()');
+    expect(sql).toContain(
+      "if old.status = 'active' and new.status not in ('active', 'finished')"
+    );
+    expect(sql).toContain("if old.status = 'declined' then");
+    expect(sql).toContain('declined invitations cannot be changed');
+    expect(sql).toContain(
+      "if old.status = 'finished' and new.status is distinct from old.status"
+    );
+  });
 });

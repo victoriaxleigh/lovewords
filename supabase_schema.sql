@@ -3,6 +3,8 @@
 -- Supabase Dashboard → SQL Editor → New query → Run
 -- ============================================================
 
+create extension if not exists pg_cron;
+
 -- Profiles (one row per user, auto-linked to auth)
 create table if not exists profiles (
   id uuid primary key references auth.users on delete cascade,
@@ -688,6 +690,16 @@ begin
     raise exception 'Game player identities are immutable';
   end if;
 
+  if old.status = 'declined' then
+    raise exception 'Declined invitations cannot be changed';
+  end if;
+  if old.status = 'active' and new.status not in ('active', 'finished') then
+    raise exception 'Active games may only remain active or finish';
+  end if;
+  if old.status = 'finished' and new.status is distinct from old.status then
+    raise exception 'Terminal game statuses cannot be changed';
+  end if;
+
   if old.status = 'waiting' then
     if new.status = 'active' then
       if auth.uid() is null or auth.uid() <> old.player2_uid then
@@ -718,6 +730,7 @@ begin
       if auth.uid() is null or auth.uid() not in (old.player1_uid, old.player2_uid) then
         raise exception 'Only invitation participants can decline or cancel';
       end if;
+      new.updated_at := clock_timestamp();
       if
         to_jsonb(new) - 'status' - 'updated_at'
         is distinct from
@@ -739,12 +752,84 @@ create trigger enforce_game_invitation_rules_trigger
   before insert or update on games
   for each row execute function public.enforce_game_invitation_rules();
 
+create or replace function public.cleanup_player_discovery_bookkeeping()
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  -- Keep dedupe tombstones while their source event could still authorize a
+  -- notification. Removing those rows by age alone would make old events replayable.
+  delete from public.notification_delivery_events delivery
+  where delivery.delivered_at < clock_timestamp() - interval '7 days'
+    and not exists (
+      select 1
+      from public.games game
+      where (
+        delivery.notification_type = 'invite'
+        and game.status = 'waiting'
+        and game.player1_uid = delivery.sender_uid
+        and game.player2_uid = delivery.recipient_uid
+        and delivery.event_key = 'invite:' || game.id::text
+      ) or (
+        delivery.notification_type = 'turn'
+        and game.status = 'active'
+        and game.current_turn = delivery.recipient_uid
+        and delivery.event_key =
+          'turn:' || game.id::text || ':' || (jsonb_array_length(game.moves) - 1)::text
+        and game.moves -> (jsonb_array_length(game.moves) - 1) ->> 'uid' =
+          delivery.sender_uid::text
+        and (
+          (game.player1_uid = delivery.sender_uid
+            and game.player2_uid = delivery.recipient_uid)
+          or
+          (game.player2_uid = delivery.sender_uid
+            and game.player1_uid = delivery.recipient_uid)
+        )
+      ) or (
+        delivery.notification_type = 'lovenote'
+        and game.status = 'active'
+        and exists (
+          select 1
+          from public.love_notes note
+          where note.game_id = game.id
+            and note.from_uid = delivery.sender_uid
+            and note.to_uid = delivery.recipient_uid
+            and delivery.event_key = 'lovenote:' || note.id::text
+        )
+      )
+    );
+
+  delete from public.notification_rate_limits
+  where last_delivered_at < clock_timestamp() - interval '2 days';
+
+  delete from public.profile_email_lookup_limits
+  where window_started < clock_timestamp() - interval '2 days';
+
+  delete from public.game_creation_grants
+  where expires_at < clock_timestamp();
+
+  delete from public.games
+  where status = 'declined'
+    and updated_at < clock_timestamp() - interval '30 days';
+end;
+$$;
+
+select cron.schedule(
+  'lovewords-player-discovery-cleanup',
+  '17 3 * * *',
+  'select public.cleanup_player_discovery_bookkeeping()'
+);
+
 revoke all on function public.search_profiles(text) from public, anon;
 revoke all on function public.find_profile_by_email(text) from public, anon;
 drop function if exists public.create_active_game(jsonb, jsonb, jsonb, uuid, text, text, uuid, boolean);
 revoke all on function public.create_active_game(jsonb, jsonb, jsonb, uuid, text, boolean, uuid, boolean)
   from public, anon;
 revoke execute on function public.enforce_game_invitation_rules() from public, anon, authenticated;
+revoke execute on function public.cleanup_player_discovery_bookkeeping()
+  from public, anon, authenticated;
 drop function if exists public.claim_notification_delivery(uuid, uuid, uuid, text);
 revoke execute on function public.claim_notification_delivery(uuid, uuid, text, text)
   from public, anon, authenticated;

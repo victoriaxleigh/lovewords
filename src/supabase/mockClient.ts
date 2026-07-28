@@ -97,7 +97,12 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private table: string;
   private op: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
   private payload: any = null;
-  private filters: Array<{ kind: 'eq' | 'or' | 'in'; col?: string; val?: any; expr?: string }> = [];
+  private filters: Array<{
+    kind: 'eq' | 'neq' | 'or' | 'in';
+    col?: string;
+    val?: any;
+    expr?: string;
+  }> = [];
   private orderCol?: string;
   private orderAsc = true;
   private isSingle = false;
@@ -122,6 +127,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   }
 
   eq(col: string, val: any) { this.filters.push({ kind: 'eq', col, val }); return this; }
+  neq(col: string, val: any) { this.filters.push({ kind: 'neq', col, val }); return this; }
   or(expr: string) { this.filters.push({ kind: 'or', expr }); return this; }
   in(col: string, values: any[]) { this.filters.push({ kind: 'in', col, val: values }); return this; }
   order(col: string, opts?: { ascending?: boolean }) {
@@ -134,6 +140,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private match(row: Row): boolean {
     for (const f of this.filters) {
       if (f.kind === 'eq' && row[f.col!] !== f.val) return false;
+      if (f.kind === 'neq' && row[f.col!] === f.val) return false;
       if (f.kind === 'in' && !f.val.includes(row[f.col!])) return false;
       if (f.kind === 'or') {
         const ok = f.expr!.split(',').some((clause) => {

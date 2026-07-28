@@ -583,9 +583,10 @@ export function subscribeToUserGames(uid: string, onUpdate: (games: Game[]) => v
       .from('games')
       .select('*')
       .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`)
+      .neq('status', 'declined')
       .order('updated_at', { ascending: false });
     if (error) console.error('Failed to fetch user games:', error);
-    if (data) onUpdate(data.map(rowToGame).filter((game) => game.status !== 'declined'));
+    if (data) onUpdate(data.map(rowToGame));
   };
 
   fetch();

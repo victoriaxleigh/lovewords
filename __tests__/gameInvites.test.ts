@@ -1,6 +1,8 @@
 jest.mock('../src/supabase/config', () => ({
   supabase: {
     from: jest.fn(),
+    channel: jest.fn(),
+    removeChannel: jest.fn(),
     auth: { getSession: jest.fn() },
   },
 }));
@@ -12,6 +14,7 @@ import {
   declineGameInvite,
   getUserGameCount,
   sendNudge,
+  subscribeToUserGames,
 } from '../src/supabase/gameService';
 import { supabase } from '../src/supabase/config';
 import { Game, Player } from '../src/types';
@@ -171,6 +174,31 @@ describe('waiting game invitations', () => {
 
     await expect(getUserGameCount(INVITER)).resolves.toBe(2);
     expect(builder.in).toHaveBeenCalledWith('status', ['active', 'finished']);
+  });
+
+  test('filters declined games in the database query', async () => {
+    const builder: any = {};
+    builder.or = jest.fn().mockReturnValue(builder);
+    builder.neq = jest.fn().mockReturnValue(builder);
+    builder.order = jest.fn().mockResolvedValue({ data: [], error: null });
+    const select = jest.fn().mockReturnValue(builder);
+    (supabase.from as jest.Mock).mockReturnValue({ select });
+
+    const channel: any = {};
+    channel.on = jest.fn().mockReturnValue(channel);
+    channel.subscribe = jest.fn().mockReturnValue(channel);
+    (supabase.channel as jest.Mock).mockReturnValue(channel);
+
+    const onUpdate = jest.fn();
+    const unsubscribe = subscribeToUserGames(INVITER, onUpdate);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(builder.neq).toHaveBeenCalledWith('status', 'declined');
+    expect(onUpdate).toHaveBeenCalledWith([]);
+
+    unsubscribe();
+    expect(supabase.removeChannel).toHaveBeenCalledWith(channel);
   });
 
   test('returns the server-owned nudge cooldown instead of reporting false success', async () => {
