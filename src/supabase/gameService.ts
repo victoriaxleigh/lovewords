@@ -329,7 +329,8 @@ export async function swapSoloTiles(
 export async function createGame(
   player1: Player,
   player2: Player,
-  mode: GameMode = 'partner'
+  mode: GameMode = 'partner',
+  firstTurnUid: string = player1.uid
 ): Promise<string> {
   const bag = createTileBag();
   const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
@@ -344,7 +345,7 @@ export async function createGame(
     ],
     board: createEmptyBoard(),
     bag: finalBag,
-    current_turn: player1.uid,
+    current_turn: firstTurnUid,
     status: 'active',
     mode,
     moves: [],
@@ -374,9 +375,21 @@ export async function getUserGameCount(uid: string): Promise<number> {
 export async function createRematch(game: Game): Promise<string> {
   const [p1, p2] = game.players;
   if (p2.email === 'solo') return createSoloGame(p1);
+
+  // Loser goes first; on a tie, last game's second player starts.
   const first = p1.score < p2.score ? p1 : p2;
-  const second = first === p1 ? p2 : p1;
-  return createGame(first, second, game.mode); // rematch keeps the same mode
+
+  // The player who taps Rematch must be player1: the games_insert policy is
+  // `with check (auth.uid() = player1_uid)`, so a row where player1 is the
+  // other person is rejected by RLS. Keep the caller as player1 and give the
+  // opening move to `first` via current_turn — otherwise the winner (who is
+  // never the lower scorer) can never start a rematch.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const caller = session?.user?.id === p2.uid ? p2 : p1;
+  const opponent = caller === p1 ? p2 : p1;
+  return createGame(caller, opponent, game.mode, first.uid); // rematch keeps the same mode
 }
 
 // Realtime events that fire while the websocket is down (phone locked, app
