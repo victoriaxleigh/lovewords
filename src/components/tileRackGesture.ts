@@ -1,26 +1,44 @@
-export type RackDragDirection = 'horizontal' | 'vertical';
+export type RackDragMode = 'rack' | 'board';
 export type RackGestureEndAction = 'reorder' | 'board-drag' | 'press' | 'none';
 
 export const RACK_DRAG_THRESHOLD = 5;
+export const BOARD_MODE_ENTER_DY = -28;
+export const BOARD_MODE_EXIT_DY = -12;
 
-export function getRackDragDirection(
+export function getRackDragMode(
+  currentMode: RackDragMode | null,
   dx: number,
-  dy: number
-): RackDragDirection | null {
-  if (Math.abs(dx) <= RACK_DRAG_THRESHOLD && Math.abs(dy) <= RACK_DRAG_THRESHOLD) {
+  dy: number,
+  boardDragEnabled: boolean
+): RackDragMode | null {
+  if (
+    currentMode === null &&
+    Math.abs(dx) <= RACK_DRAG_THRESHOLD &&
+    Math.abs(dy) <= RACK_DRAG_THRESHOLD
+  ) {
     return null;
   }
-  return Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+
+  if (currentMode === 'board') {
+    return !boardDragEnabled || dy >= BOARD_MODE_EXIT_DY ? 'rack' : 'board';
+  }
+
+  if (boardDragEnabled && dy <= BOARD_MODE_ENTER_DY) {
+    return 'board';
+  }
+
+  return 'rack';
 }
 
 export function getRackGestureEndAction(
-  direction: RackDragDirection | null,
-  gameplayEnabled: boolean,
-  organizationEnabled: boolean
+  mode: RackDragMode | null,
+  boardDragEnabled: boolean,
+  organizationEnabled: boolean,
+  pressEnabled: boolean
 ): RackGestureEndAction {
-  if (direction === 'horizontal' && organizationEnabled) return 'reorder';
-  if (direction === 'vertical' && gameplayEnabled) return 'board-drag';
-  if (direction === null && gameplayEnabled) return 'press';
+  if (mode === 'rack' && organizationEnabled) return 'reorder';
+  if (mode === 'board' && boardDragEnabled) return 'board-drag';
+  if (mode === null && pressEnabled) return 'press';
   return 'none';
 }
 
@@ -32,9 +50,17 @@ export function getRackReorderTarget(
   return tileIndex + Math.round(horizontalTranslation / tileStride);
 }
 
-export function getRackDragVisualOffset(
-  direction: RackDragDirection | null,
-  horizontalTranslation: number
+export function getRackSiblingPreviewOffset(
+  tileIndex: number,
+  sourceIndex: number,
+  targetIndex: number,
+  tileStride: number
 ): number {
-  return direction === 'horizontal' ? horizontalTranslation : 0;
+  if (targetIndex > sourceIndex && tileIndex > sourceIndex && tileIndex <= targetIndex) {
+    return -tileStride;
+  }
+  if (targetIndex < sourceIndex && tileIndex >= targetIndex && tileIndex < sourceIndex) {
+    return tileStride;
+  }
+  return 0;
 }

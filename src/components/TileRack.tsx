@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Animated,
   View,
@@ -12,11 +12,11 @@ import { Tile } from '../types';
 import TileComponent from './TileComponent';
 import { Colors } from '../utils/colors';
 import {
-  getRackDragDirection,
-  getRackDragVisualOffset,
+  getRackDragMode,
   getRackGestureEndAction,
   getRackReorderTarget,
-  RackDragDirection,
+  getRackSiblingPreviewOffset,
+  RackDragMode,
 } from './tileRackGesture';
 
 const MAX_TILE_SIZE = 46;
@@ -44,7 +44,8 @@ type Props = {
 
 function DraggableTile({
   tile, index, selected, onTilePress, disabled, organizationEnabled, onReorder,
-  dragCallbacks, isDragging, highlight, size,
+  dragCallbacks, isDragging, highlight, size, tileCount, previewOffset,
+  onPreviewChange, onPreviewClear,
 }: {
   tile: Tile;
   index: number;
@@ -57,32 +58,55 @@ function DraggableTile({
   isDragging?: boolean;
   highlight?: boolean;
   size: number;
+  tileCount: number;
+  previewOffset: number;
+  onPreviewChange: (sourceIndex: number, targetIndex: number) => void;
+  onPreviewClear: () => void;
 }) {
   // Keep latest prop values accessible inside the gesture (created once at mount).
   const tileRef = useRef(tile);
   const indexRef = useRef(index);
   const sizeRef = useRef(size);
+  const tileCountRef = useRef(tileCount);
   const disabledRef = useRef(disabled);
   const organizationEnabledRef = useRef(organizationEnabled);
   const onTilePressRef = useRef(onTilePress);
   const onReorderRef = useRef(onReorder);
   const dragCallbacksRef = useRef(dragCallbacks);
+  const onPreviewChangeRef = useRef(onPreviewChange);
+  const onPreviewClearRef = useRef(onPreviewClear);
   useEffect(() => { tileRef.current = tile; }, [tile]);
   useEffect(() => { indexRef.current = index; }, [index]);
   useEffect(() => { sizeRef.current = size; }, [size]);
+  useEffect(() => { tileCountRef.current = tileCount; }, [tileCount]);
   useEffect(() => { disabledRef.current = disabled; }, [disabled]);
   useEffect(() => { organizationEnabledRef.current = organizationEnabled; }, [organizationEnabled]);
   useEffect(() => { onTilePressRef.current = onTilePress; }, [onTilePress]);
   useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
   useEffect(() => { dragCallbacksRef.current = dragCallbacks; }, [dragCallbacks]);
+  useEffect(() => { onPreviewChangeRef.current = onPreviewChange; }, [onPreviewChange]);
+  useEffect(() => { onPreviewClearRef.current = onPreviewClear; }, [onPreviewClear]);
 
   // Drag state tracked in refs so gesture callbacks stay allocation-free.
-  const dragDirectionRef = useRef<RackDragDirection | null>(null);
+  const dragModeRef = useRef<RackDragMode | null>(null);
   const boardDragStartedRef = useRef(false);
+  const activeDragCallbacksRef = useRef<DragCallbacks | null>(null);
+  const previewTargetRef = useRef(index);
   const startXRef = useRef(0);
   const startYRef = useRef(0);
-  const horizontalDragX = useRef(new Animated.Value(0)).current;
-  const [isHorizontalDragging, setIsHorizontalDragging] = useState(false);
+  const rackDragXY = useRef(new Animated.ValueXY()).current;
+  const siblingPreviewX = useRef(new Animated.Value(previewOffset)).current;
+  const [isLifted, setIsLifted] = useState(false);
+
+  useEffect(() => {
+    siblingPreviewX.stopAnimation();
+    Animated.spring(siblingPreviewX, {
+      toValue: previewOffset,
+      useNativeDriver: true,
+      speed: 28,
+      bounciness: 0,
+    }).start();
+  }, [previewOffset, siblingPreviewX]);
 
   const gesture = useMemo(() =>
     Gesture.Pan()
@@ -90,10 +114,13 @@ function DraggableTile({
       .minDistance(0)
       .onBegin((e) => {
         if (disabledRef.current && !organizationEnabledRef.current) return;
-        dragDirectionRef.current = null;
+        dragModeRef.current = null;
         boardDragStartedRef.current = false;
-        horizontalDragX.setValue(0);
-        setIsHorizontalDragging(false);
+        activeDragCallbacksRef.current = null;
+        previewTargetRef.current = indexRef.current;
+        rackDragXY.setValue({ x: 0, y: 0 });
+        setIsLifted(false);
+        onPreviewClearRef.current();
         startXRef.current = e.absoluteX;
         startYRef.current = e.absoluteY;
       })
@@ -101,63 +128,100 @@ function DraggableTile({
         if (disabledRef.current && !organizationEnabledRef.current) return;
         const dx = e.absoluteX - startXRef.current;
         const dy = e.absoluteY - startYRef.current;
+        const boardDragEnabled =
+          !disabledRef.current && dragCallbacksRef.current !== undefined;
+        const nextMode = getRackDragMode(
+          dragModeRef.current,
+          dx,
+          dy,
+          boardDragEnabled
+        );
+        const modeChanged = nextMode !== dragModeRef.current;
 
-        const nextDirection = getRackDragDirection(dx, dy);
-        if (nextDirection !== dragDirectionRef.current) {
-          if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
-            dragCallbacksRef.current?.onDragCancel();
+        if (modeChanged) {
+          if (dragModeRef.current === 'board' && boardDragStartedRef.current) {
+            activeDragCallbacksRef.current?.onDragCancel();
             boardDragStartedRef.current = false;
-          }
-          if (dragDirectionRef.current === 'horizontal') {
-            horizontalDragX.setValue(0);
-            setIsHorizontalDragging(false);
+            activeDragCallbacksRef.current = null;
           }
 
-          dragDirectionRef.current = nextDirection;
-          if (nextDirection === 'horizontal') {
-            setIsHorizontalDragging(true);
-          } else if (nextDirection === 'vertical' && !disabledRef.current) {
+          dragModeRef.current = nextMode;
+          if (nextMode !== null) {
+            setIsLifted(true);
+          }
+          if (nextMode === 'board') {
+            rackDragXY.setValue({ x: 0, y: 0 });
+            onPreviewClearRef.current();
             boardDragStartedRef.current = true;
-            dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
+            activeDragCallbacksRef.current = dragCallbacksRef.current ?? null;
+            activeDragCallbacksRef.current?.onDragStart(
+              tileRef.current,
+              e.absoluteX,
+              e.absoluteY
+            );
           }
         }
 
-        if (dragDirectionRef.current === 'horizontal') {
-          horizontalDragX.setValue(getRackDragVisualOffset(dragDirectionRef.current, dx));
-        } else if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
-          dragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
+        if (dragModeRef.current === 'rack') {
+          rackDragXY.setValue({ x: dx, y: dy });
+          const tileStride = sizeRef.current + 4;
+          const unclampedTarget = getRackReorderTarget(
+            indexRef.current,
+            dx,
+            tileStride
+          );
+          const targetIndex = Math.max(
+            0,
+            Math.min(tileCountRef.current - 1, unclampedTarget)
+          );
+          if (targetIndex !== previewTargetRef.current) {
+            previewTargetRef.current = targetIndex;
+            onPreviewChangeRef.current(indexRef.current, targetIndex);
+          } else if (modeChanged) {
+            onPreviewChangeRef.current(indexRef.current, targetIndex);
+          }
+        } else if (dragModeRef.current === 'board' && boardDragStartedRef.current) {
+          activeDragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
         }
       })
       .onEnd((e) => {
+        const boardDragEnabled =
+          boardDragStartedRef.current && activeDragCallbacksRef.current !== null;
         const action = getRackGestureEndAction(
-          dragDirectionRef.current,
-          !disabledRef.current,
-          organizationEnabledRef.current ?? false
+          dragModeRef.current,
+          boardDragEnabled,
+          organizationEnabledRef.current ?? false,
+          !disabledRef.current
         );
         if (action === 'reorder') {
-          const dx = e.absoluteX - startXRef.current;
-          const tileStride = sizeRef.current + 4;
-          const targetIndex = getRackReorderTarget(indexRef.current, dx, tileStride);
-          onReorderRef.current?.(tileRef.current.id, targetIndex);
+          onReorderRef.current?.(tileRef.current.id, previewTargetRef.current);
         } else if (action === 'board-drag' && boardDragStartedRef.current) {
-          dragCallbacksRef.current?.onDragEnd(e.absoluteX, e.absoluteY, tileRef.current);
+          activeDragCallbacksRef.current?.onDragEnd(
+            e.absoluteX,
+            e.absoluteY,
+            tileRef.current
+          );
         } else if (action === 'press') {
           onTilePressRef.current();
         }
-        dragDirectionRef.current = null;
+        dragModeRef.current = null;
         boardDragStartedRef.current = false;
-        horizontalDragX.setValue(0);
-        setIsHorizontalDragging(false);
+        activeDragCallbacksRef.current = null;
+        rackDragXY.setValue({ x: 0, y: 0 });
+        setIsLifted(false);
+        onPreviewClearRef.current();
       })
       .onFinalize(() => {
         // Fires on cancel (e.g. interrupted by a call) — clean up if mid-drag.
         if (boardDragStartedRef.current) {
-          dragCallbacksRef.current?.onDragCancel();
+          activeDragCallbacksRef.current?.onDragCancel();
         }
-        dragDirectionRef.current = null;
+        dragModeRef.current = null;
         boardDragStartedRef.current = false;
-        horizontalDragX.setValue(0);
-        setIsHorizontalDragging(false);
+        activeDragCallbacksRef.current = null;
+        rackDragXY.setValue({ x: 0, y: 0 });
+        setIsLifted(false);
+        onPreviewClearRef.current();
       }),
   []); // created once; all changing props/state are accessed via refs above
 
@@ -168,13 +232,14 @@ function DraggableTile({
           styles.draggableTile,
           {
             opacity: isDragging ? 0.3 : 1,
-            zIndex: isHorizontalDragging ? 20 : 1,
-            elevation: isHorizontalDragging ? 12 : 0,
-            shadowOpacity: isHorizontalDragging ? 0.4 : 0,
-            shadowRadius: isHorizontalDragging ? 7 : 0,
+            zIndex: isLifted ? 20 : 1,
+            elevation: isLifted ? 12 : 0,
+            shadowOpacity: isLifted ? 0.4 : 0,
+            shadowRadius: isLifted ? 7 : 0,
             transform: [
-              { translateX: horizontalDragX },
-              { scale: isHorizontalDragging ? 1.08 : 1 },
+              { translateX: Animated.add(rackDragXY.x, siblingPreviewX) },
+              { translateY: rackDragXY.y },
+              { scale: isLifted ? 1.08 : 1 },
             ],
           },
         ]}
@@ -196,9 +261,20 @@ export default function TileRack({
   swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId, onShuffle,
 }: Props) {
   const { width } = useWindowDimensions();
+  const [dragPreview, setDragPreview] = useState<{
+    sourceIndex: number;
+    targetIndex: number;
+  } | null>(null);
   // Fit 7 tiles + rack padding (16) + shuffle button & gap (48) + screen margin (16)
   // in the viewport; each tile carries 4px of margin on top of its size.
   const tileSize = Math.max(32, Math.min(MAX_TILE_SIZE, Math.floor((width - 80) / 7) - 4));
+  const tileStride = tileSize + 4;
+  const handlePreviewChange = useCallback((sourceIndex: number, targetIndex: number) => {
+    setDragPreview({ sourceIndex, targetIndex });
+  }, []);
+  const handlePreviewClear = useCallback(() => {
+    setDragPreview(null);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -218,6 +294,17 @@ export default function TileRack({
               isDragging={tile.id === draggingTileId}
               highlight={recentlyDrawnIds?.has(tile.id) ?? false}
               size={tileSize}
+              tileCount={tiles.length}
+              previewOffset={dragPreview
+                ? getRackSiblingPreviewOffset(
+                    index,
+                    dragPreview.sourceIndex,
+                    dragPreview.targetIndex,
+                    tileStride
+                  )
+                : 0}
+              onPreviewChange={handlePreviewChange}
+              onPreviewClear={handlePreviewClear}
             />
           ))}
           {Array.from({ length: Math.max(0, 7 - tiles.length) }).map((_, i) => (
