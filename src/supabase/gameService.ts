@@ -19,24 +19,38 @@ const CONSECUTIVE_PASS_LIMIT = 4;
 // Calls our Netlify serverless function, which sends a Web Push (browser) and/or
 // Expo push (native) notification depending on which subscription the recipient
 // has on file. Fails silently — a notification error should never break a move.
-function sendPushNotification(
+async function sendPushNotification(
   recipientUid: string,
-  senderName: string,
-  type: 'turn' | 'lovenote' | 'nudge',
-  isFriend = false
-) {
-  fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recipientUid, senderName, type, isFriend }),
-  }).catch(() => {}); // never throw — notifications are best-effort
+  type: 'turn' | 'lovenote' | 'nudge' | 'invite',
+  gameId: string,
+  eventId?: string
+): Promise<'sent' | 'cooldown' | 'failed'> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) return 'failed';
+    const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipientUid, type, gameId, eventId }),
+    });
+    if (response.status === 429) return 'cooldown';
+    return response.ok ? 'sent' : 'failed';
+  } catch {
+    // Notifications are best-effort and never block a game action.
+    return 'failed';
+  }
 }
 
 // ─── Nudge ────────────────────────────────────────────────────────────────────
 // Poke your partner/friend when it's their turn and they're taking their time.
 // Best-effort push only — no DB write, no game-state change.
-export function sendNudge(recipientUid: string, senderName: string, isFriend = false) {
-  sendPushNotification(recipientUid, senderName, 'nudge', isFriend);
+export function sendNudge(recipientUid: string, gameId: string) {
+  return sendPushNotification(recipientUid, 'nudge', gameId);
 }
 
 export type GameAnalysisToken = {
@@ -174,31 +188,34 @@ export async function createSoloGame(player: Player): Promise<string> {
   const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
   const { drawn: rack2, remaining: finalBag } = drawTiles(bag2, 7);
 
-  const payload = {
-    player1_uid: player.uid,
-    player2_uid: player.uid,
-    players: [
-      { ...player, rack: rack1, score: 0, historyVersion: 2 },
-      {
-        uid: player.uid,
-        displayName: 'Player 2 🎯',
-        email: 'solo',
-        rack: rack2,
-        score: 0,
-        historyVersion: 2,
-      },
-    ],
-    board: createEmptyBoard(),
-    bag: finalBag,
-    current_turn: player.uid, // stays myUid forever — turn tracked by moves.length
-    status: 'active',
-    mode: 'partner', // solo is always the self/romantic practice experience
-    moves: [],
-  };
-
-  const { data, error } = await supabase.from('games').insert(payload).select('id').single();
+  const players = [
+    {
+      uid: player.uid,
+      displayName: player.displayName,
+      rack: rack1,
+      score: 0,
+      historyVersion: 2,
+    },
+    {
+      uid: player.uid,
+      displayName: 'Player 2 🎯',
+      rack: rack2,
+      score: 0,
+      historyVersion: 2,
+    },
+  ];
+  const { data, error } = await supabase.rpc('create_active_game', {
+    game_players: players,
+    game_board: createEmptyBoard(),
+    game_bag: finalBag,
+    game_current_turn: player.uid,
+    game_mode: 'partner',
+    email_grant: false,
+    source_game_id: null,
+    solo_game: true,
+  });
   if (error) throw error;
-  return data.id;
+  return data;
 }
 
 // ─── Solo: Submit Move ────────────────────────────────────────────────────────
@@ -326,33 +343,163 @@ export async function swapSoloTiles(
 }
 
 // ─── Create Game ──────────────────────────────────────────────────────────────
+export type GameParticipant = Pick<Player, 'uid' | 'displayName'>;
+
+export type ActiveGameSource =
+  | { kind: 'email' }
+  | { kind: 'rematch'; gameId: string };
+
 export async function createGame(
-  player1: Player,
-  player2: Player,
-  mode: GameMode = 'partner'
+  player1: GameParticipant,
+  player2: GameParticipant,
+  mode: GameMode,
+  source: ActiveGameSource
 ): Promise<string> {
   const bag = createTileBag();
   const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
   const { drawn: rack2, remaining: finalBag } = drawTiles(bag2, 7);
 
+  const players = [
+    {
+      uid: player1.uid,
+      displayName: player1.displayName,
+      rack: rack1,
+      score: 0,
+      historyVersion: 2,
+    },
+    {
+      uid: player2.uid,
+      displayName: player2.displayName,
+      rack: rack2,
+      score: 0,
+      historyVersion: 2,
+    },
+  ];
+  const { data, error } = await supabase.rpc('create_active_game', {
+    game_players: players,
+    game_board: createEmptyBoard(),
+    game_bag: finalBag,
+    game_current_turn: player1.uid,
+    game_mode: mode,
+    email_grant: source.kind === 'email',
+    source_game_id: source.kind === 'rematch' ? source.gameId : null,
+    solo_game: false,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ─── Game invitations ────────────────────────────────────────────────────────
+// Discovery invites stay inert until the recipient accepts. Email-created
+// games intentionally continue to use createGame() and start immediately.
+export async function createGameInvite(
+  player1: GameParticipant,
+  player2: GameParticipant,
+  mode: GameMode = 'partner'
+): Promise<string> {
   const payload = {
     player1_uid: player1.uid,
     player2_uid: player2.uid,
     players: [
-      { ...player1, rack: rack1, score: 0, historyVersion: 2 },
-      { ...player2, rack: rack2, score: 0, historyVersion: 2 },
+      {
+        uid: player1.uid,
+        displayName: player1.displayName,
+        email: '',
+        rack: [],
+        score: 0,
+        historyVersion: 2,
+      },
+      {
+        uid: player2.uid,
+        displayName: player2.displayName,
+        email: '',
+        rack: [],
+        score: 0,
+        historyVersion: 2,
+      },
     ],
     board: createEmptyBoard(),
-    bag: finalBag,
+    bag: [],
     current_turn: player1.uid,
-    status: 'active',
+    status: 'waiting',
     mode,
     moves: [],
   };
-
   const { data, error } = await supabase.from('games').insert(payload).select('id').single();
   if (error) throw error;
+  void sendPushNotification(player2.uid, 'invite', data.id, data.id);
   return data.id;
+}
+
+async function currentUid(): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) throw new Error('Not signed in');
+  return session.user.id;
+}
+
+export async function acceptGameInvite(game: Game): Promise<void> {
+  const uid = await currentUid();
+  if (game.status !== 'waiting' || game.players[1].uid !== uid) {
+    throw new Error('Only the invited player can accept this invitation.');
+  }
+  const bag = createTileBag();
+  const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
+  const { drawn: rack2, remaining } = drawTiles(bag2, 7);
+  const players: [Player, Player] = [
+    { ...game.players[0], rack: rack1, score: 0, historyVersion: 2 },
+    { ...game.players[1], rack: rack2, score: 0, historyVersion: 2 },
+  ];
+  const { data, error } = await supabase
+    .from('games')
+    .update({
+      players,
+      board: createEmptyBoard(),
+      bag: remaining,
+      current_turn: game.players[0].uid,
+      status: 'active',
+      moves: [],
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', game.id)
+    .eq('status', 'waiting')
+    .eq('player2_uid', uid)
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Invitation is no longer available.');
+}
+
+export async function declineGameInvite(game: Game): Promise<void> {
+  const uid = await currentUid();
+  if (game.status !== 'waiting' || game.players[1].uid !== uid) {
+    throw new Error('Only the invited player can decline this invitation.');
+  }
+  const { data, error } = await supabase
+    .from('games')
+    .update({ status: 'declined', updated_at: new Date().toISOString() })
+    .eq('id', game.id)
+    .eq('status', 'waiting')
+    .eq('player2_uid', uid)
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Invitation is no longer available.');
+}
+
+export async function cancelGameInvite(game: Game): Promise<void> {
+  const uid = await currentUid();
+  if (game.status !== 'waiting' || game.players[0].uid !== uid) {
+    throw new Error('Only the sender can cancel this invitation.');
+  }
+  const { data, error } = await supabase
+    .from('games')
+    .update({ status: 'declined', updated_at: new Date().toISOString() })
+    .eq('id', game.id)
+    .eq('status', 'waiting')
+    .eq('player1_uid', uid)
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'Invitation is no longer available.');
 }
 
 // ─── Game count (paywall gate) ────────────────────────────────────────────────
@@ -363,7 +510,8 @@ export async function getUserGameCount(uid: string): Promise<number> {
   const { count, error } = await supabase
     .from('games')
     .select('id', { count: 'exact', head: true })
-    .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`);
+    .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`)
+    .in('status', ['active', 'finished']);
   if (error) throw error;
   return count ?? 0;
 }
@@ -376,7 +524,7 @@ export async function createRematch(game: Game): Promise<string> {
   if (p2.email === 'solo') return createSoloGame(p1);
   const first = p1.score < p2.score ? p1 : p2;
   const second = first === p1 ? p2 : p1;
-  return createGame(first, second, game.mode); // rematch keeps the same mode
+  return createGame(first, second, game.mode, { kind: 'rematch', gameId: game.id });
 }
 
 // Realtime events that fire while the websocket is down (phone locked, app
@@ -437,7 +585,7 @@ export function subscribeToUserGames(uid: string, onUpdate: (games: Game[]) => v
       .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`)
       .order('updated_at', { ascending: false });
     if (error) console.error('Failed to fetch user games:', error);
-    if (data) onUpdate(data.map(rowToGame));
+    if (data) onUpdate(data.map(rowToGame).filter((game) => game.status !== 'declined'));
   };
 
   fetch();
@@ -514,8 +662,7 @@ export async function submitMove(
 
   // Send push notification to opponent
   const opponent = game.players[otherIndex];
-  const myName = game.players[playerIndex].displayName;
-  sendPushNotification(opponent.uid, myName, 'turn', game.mode === 'friend');
+  void sendPushNotification(opponent.uid, 'turn', gameId, String(game.moves.length));
 
   return { success: true };
 }
@@ -600,21 +747,23 @@ export async function sendLoveNote(
   fromUid: string,
   toUid: string,
   message: string,
-  emoji: string,
-  senderName: string,
-  isFriend = false
+  emoji: string
 ): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase.from('love_notes').insert({
-    game_id: gameId,
-    from_uid: fromUid,
-    to_uid: toUid,
-    message,
-    emoji,
-    read: false,
-  });
+  const { data, error } = await supabase
+    .from('love_notes')
+    .insert({
+      game_id: gameId,
+      from_uid: fromUid,
+      to_uid: toUid,
+      message,
+      emoji,
+      read: false,
+    })
+    .select('id')
+    .single();
   if (error) return { success: false, error: error.message };
 
-  sendPushNotification(toUid, senderName, 'lovenote', isFriend);
+  void sendPushNotification(toUid, 'lovenote', gameId, data.id);
   return { success: true };
 }
 

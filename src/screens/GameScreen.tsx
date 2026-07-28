@@ -60,6 +60,7 @@ export default function GameScreen() {
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
+  const [nudgeError, setNudgeError] = useState<string | null>(null);
   const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState(false);
   const [analysisQuality, setAnalysisQuality] = useState<'full' | 'basic' | null>(null);
@@ -484,14 +485,25 @@ export default function GameScreen() {
     }
   }
 
-  // Nudge the partner — best-effort push, with a 30s cooldown so you can't spam.
-  function handleNudge() {
+  // Nudge the partner and reflect the server-owned cooldown honestly.
+  async function handleNudge() {
     if (!partner || nudgeCooldown) return;
-    sendNudge(partner.uid, myDisplayName, isFriend);
-    setNudgeSent(true);
     setNudgeCooldown(true);
-    setTimeout(() => setNudgeSent(false), 3000);
-    setTimeout(() => setNudgeCooldown(false), 30000);
+    setNudgeError(null);
+    const result = await sendNudge(partner.uid, gameId);
+    if (result === 'sent') {
+      setNudgeSent(true);
+      setTimeout(() => setNudgeSent(false), 3000);
+      setTimeout(() => setNudgeCooldown(false), 60 * 60 * 1000);
+    } else if (result === 'cooldown') {
+      setNudgeError('⏳ Already nudged');
+      setTimeout(() => setNudgeError(null), 3000);
+      setTimeout(() => setNudgeCooldown(false), 60 * 60 * 1000);
+    } else {
+      setNudgeError('Could not nudge');
+      setNudgeCooldown(false);
+      setTimeout(() => setNudgeError(null), 3000);
+    }
   }
 
   async function handlePass() {
@@ -725,7 +737,9 @@ export default function GameScreen() {
             accessibilityLabel="Nudge your partner to take their turn"
             accessibilityRole="button"
           >
-            <Text style={styles.nudgeBtnText}>{nudgeSent ? '✅ Nudged!' : '👉 Nudge them'}</Text>
+            <Text style={styles.nudgeBtnText}>
+              {nudgeSent ? '✅ Nudged!' : nudgeError ?? '👉 Nudge them'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>

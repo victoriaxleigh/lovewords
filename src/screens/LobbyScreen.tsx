@@ -7,13 +7,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  ScrollView,
 } from 'react-native';
-import { createGame, createSoloGame, subscribeToUserGames, deleteGame, getUserGameCount } from '../supabase/gameService';
-import { getUserByEmail } from '../supabase/authService';
+import {
+  acceptGameInvite,
+  cancelGameInvite,
+  createGame,
+  createGameInvite,
+  createSoloGame,
+  declineGameInvite,
+  subscribeToUserGames,
+  deleteGame,
+  getUserGameCount,
+  type GameParticipant,
+} from '../supabase/gameService';
+import { getUserByEmail, PublicProfile } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, GameMode, Player } from '../types';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
+import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
 import NewGameModal from './NewGameModal';
 
@@ -22,9 +35,6 @@ type Props = {
 };
 
 type Tab = 'active' | 'past';
-
-// Native app: number of games playable before the $2.99 lifetime unlock.
-const FREE_GAME_LIMIT = 3;
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -59,7 +69,7 @@ export default function LobbyScreen({ currentUser }: Props) {
     if (Platform.OS === 'web') return false;
     if (await getHasLifetimeAccess()) return false;
     const gameCount = await getUserGameCount(currentUser.uid);
-    return gameCount >= FREE_GAME_LIMIT;
+    return hasReachedFreeGameLimit(gameCount);
   }
 
   async function handleStartSolo() {
@@ -96,20 +106,66 @@ export default function LobbyScreen({ currentUser }: Props) {
         setErrorMsg('No one with that email yet. Ask them to sign up first.');
         return;
       }
-      const opponent: Player = {
+      const opponent: GameParticipant = {
         uid: opponentData.id,
         displayName: opponentData.display_name,
-        email: opponentData.email,
-        score: 0,
-        rack: [],
       };
-      const gameId = await createGame(currentUser, opponent, mode);
+      const gameId = await createGame(currentUser, opponent, mode, { kind: 'email' });
       setShowNewGame(false);
       navigation.navigate('Game', { gameId, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleInvite(profile: PublicProfile, mode: GameMode) {
+    setInviting(true);
+    setErrorMsg(null);
+    try {
+      if (await isBlockedByPaywall()) {
+        setShowNewGame(false);
+        navigation.navigate('Paywall');
+        return;
+      }
+      const opponent: GameParticipant = {
+        uid: profile.profileId,
+        displayName: profile.displayName,
+      };
+      await createGameInvite(currentUser, opponent, mode);
+      setShowNewGame(false);
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Could not send invitation.');
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleInvitation(game: Game, action: 'accept' | 'decline' | 'cancel') {
+    setBusyId(game.id);
+    setErrorMsg(null);
+    try {
+      if (action === 'accept') {
+        if (await isBlockedByPaywall()) {
+          navigation.navigate('Paywall');
+          return;
+        }
+        await acceptGameInvite(game);
+        navigation.navigate('Game', {
+          gameId: game.id,
+          myUid: currentUser.uid,
+          myDisplayName: currentUser.displayName,
+        });
+      } else if (action === 'decline') {
+        await declineGameInvite(game);
+      } else {
+        await cancelGameInvite(game);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Could not update invitation.');
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -144,7 +200,13 @@ export default function LobbyScreen({ currentUser }: Props) {
     return game.players.find((p) => p.uid === currentUser.uid)?.score ?? 0;
   }
 
-  const activeGames = games.filter((g) => g.status !== 'finished');
+  const incomingInvites = games.filter(
+    (game) => game.status === 'waiting' && game.players[1].uid === currentUser.uid
+  );
+  const outgoingInvites = games.filter(
+    (game) => game.status === 'waiting' && game.players[0].uid === currentUser.uid
+  );
+  const activeGames = games.filter((g) => g.status === 'active');
   const pastGames = games.filter((g) => g.status === 'finished');
   const tabGames = activeTab === 'active' ? activeGames : pastGames;
 
@@ -201,6 +263,62 @@ export default function LobbyScreen({ currentUser }: Props) {
             <Text style={styles.errorBannerDismiss}>✕</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {(incomingInvites.length > 0 || outgoingInvites.length > 0) && (
+        <ScrollView
+          style={styles.invites}
+          contentContainerStyle={styles.invitesContent}
+          nestedScrollEnabled
+        >
+          {incomingInvites.map((game) => {
+            const sender = game.players[0];
+            const rowBusy = busyId === game.id;
+            return (
+              <View key={game.id} style={styles.inviteCard}>
+                <Text style={styles.inviteTitle}>{sender.displayName} invited you</Text>
+                <Text style={styles.inviteMeta}>
+                  {game.mode === 'friend' ? '🎲 Friend game' : '💕 Partner game'}
+                </Text>
+                <View style={styles.inviteActions}>
+                  <TouchableOpacity
+                    style={[styles.inviteButton, styles.inviteAccept]}
+                    onPress={() => handleInvitation(game, 'accept')}
+                    disabled={rowBusy}
+                  >
+                    <Text style={styles.inviteAcceptText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.inviteButton}
+                    onPress={() => handleInvitation(game, 'decline')}
+                    disabled={rowBusy}
+                  >
+                    <Text style={styles.inviteButtonText}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+          {outgoingInvites.map((game) => {
+            const recipient = game.players[1];
+            const rowBusy = busyId === game.id;
+            return (
+              <View key={game.id} style={styles.inviteCard}>
+                <Text style={styles.inviteTitle}>Waiting for {recipient.displayName}</Text>
+                <Text style={styles.inviteMeta}>Invitation sent — no tiles dealt yet.</Text>
+                <TouchableOpacity
+                  style={[styles.inviteButton, styles.cancelInvite]}
+                  onPress={() => handleInvitation(game, 'cancel')}
+                  disabled={rowBusy}
+                >
+                  <Text style={styles.inviteButtonText}>
+                    {rowBusy ? 'Cancelling…' : 'Cancel invitation'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
       )}
 
       {/* Tabs */}
@@ -329,6 +447,7 @@ export default function LobbyScreen({ currentUser }: Props) {
         visible={showNewGame}
         onClose={() => setShowNewGame(false)}
         onStart={handleStart}
+        onInvite={handleInvite}
         onStartSolo={handleStartSolo}
         inviting={inviting}
         startingSolo={startingSolo}
@@ -467,6 +586,31 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { flex: 1, fontSize: 13, color: Colors.errorDark, fontWeight: '600' },
   errorBannerDismiss: { fontSize: 15, color: Colors.errorDark, fontWeight: '700', paddingLeft: 8 },
+  invites: { marginHorizontal: 16, marginTop: 12, maxHeight: 280 },
+  invitesContent: { gap: 10, paddingBottom: 2 },
+  inviteCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: RADII.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...SHADOWS.card,
+  },
+  inviteTitle: { color: Colors.text, fontSize: 15, fontWeight: '800' },
+  inviteMeta: { color: Colors.textLight, fontSize: 12, marginTop: 3 },
+  inviteActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  inviteButton: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: RADII.md,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  inviteAccept: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  inviteAcceptText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  inviteButtonText: { color: Colors.text, fontSize: 13, fontWeight: '700' },
+  cancelInvite: { marginTop: 10 },
   menu: {
     flexDirection: 'row',
     gap: 8,

@@ -5,6 +5,9 @@
 type Row = Record<string, any>;
 
 const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
+const ALEX_ONE_ID = '00000000-0000-0000-0000-000000000002';
+const ALEX_TWO_ID = '00000000-0000-0000-0000-000000000003';
+const CASEY_ID = '00000000-0000-0000-0000-000000000004';
 const FAKE_USER = {
   id: FAKE_USER_ID,
   email: 'dev@local',
@@ -12,7 +15,58 @@ const FAKE_USER = {
 };
 
 const stores: Record<string, Row[]> = { games: [], profiles: [], love_notes: [] };
-stores.profiles.push({ id: FAKE_USER_ID, email: FAKE_USER.email, display_name: 'Dev' });
+stores.profiles.push(
+  { id: FAKE_USER_ID, email: FAKE_USER.email, display_name: 'Dev', discoverable: false },
+  {
+    id: ALEX_ONE_ID,
+    email: 'alex.one@local',
+    display_name: 'Alex Morgan',
+    discoverable: true,
+  },
+  {
+    id: ALEX_TWO_ID,
+    email: 'alex.two@local',
+    display_name: 'Alex Morgan',
+    discoverable: true,
+  },
+  {
+    id: CASEY_ID,
+    email: 'casey@local',
+    display_name: 'Casey Private',
+    discoverable: false,
+  }
+);
+stores.games.push({
+  id: '00000000-0000-0000-0000-000000000010',
+  player1_uid: FAKE_USER_ID,
+  player2_uid: CASEY_ID,
+  players: [
+    {
+      uid: FAKE_USER_ID,
+      displayName: 'Dev',
+      email: '',
+      score: 0,
+      rack: [],
+      historyVersion: 2,
+    },
+    {
+      uid: CASEY_ID,
+      displayName: 'Casey Private',
+      email: '',
+      score: 0,
+      rack: [],
+      historyVersion: 2,
+    },
+  ],
+  board: [],
+  bag: [],
+  current_turn: FAKE_USER_ID,
+  status: 'waiting',
+  mode: 'friend',
+  moves: [],
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 
 // Browser-console handle for driving hard-to-reach states in dev
 // (e.g. flip a game to 'finished' to test the game-over screen).
@@ -43,7 +97,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private table: string;
   private op: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
   private payload: any = null;
-  private filters: Array<{ kind: 'eq' | 'or'; col?: string; val?: any; expr?: string }> = [];
+  private filters: Array<{ kind: 'eq' | 'or' | 'in'; col?: string; val?: any; expr?: string }> = [];
   private orderCol?: string;
   private orderAsc = true;
   private isSingle = false;
@@ -69,6 +123,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
 
   eq(col: string, val: any) { this.filters.push({ kind: 'eq', col, val }); return this; }
   or(expr: string) { this.filters.push({ kind: 'or', expr }); return this; }
+  in(col: string, values: any[]) { this.filters.push({ kind: 'in', col, val: values }); return this; }
   order(col: string, opts?: { ascending?: boolean }) {
     this.orderCol = col;
     this.orderAsc = opts?.ascending ?? true;
@@ -79,6 +134,7 @@ class QueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private match(row: Row): boolean {
     for (const f of this.filters) {
       if (f.kind === 'eq' && row[f.col!] !== f.val) return false;
+      if (f.kind === 'in' && !f.val.includes(row[f.col!])) return false;
       if (f.kind === 'or') {
         const ok = f.expr!.split(',').some((clause) => {
           const m = clause.match(/^([^.]+)\.eq\.(.+)$/);
@@ -222,6 +278,72 @@ export const mockSupabase = {
         },
       };
     },
+  },
+  rpc: async (name: string, args: Record<string, any>) => {
+    if (!currentSession?.user?.id) {
+      return { data: null, error: { message: 'Authentication required' } };
+    }
+    if (name === 'search_profiles') {
+      const query = (args.search_query ?? '').trim().toLowerCase();
+      if (query.length < 3) {
+        return { data: null, error: { message: 'Search query must be at least 3 characters' } };
+      }
+      const data = stores.profiles
+        .filter(
+          (profile) =>
+            profile.discoverable &&
+            profile.id !== currentSession.user.id &&
+            profile.display_name.toLowerCase().startsWith(query)
+        )
+        .slice(0, 20)
+        .map((profile) => ({
+          profile_id: profile.id,
+          display_name: profile.display_name,
+          player_code: profile.id.replaceAll('-', '').slice(-6).toUpperCase(),
+        }));
+      return { data, error: null };
+    }
+    if (name === 'find_profile_by_email') {
+      const email = (args.lookup_email ?? '').trim().toLowerCase();
+      const profile = stores.profiles.find((row) => row.email.toLowerCase() === email);
+      return {
+        data: profile
+          ? [{ id: profile.id, display_name: profile.display_name, email: profile.email }]
+          : [],
+        error: null,
+      };
+    }
+    if (name === 'create_active_game') {
+      const id = uuid();
+      const players = args.game_players.map((player: Row, index: number) => {
+        const profile = stores.profiles.find((row) => row.id === player.uid);
+        return {
+          ...player,
+          displayName: args.solo_game && index === 1
+            ? 'Player 2 🎯'
+            : profile?.display_name ?? player.displayName,
+          email: args.solo_game && index === 1 ? 'solo' : '',
+        };
+      });
+      stores.games.push({
+        id,
+        player1_uid: players[0].uid,
+        player2_uid: players[1].uid,
+        players,
+        board: args.game_board,
+        bag: args.game_bag,
+        current_turn: args.game_current_turn,
+        status: 'active',
+        mode: args.game_mode,
+        moves: [],
+        rematch_of: args.source_game_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      fireChannel('games', { eventType: 'INSERT' });
+      return { data: id, error: null };
+    }
+    return { data: null, error: { message: `Unknown mock RPC: ${name}` } };
   },
   from: (table: string) => new QueryBuilder(table),
   channel: (name: string) => new MockChannel(name),

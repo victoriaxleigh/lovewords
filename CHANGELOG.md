@@ -4,6 +4,9 @@
 
 ### Added
 
+- Opt-in player discovery by display name with privacy-safe player codes and
+  accept/decline/cancel game invitations.
+- Server-authorized game creation and event-bound, abuse-limited push notifications.
 - Local rack organization during either player's turn: tiles follow horizontal drags without
   changing shared game state, while board placement remains turn-gated.
 - In-app **AI game coach**: a move-by-move review on the finished-game screen (Claude Sonnet
