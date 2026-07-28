@@ -31,3 +31,10 @@ export function getRackReorderTarget(
 ): number {
   return tileIndex + Math.round(horizontalTranslation / tileStride);
 }
+
+export function getRackDragVisualOffset(
+  direction: RackDragDirection | null,
+  horizontalTranslation: number
+): number {
+  return direction === 'horizontal' ? horizontalTranslation : 0;
+}

@@ -1,11 +1,19 @@
-import React, { useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import {
+  Animated,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Tile } from '../types';
 import TileComponent from './TileComponent';
 import { Colors } from '../utils/colors';
 import {
   getRackDragDirection,
+  getRackDragVisualOffset,
   getRackGestureEndAction,
   getRackReorderTarget,
   RackDragDirection,
@@ -73,6 +81,8 @@ function DraggableTile({
   const boardDragStartedRef = useRef(false);
   const startXRef = useRef(0);
   const startYRef = useRef(0);
+  const horizontalDragX = useRef(new Animated.Value(0)).current;
+  const [isHorizontalDragging, setIsHorizontalDragging] = useState(false);
 
   const gesture = useMemo(() =>
     Gesture.Pan()
@@ -82,6 +92,8 @@ function DraggableTile({
         if (disabledRef.current && !organizationEnabledRef.current) return;
         dragDirectionRef.current = null;
         boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
         startXRef.current = e.absoluteX;
         startYRef.current = e.absoluteY;
       })
@@ -92,13 +104,17 @@ function DraggableTile({
 
         if (!dragDirectionRef.current) {
           dragDirectionRef.current = getRackDragDirection(dx, dy);
-          if (dragDirectionRef.current === 'vertical' && !disabledRef.current) {
+          if (dragDirectionRef.current === 'horizontal') {
+            setIsHorizontalDragging(true);
+          } else if (dragDirectionRef.current === 'vertical' && !disabledRef.current) {
             boardDragStartedRef.current = true;
             dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
           }
         }
 
-        if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
+        if (dragDirectionRef.current === 'horizontal') {
+          horizontalDragX.setValue(getRackDragVisualOffset(dragDirectionRef.current, dx));
+        } else if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
           dragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
         }
       })
@@ -120,6 +136,8 @@ function DraggableTile({
         }
         dragDirectionRef.current = null;
         boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
       })
       .onFinalize(() => {
         // Fires on cancel (e.g. interrupted by a call) — clean up if mid-drag.
@@ -128,12 +146,29 @@ function DraggableTile({
         }
         dragDirectionRef.current = null;
         boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
       }),
   []); // created once; all changing props/state are accessed via refs above
 
   return (
     <GestureDetector gesture={gesture}>
-      <View style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <Animated.View
+        style={[
+          styles.draggableTile,
+          {
+            opacity: isDragging ? 0.3 : 1,
+            zIndex: isHorizontalDragging ? 20 : 1,
+            elevation: isHorizontalDragging ? 12 : 0,
+            shadowOpacity: isHorizontalDragging ? 0.4 : 0,
+            shadowRadius: isHorizontalDragging ? 7 : 0,
+            transform: [
+              { translateX: horizontalDragX },
+              { scale: isHorizontalDragging ? 1.08 : 1 },
+            ],
+          },
+        ]}
+      >
         <TileComponent
           tile={tile}
           selected={selected}
@@ -141,7 +176,7 @@ function DraggableTile({
           disabled={disabled}
           highlight={highlight}
         />
-      </View>
+      </Animated.View>
     </GestureDetector>
   );
 }
@@ -198,6 +233,10 @@ export default function TileRack({
 const styles = StyleSheet.create({
   container: { alignItems: 'center', paddingVertical: 10 },
   rackRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  draggableTile: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+  },
   rack: {
     flexDirection: 'row',
     backgroundColor: '#5C2A3E',

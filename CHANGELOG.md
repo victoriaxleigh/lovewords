@@ -4,7 +4,7 @@
 
 ### Added
 
-- Local rack organization during either player's turn: horizontal drags reorder tiles without
+- Local rack organization during either player's turn: tiles follow horizontal drags without
   changing shared game state, while board placement remains turn-gated.
 - In-app **AI game coach**: a move-by-move review on the finished-game screen (Claude Sonnet
   via the new `game-coach.js` function), replacing the shareable curl command. Names the

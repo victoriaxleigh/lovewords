@@ -3,7 +3,7 @@ feature: rack-organization-while-waiting
 status: complete
 created: 2026-07-27
 updated: 2026-07-27
-iteration: 2
+iteration: 3
 ---
 
 ## Overview
@@ -71,6 +71,9 @@ and no-op inputs. Run the full Jest suite and production web build.
 
 ### User Notes
 
+- [x] Rack reordering needs live visual feedback while dragging; the tile currently appears
+  stationary and only jumps to its new position after release.
+
 ## Pipeline Log
 
 - [iter 1] implement: complete — Added local rack ordering with turn-aware horizontal/vertical gesture locking and realtime order reconciliation; 145 tests and the production web build pass.
@@ -79,9 +82,12 @@ and no-op inputs. Run the full Jest suite and production web build.
 - [iter 2] implement: complete — Added focused gesture direction/turn-gating helpers and six tests, resolving the iteration-1 QA finding; 151 tests and the production web build pass.
 - [iter 2] qa: complete — Clean pass; the gesture coverage finding is resolved, and 151 tests, the production web build, and diff checks pass with no feature-related type errors.
 - [iter 2] security: complete — No exploitable issues found; local-only rack ordering and explicit gameplay turn gating remain intact.
+- [iter 3] implement: complete — Added live horizontal pointer tracking plus lift/scale styling while reordering; 152 tests and the production web build pass.
+- [iter 3] qa: complete — Clean pass; live feedback and reset/cancel behavior work without regressing vertical board dragging or waiting-turn gating; 152 tests and the web build pass.
+- [iter 3] security: complete — No exploitable issues found; feedback remains local visual state and does not alter service or turn boundaries.
 
 ## Outcome
 
-Players can now reorder their rack with horizontal drags during either player's turn while vertical
-board placement remains available only on their own turn. Rack order stays local, reconciles safely
-across realtime updates, and is covered by focused ordering and gesture-gating tests.
+Players can reorder their rack during either player's turn with the dragged tile following the
+pointer and lifting visually until release. The order stays local and realtime-safe, while taps
+and vertical board placement remain locked to the active player.

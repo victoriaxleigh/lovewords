@@ -1,5 +1,6 @@
 import {
   getRackDragDirection,
+  getRackDragVisualOffset,
   getRackGestureEndAction,
   getRackReorderTarget,
 } from '../src/components/tileRackGesture';
@@ -20,6 +21,12 @@ describe('TileRack gesture direction', () => {
   test('translates horizontal movement into a rack target index', () => {
     expect(getRackReorderTarget(2, 51, 50)).toBe(3);
     expect(getRackReorderTarget(2, -101, 50)).toBe(0);
+  });
+
+  test('only horizontal drags move the rack tile visual', () => {
+    expect(getRackDragVisualOffset('horizontal', 37)).toBe(37);
+    expect(getRackDragVisualOffset('vertical', 37)).toBe(0);
+    expect(getRackDragVisualOffset(null, 37)).toBe(0);
   });
 });
 
