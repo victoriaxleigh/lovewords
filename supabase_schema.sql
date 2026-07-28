@@ -3,8 +3,6 @@
 -- Supabase Dashboard → SQL Editor → New query → Run
 -- ============================================================
 
-create extension if not exists pg_cron;
-
 -- Profiles (one row per user, auto-linked to auth)
 create table if not exists profiles (
   id uuid primary key references auth.users on delete cascade,
@@ -832,11 +830,28 @@ begin
 end;
 $$;
 
-select cron.schedule(
-  'lovewords-player-discovery-cleanup',
-  '17 3 * * *',
-  'select public.cleanup_player_discovery_bookkeeping()'
-);
+-- Schedule the daily bookkeeping cleanup, best-effort. pg_cron requires
+-- superuser to install, so on Supabase it must be enabled from the dashboard
+-- (Database > Extensions). When it is unavailable the rest of this schema still
+-- applies; enable pg_cron and re-run (or schedule
+-- public.cleanup_player_discovery_bookkeeping() by hand) to activate the sweep.
+do $$
+begin
+  begin
+    create extension if not exists pg_cron;
+  exception when others then
+    raise notice 'pg_cron unavailable (%); skipping cleanup schedule. Enable pg_cron from the Supabase dashboard and re-run to schedule public.cleanup_player_discovery_bookkeeping().', sqlerrm;
+  end;
+
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule(
+      'lovewords-player-discovery-cleanup',
+      '17 3 * * *',
+      'select public.cleanup_player_discovery_bookkeeping()'
+    );
+  end if;
+end;
+$$;
 
 revoke all on function public.search_profiles(text) from public, anon;
 revoke all on function public.find_profile_by_email(text) from public, anon;
