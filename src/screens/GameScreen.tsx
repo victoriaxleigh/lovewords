@@ -23,6 +23,7 @@ import {
   getMovePlacements,
   hasAnyPlacements,
 } from '../engine/gameHistory';
+import { applyRackOrder, moveRackTile } from '../engine/rackOrder';
 import BoardComponent, { getCellSize } from '../components/BoardComponent';
 import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
@@ -188,25 +189,38 @@ export default function GameScreen() {
   const me = game?.players[currentSide];
   const partner = game?.players[1 - currentSide];
 
-  // Local-only rack display order (shuffle). Tile ids not in the order (fresh draws)
-  // keep their natural position at the end; stale ids are simply ignored.
+  // Local-only rack display order. Fresh draws are appended and stale ids ignored.
   const [rackOrder, setRackOrder] = useState<string[] | null>(null);
   const orderedRack = useMemo(() => {
-    const rack = me?.rack ?? [];
-    if (!rackOrder) return rack;
-    const pos = new Map(rackOrder.map((id, i) => [id, i]));
-    return [...rack].sort(
-      (a, b) => (pos.get(a.id) ?? rackOrder.length) - (pos.get(b.id) ?? rackOrder.length)
-    );
+    return applyRackOrder(me?.rack ?? [], rackOrder);
   }, [me?.rack, rackOrder]);
 
   function handleShuffle() {
+    if (game?.status !== 'active') return;
     const ids = (me?.rack ?? []).map((t) => t.id);
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     setRackOrder(ids);
+  }
+
+  function handleRackReorder(tileId: string, targetIndex: number) {
+    if (game?.status !== 'active') return;
+
+    setRackOrder((savedOrder) => {
+      const currentOrder = applyRackOrder(me?.rack ?? [], savedOrder).map((tile) => tile.id);
+      const hiddenIds = new Set(pendingTiles.map((tile) => tile.id));
+      const visibleOrder = currentOrder.filter((id) => !hiddenIds.has(id));
+      const reorderedVisible = moveRackTile(visibleOrder, tileId, targetIndex);
+
+      // Keep placed-but-unsubmitted tiles in the local order so recall appends
+      // them without losing their IDs.
+      return [
+        ...reorderedVisible,
+        ...currentOrder.filter((id) => hiddenIds.has(id)),
+      ];
+    });
   }
 
   // Safety net: alert when a pending tile has coords that won't render on the board.
@@ -743,10 +757,12 @@ export default function GameScreen() {
       {/* Tile rack — behaviour switches based on swapMode; only one rack ever renders */}
       <TileRack
         tiles={orderedRack.filter((t) => !pendingTiles.find((p) => p.id === t.id))}
-        onShuffle={handleShuffle}
+        onShuffle={game.status === 'active' ? handleShuffle : undefined}
         selectedTileId={swapMode ? null : selectedTile?.id ?? null}
         onTilePress={swapMode ? (t) => handleSwapTileSelect(t.id) : handleRackTilePress}
         disabled={!isMyTurn || game.status !== 'active'}
+        organizationEnabled={game.status === 'active'}
+        onReorder={handleRackReorder}
         swapSelectedIds={swapSelectedIds}
         recentlyDrawnIds={recentlyDrawnIds}
         draggingTileId={swapMode ? null : draggingTile?.id ?? null}

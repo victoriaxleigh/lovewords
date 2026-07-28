@@ -1,11 +1,24 @@
-import React, { useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import {
+  Animated,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Tile } from '../types';
 import TileComponent from './TileComponent';
 import { Colors } from '../utils/colors';
+import {
+  getRackDragDirection,
+  getRackDragVisualOffset,
+  getRackGestureEndAction,
+  getRackReorderTarget,
+  RackDragDirection,
+} from './tileRackGesture';
 
-const DRAG_THRESHOLD = 5;
 const MAX_TILE_SIZE = 46;
 
 export type DragCallbacks = {
@@ -20,6 +33,8 @@ type Props = {
   selectedTileId: string | null;
   onTilePress: (tile: Tile) => void;
   disabled?: boolean;
+  organizationEnabled?: boolean;
+  onReorder?: (tileId: string, targetIndex: number) => void;
   swapSelectedIds?: string[];
   recentlyDrawnIds?: Set<string>;
   dragCallbacks?: DragCallbacks;
@@ -28,12 +43,16 @@ type Props = {
 };
 
 function DraggableTile({
-  tile, selected, onTilePress, disabled, dragCallbacks, isDragging, highlight, size,
+  tile, index, selected, onTilePress, disabled, organizationEnabled, onReorder,
+  dragCallbacks, isDragging, highlight, size,
 }: {
   tile: Tile;
+  index: number;
   selected: boolean;
   onTilePress: () => void;
   disabled?: boolean;
+  organizationEnabled?: boolean;
+  onReorder?: (tileId: string, targetIndex: number) => void;
   dragCallbacks?: DragCallbacks;
   isDragging?: boolean;
   highlight?: boolean;
@@ -41,62 +60,125 @@ function DraggableTile({
 }) {
   // Keep latest prop values accessible inside the gesture (created once at mount).
   const tileRef = useRef(tile);
+  const indexRef = useRef(index);
+  const sizeRef = useRef(size);
   const disabledRef = useRef(disabled);
+  const organizationEnabledRef = useRef(organizationEnabled);
   const onTilePressRef = useRef(onTilePress);
+  const onReorderRef = useRef(onReorder);
   const dragCallbacksRef = useRef(dragCallbacks);
   useEffect(() => { tileRef.current = tile; }, [tile]);
+  useEffect(() => { indexRef.current = index; }, [index]);
+  useEffect(() => { sizeRef.current = size; }, [size]);
   useEffect(() => { disabledRef.current = disabled; }, [disabled]);
+  useEffect(() => { organizationEnabledRef.current = organizationEnabled; }, [organizationEnabled]);
   useEffect(() => { onTilePressRef.current = onTilePress; }, [onTilePress]);
+  useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
   useEffect(() => { dragCallbacksRef.current = dragCallbacks; }, [dragCallbacks]);
 
   // Drag state tracked in refs so gesture callbacks stay allocation-free.
-  const dragStartedRef = useRef(false);
+  const dragDirectionRef = useRef<RackDragDirection | null>(null);
+  const boardDragStartedRef = useRef(false);
   const startXRef = useRef(0);
   const startYRef = useRef(0);
+  const horizontalDragX = useRef(new Animated.Value(0)).current;
+  const [isHorizontalDragging, setIsHorizontalDragging] = useState(false);
 
   const gesture = useMemo(() =>
     Gesture.Pan()
       .runOnJS(true)
       .minDistance(0)
       .onBegin((e) => {
-        if (disabledRef.current) return;
-        dragStartedRef.current = false;
+        if (disabledRef.current && !organizationEnabledRef.current) return;
+        dragDirectionRef.current = null;
+        boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
         startXRef.current = e.absoluteX;
         startYRef.current = e.absoluteY;
       })
       .onUpdate((e) => {
-        if (disabledRef.current) return;
+        if (disabledRef.current && !organizationEnabledRef.current) return;
         const dx = e.absoluteX - startXRef.current;
         const dy = e.absoluteY - startYRef.current;
-        if (!dragStartedRef.current &&
-            (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
-          dragStartedRef.current = true;
-          dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
+
+        const nextDirection = getRackDragDirection(dx, dy);
+        if (nextDirection !== dragDirectionRef.current) {
+          if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
+            dragCallbacksRef.current?.onDragCancel();
+            boardDragStartedRef.current = false;
+          }
+          if (dragDirectionRef.current === 'horizontal') {
+            horizontalDragX.setValue(0);
+            setIsHorizontalDragging(false);
+          }
+
+          dragDirectionRef.current = nextDirection;
+          if (nextDirection === 'horizontal') {
+            setIsHorizontalDragging(true);
+          } else if (nextDirection === 'vertical' && !disabledRef.current) {
+            boardDragStartedRef.current = true;
+            dragCallbacksRef.current?.onDragStart(tileRef.current, e.absoluteX, e.absoluteY);
+          }
         }
-        if (dragStartedRef.current) {
+
+        if (dragDirectionRef.current === 'horizontal') {
+          horizontalDragX.setValue(getRackDragVisualOffset(dragDirectionRef.current, dx));
+        } else if (dragDirectionRef.current === 'vertical' && boardDragStartedRef.current) {
           dragCallbacksRef.current?.onDragMove(e.absoluteX, e.absoluteY);
         }
       })
       .onEnd((e) => {
-        if (dragStartedRef.current) {
+        const action = getRackGestureEndAction(
+          dragDirectionRef.current,
+          !disabledRef.current,
+          organizationEnabledRef.current ?? false
+        );
+        if (action === 'reorder') {
+          const dx = e.absoluteX - startXRef.current;
+          const tileStride = sizeRef.current + 4;
+          const targetIndex = getRackReorderTarget(indexRef.current, dx, tileStride);
+          onReorderRef.current?.(tileRef.current.id, targetIndex);
+        } else if (action === 'board-drag' && boardDragStartedRef.current) {
           dragCallbacksRef.current?.onDragEnd(e.absoluteX, e.absoluteY, tileRef.current);
-        } else if (!disabledRef.current) {
+        } else if (action === 'press') {
           onTilePressRef.current();
         }
-        dragStartedRef.current = false;
+        dragDirectionRef.current = null;
+        boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
       })
       .onFinalize(() => {
         // Fires on cancel (e.g. interrupted by a call) — clean up if mid-drag.
-        if (dragStartedRef.current) {
+        if (boardDragStartedRef.current) {
           dragCallbacksRef.current?.onDragCancel();
-          dragStartedRef.current = false;
         }
+        dragDirectionRef.current = null;
+        boardDragStartedRef.current = false;
+        horizontalDragX.setValue(0);
+        setIsHorizontalDragging(false);
       }),
-  []); // created once; all mutable state accessed via refs above
+  []); // created once; all changing props/state are accessed via refs above
 
   return (
     <GestureDetector gesture={gesture}>
-      <View style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <Animated.View
+        style={[
+          styles.draggableTile,
+          {
+            opacity: isDragging ? 0.3 : 1,
+            zIndex: isHorizontalDragging ? 20 : 1,
+            elevation: isHorizontalDragging ? 12 : 0,
+            shadowOpacity: isHorizontalDragging ? 0.4 : 0,
+            shadowRadius: isHorizontalDragging ? 7 : 0,
+            transform: [
+              { translateX: horizontalDragX },
+              { scale: isHorizontalDragging ? 1.08 : 1 },
+            ],
+          },
+        ]}
+      >
         <TileComponent
           tile={tile}
           selected={selected}
@@ -104,13 +186,14 @@ function DraggableTile({
           disabled={disabled}
           highlight={highlight}
         />
-      </View>
+      </Animated.View>
     </GestureDetector>
   );
 }
 
 export default function TileRack({
-  tiles, selectedTileId, onTilePress, disabled, swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId, onShuffle,
+  tiles, selectedTileId, onTilePress, disabled, organizationEnabled, onReorder,
+  swapSelectedIds, recentlyDrawnIds, dragCallbacks, draggingTileId, onShuffle,
 }: Props) {
   const { width } = useWindowDimensions();
   // Fit 7 tiles + rack padding (16) + shuffle button & gap (48) + screen margin (16)
@@ -121,13 +204,16 @@ export default function TileRack({
     <View style={styles.container}>
       <View style={styles.rackRow}>
         <View style={styles.rack}>
-          {tiles.map((tile) => (
+          {tiles.map((tile, index) => (
             <DraggableTile
               key={tile.id}
               tile={tile}
+              index={index}
               selected={tile.id === selectedTileId || (swapSelectedIds?.includes(tile.id) ?? false)}
               onTilePress={() => onTilePress(tile)}
               disabled={disabled}
+              organizationEnabled={organizationEnabled}
+              onReorder={onReorder}
               dragCallbacks={dragCallbacks}
               isDragging={tile.id === draggingTileId}
               highlight={recentlyDrawnIds?.has(tile.id) ?? false}
@@ -157,6 +243,10 @@ export default function TileRack({
 const styles = StyleSheet.create({
   container: { alignItems: 'center', paddingVertical: 10 },
   rackRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  draggableTile: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+  },
   rack: {
     flexDirection: 'row',
     backgroundColor: '#5C2A3E',
