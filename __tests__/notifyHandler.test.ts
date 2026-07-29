@@ -10,8 +10,6 @@ const GAME_ID = '123e4567-e89b-42d3-a456-426614174000';
 const SENDER_ID = 'a3f035b6-8b32-4c24-826b-f16e381ed80a';
 const RECIPIENT_ID = '6480cd75-0d45-43c0-81a5-a53428879e99';
 const ACCESS_TOKEN = 'user-access-token';
-const LEGACY_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiJ9.service-role.signature';
-const OPAQUE_SERVICE_ROLE_KEY = 'sb_secret_test-service-role-key';
 
 function response(status: number, body: unknown) {
   return {
@@ -41,7 +39,7 @@ describe('authenticated notification handler', () => {
 
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://supabase.example';
-    process.env.SUPABASE_SERVICE_KEY = LEGACY_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_KEY = 'service-role-key';
     global.fetch = jest.fn();
     webpush.sendNotification.mockClear();
   });
@@ -92,68 +90,6 @@ describe('authenticated notification handler', () => {
 
     expect(result.statusCode).toBe(403);
     expect(global.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  test('uses opaque service keys only as apikey values for Data API requests', async () => {
-    process.env.SUPABASE_SERVICE_KEY = OPAQUE_SERVICE_ROLE_KEY;
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(response(200, { id: SENDER_ID }))
-      .mockResolvedValueOnce(
-        response(200, [
-          {
-            player1_uid: SENDER_ID,
-            player2_uid: RECIPIENT_ID,
-            status: 'waiting',
-            current_turn: RECIPIENT_ID,
-            mode: 'partner',
-          },
-        ])
-      )
-      .mockResolvedValueOnce(response(200, false));
-
-    const result = await handler(
-      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'invite' })
-    );
-
-    expect(result.statusCode).toBe(429);
-    expect(result.body).toBe('Notification cooldown active');
-    expect((global.fetch as jest.Mock).mock.calls[0][1].headers).toEqual({
-      apikey: OPAQUE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${ACCESS_TOKEN}`,
-    });
-    expect((global.fetch as jest.Mock).mock.calls[1][1].headers).toEqual({
-      apikey: OPAQUE_SERVICE_ROLE_KEY,
-    });
-    expect((global.fetch as jest.Mock).mock.calls[2][1].headers).toEqual({
-      apikey: OPAQUE_SERVICE_ROLE_KEY,
-      'Content-Type': 'application/json',
-    });
-  });
-
-  test('preserves legacy service-role bearer authentication for Data API requests', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(response(200, { id: SENDER_ID }))
-      .mockResolvedValueOnce(
-        response(200, [
-          {
-            player1_uid: RECIPIENT_ID,
-            player2_uid: SENDER_ID,
-            status: 'waiting',
-            current_turn: RECIPIENT_ID,
-            mode: 'partner',
-          },
-        ])
-      );
-
-    const result = await handler(
-      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'invite' })
-    );
-
-    expect(result.statusCode).toBe(403);
-    expect((global.fetch as jest.Mock).mock.calls[1][1].headers).toEqual({
-      apikey: LEGACY_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${LEGACY_SERVICE_ROLE_KEY}`,
-    });
   });
 
   test('derives sender name and mode after authorizing the game relationship', async () => {

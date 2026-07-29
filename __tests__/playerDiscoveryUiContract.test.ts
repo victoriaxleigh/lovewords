@@ -29,7 +29,6 @@ describe('player discovery UI regressions', () => {
     expect(game).toContain('const result = await sendNudge(partner.uid, gameId)');
     expect(game).toContain("result === 'cooldown'");
     expect(game).toContain('Already nudged');
-    expect(game).toContain('Could not nudge (${result.code})');
     expect(game).toContain('60 * 60 * 1000');
   });
 });

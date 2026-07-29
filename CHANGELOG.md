@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-### Fixed
-
-- iOS PWA nudges retry once with a refreshed session when the notification endpoint rejects an expired access token.
-
 ### Added
 
 - Opt-in player discovery by display name with privacy-safe player codes and
