@@ -58,7 +58,10 @@ exports.handler = async (event) => {
     return { statusCode: 401, body: 'Missing Authorization header' };
   }
 
-  const supabaseHeaders = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
+  const supabaseHeaders = { apikey: supabaseKey };
+  if (!supabaseKey.startsWith('sb_secret_')) {
+    supabaseHeaders.Authorization = `Bearer ${supabaseKey}`;
+  }
   const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { apikey: supabaseKey, Authorization: `Bearer ${accessToken}` },
   });

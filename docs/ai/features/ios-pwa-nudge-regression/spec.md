@@ -3,7 +3,7 @@ feature: ios-pwa-nudge-regression
 status: implementing
 created: 2026-07-29
 updated: 2026-07-29
-iteration: 2
+iteration: 3
 ---
 
 ## Overview
@@ -18,6 +18,7 @@ reliable delivery without weakening the server-side authorization or cooldown.
 - [x] A stale but refreshable Supabase session is refreshed and the notification request is retried at most once.
 - [x] Authorization failures, cooldowns, and network failures must not be reported as successful delivery.
 - [x] Notification requests remain bound to the authenticated sender, game participants, active game, and current turn.
+- [x] Server-side notification requests support both legacy service-role JWTs and opaque `sb_secret_...` keys.
 
 ## Technical Design
 
@@ -31,6 +32,9 @@ refresh and retry once on HTTP 401, and preserve the existing `sent`,
 If production logs instead identify a server-side failure, make the smallest
 correction in `netlify/functions/notify.js` or its SQL support while retaining
 all existing authorization checks and add a handler-level regression test.
+For `E502` Data API failures, support both legacy JWT service-role keys and
+current opaque `sb_secret_...` keys: opaque keys belong only in `apikey`, while
+legacy service-role JWTs may continue to populate `Authorization`.
 
 ## Acceptance Criteria
 
@@ -39,6 +43,7 @@ all existing authorization checks and add a handler-level regression test.
 - [x] Non-authentication server failures are not retried.
 - [x] Existing notification handler authorization and rate-limit tests pass.
 - [x] The web production build succeeds.
+- [x] Opaque secret keys are never sent as Bearer tokens, while legacy service-role JWT behavior remains compatible.
 
 ## Findings
 
@@ -51,6 +56,7 @@ all existing authorization checks and add a handler-level regression test.
 ### User Notes
 
 - [x] The first production hotfix did not restore nudging in the installed iOS PWA; it still reports "Could not nudge."
+- [x] The production diagnostic reports `E502`; repair the server-side Supabase Data API authentication.
 
 ## Pipeline Log
 
@@ -66,6 +72,12 @@ all existing authorization checks and add a handler-level regression test.
 - [iter 2] implement: complete — Added sanitized HTTP/session/network diagnostic codes; 212 tests and the web build pass.
 - [iter 2] qa: complete — Clean review; 212 tests and the production web build pass.
 - [iter 2] security: complete — Clean review; diagnostics expose no response bodies, tokens, identifiers, or PII.
+- [iter 3] implement: pending — Support opaque Supabase secret keys in server-side Data API requests.
+- [iter 3] qa: pending — Review the backend compatibility fix.
+- [iter 3] security: pending — Review server credential handling and authorization preservation.
+- [iter 3] implement: complete — Correctly routes opaque keys through `apikey` only while preserving legacy JWT Bearer behavior; 214 tests pass.
+- [iter 3] qa: complete — Clean review; 214 tests and the production web export pass.
+- [iter 3] security: complete — Clean review; credentials remain backend-only and all notification authorization/cooldown checks remain enforced.
 
 ## Outcome
 
