@@ -58,7 +58,15 @@ exports.handler = async (event) => {
     return { statusCode: 401, body: 'Missing Authorization header' };
   }
 
-  const supabaseHeaders = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
+  // New-format Supabase secret keys (`sb_secret_...`) are opaque and are only
+  // accepted in the `apikey` header. Sending one as a Bearer token makes
+  // PostgREST try to parse it as a JWT and reject the request, which surfaced
+  // here as every notification failing with a 502. Legacy service-role keys are
+  // JWTs and still expect the `Authorization: Bearer` form, so keep both.
+  const supabaseHeaders = { apikey: supabaseKey };
+  if (!supabaseKey.startsWith('sb_secret_')) {
+    supabaseHeaders.Authorization = `Bearer ${supabaseKey}`;
+  }
   const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: { apikey: supabaseKey, Authorization: `Bearer ${accessToken}` },
   });

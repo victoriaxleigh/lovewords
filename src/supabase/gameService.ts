@@ -30,14 +30,30 @@ async function sendPushNotification(
       data: { session },
     } = await supabase.auth.getSession();
     if (!session?.access_token) return 'failed';
-    const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ recipientUid, type, gameId, eventId }),
-    });
+
+    const send = (accessToken: string) =>
+      fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recipientUid, type, gameId, eventId }),
+      });
+
+    // An installed PWA that has been suspended can hand back an expired token
+    // from getSession() without auto-refreshing. Refresh once on a 401 and
+    // retry so a stale-but-refreshable session still delivers the push.
+    let response = await send(session.access_token);
+    if (response.status === 401) {
+      const {
+        data: { session: refreshedSession },
+        error,
+      } = await supabase.auth.refreshSession();
+      if (error || !refreshedSession?.access_token) return 'failed';
+      response = await send(refreshedSession.access_token);
+    }
+
     if (response.status === 429) return 'cooldown';
     return response.ok ? 'sent' : 'failed';
   } catch {

@@ -38,11 +38,13 @@ exports.handler = async (event) => {
     return { statusCode: 401, body: 'Invalid session' };
   }
 
-  const adminHeaders = {
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-    'Content-Type': 'application/json',
-  };
+  // Opaque `sb_secret_...` keys are only valid in the `apikey` header; sending
+  // one as a Bearer token makes PostgREST reject the request. Legacy JWT
+  // service-role keys still expect the Bearer form.
+  const adminHeaders = { apikey: supabaseKey, 'Content-Type': 'application/json' };
+  if (!supabaseKey.startsWith('sb_secret_')) {
+    adminHeaders.Authorization = `Bearer ${supabaseKey}`;
+  }
 
   async function del(path) {
     const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
