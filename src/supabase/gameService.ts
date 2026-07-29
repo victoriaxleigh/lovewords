@@ -19,17 +19,22 @@ const CONSECUTIVE_PASS_LIMIT = 4;
 // Calls our Netlify serverless function, which sends a Web Push (browser) and/or
 // Expo push (native) notification depending on which subscription the recipient
 // has on file. Fails silently — a notification error should never break a move.
+export type PushNotificationResult =
+  | 'sent'
+  | 'cooldown'
+  | { status: 'failed'; code: `E${number}` | 'ESESSION' | 'ENETWORK' };
+
 async function sendPushNotification(
   recipientUid: string,
   type: 'turn' | 'lovenote' | 'nudge' | 'invite',
   gameId: string,
   eventId?: string
-): Promise<'sent' | 'cooldown' | 'failed'> {
+): Promise<PushNotificationResult> {
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (!session?.access_token) return 'failed';
+    if (!session?.access_token) return { status: 'failed', code: 'ESESSION' };
 
     const send = (accessToken: string) => fetch(`${FUNCTIONS_BASE}/.netlify/functions/notify`, {
       method: 'POST',
@@ -46,15 +51,19 @@ async function sendPushNotification(
         data: { session: refreshedSession },
         error,
       } = await supabase.auth.refreshSession();
-      if (error || !refreshedSession?.access_token) return 'failed';
+      if (error || !refreshedSession?.access_token) {
+        return { status: 'failed', code: 'ESESSION' };
+      }
       response = await send(refreshedSession.access_token);
     }
 
     if (response.status === 429) return 'cooldown';
-    return response.ok ? 'sent' : 'failed';
+    return response.ok
+      ? 'sent'
+      : { status: 'failed', code: `E${response.status}` };
   } catch {
     // Notifications are best-effort and never block a game action.
-    return 'failed';
+    return { status: 'failed', code: 'ENETWORK' };
   }
 }
 

@@ -243,7 +243,10 @@ describe('waiting game invitations', () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: false, status: 401 })
       .mockResolvedValueOnce({ ok: false, status: 401 });
-    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('failed');
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'E401',
+    });
 
     expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledTimes(4);
@@ -252,9 +255,29 @@ describe('waiting game invitations', () => {
   test('does not refresh or retry a non-authentication server failure', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 502 });
 
-    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('failed');
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'E502',
+    });
 
     expect(supabase.auth.refreshSession).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns safe diagnostic categories without exposing response content', async () => {
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('private network details'));
+
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'ENETWORK',
+    });
+
+    (supabase.auth.getSession as jest.Mock).mockResolvedValueOnce({
+      data: { session: null },
+    });
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'ESESSION',
+    });
   });
 });
