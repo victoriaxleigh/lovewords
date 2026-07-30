@@ -238,9 +238,21 @@ describe('waiting game invitations', () => {
       error: { message: 'refresh failed' },
     });
 
-    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('failed');
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'ESESSION',
+    });
 
     expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('surfaces the notify HTTP status as a safe failure code', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 502 });
+
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toEqual({
+      status: 'failed',
+      code: 'E502',
+    });
   });
 });
