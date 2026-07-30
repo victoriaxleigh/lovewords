@@ -6,6 +6,10 @@ const migrationPath = path.join(
   'supabase/migrations/20260728000100_player_discovery_invites.sql'
 );
 const schemaPath = path.join(process.cwd(), 'supabase_schema.sql');
+const notificationClaimFixPath = path.join(
+  process.cwd(),
+  'supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql'
+);
 
 describe.each([
   ['standalone migration', migrationPath],
@@ -151,5 +155,46 @@ describe.each([
     expect(sql).toContain(
       "if old.status = 'finished' and new.status is distinct from old.status"
     );
+  });
+});
+
+describe.each([
+  ['standalone migration', migrationPath],
+  ['reference schema', schemaPath],
+  ['corrective migration', notificationClaimFixPath],
+])('%s notification claim timestamp contract', (_label, filePath) => {
+  const sql = fs.readFileSync(filePath, 'utf8').toLowerCase();
+
+  test('uses an unambiguous timestamptz variable for delivery timestamps', () => {
+    expect(sql).toContain('claim_time timestamptz := clock_timestamp()');
+    expect(sql).not.toMatch(/\bcurrent_time\s+timestamptz\b/);
+    expect(sql).toContain('window_started = claim_time');
+    expect(sql).toContain('last_delivered_at = claim_time');
+    expect(sql).toContain('claim_event_key, claim_time');
+  });
+});
+
+describe('notification claim timestamp corrective migration', () => {
+  const sql = fs.readFileSync(notificationClaimFixPath, 'utf8').toLowerCase();
+
+  test('replaces only the claim function while preserving its protections', () => {
+    expect(sql).toContain(
+      'create or replace function public.claim_notification_delivery('
+    );
+    expect(sql).not.toContain('create table');
+    expect(sql).toContain('security definer');
+    expect(sql).toContain('set search_path = public, pg_temp');
+    expect(sql).toContain('pg_advisory_xact_lock');
+    expect(sql).toContain("claim_notification_type <> 'nudge' and exists");
+    expect(sql).toContain("when 'nudge' then interval '1 hour'");
+    expect(sql).toContain('elsif rate_state.deliveries >= hourly_limit');
+    expect(sql).toContain(
+      'revoke execute on function public.claim_notification_delivery(uuid, uuid, text, text)'
+    );
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain(
+      'grant execute on function public.claim_notification_delivery(uuid, uuid, text, text)'
+    );
+    expect(sql).toContain('to service_role');
   });
 });

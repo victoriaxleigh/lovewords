@@ -289,7 +289,7 @@ set search_path = public, pg_temp
 as $$
 declare
   rate_state public.notification_rate_limits%rowtype;
-  current_time timestamptz := clock_timestamp();
+  claim_time timestamptz := clock_timestamp();
   cooldown interval;
   hourly_limit integer;
 begin
@@ -345,15 +345,15 @@ begin
     )
     values (
       claim_sender_uid, claim_recipient_uid, claim_notification_type,
-      current_time, current_time, 1
+      claim_time, claim_time, 1
     );
   else
-    if rate_state.last_delivered_at > current_time - cooldown then
+    if rate_state.last_delivered_at > claim_time - cooldown then
       return false;
     end if;
-    if rate_state.window_started <= current_time - interval '1 hour' then
+    if rate_state.window_started <= claim_time - interval '1 hour' then
       update public.notification_rate_limits
-      set window_started = current_time, last_delivered_at = current_time, deliveries = 1
+      set window_started = claim_time, last_delivered_at = claim_time, deliveries = 1
       where sender_uid = claim_sender_uid
         and recipient_uid = claim_recipient_uid
         and notification_type = claim_notification_type;
@@ -361,7 +361,7 @@ begin
       return false;
     else
       update public.notification_rate_limits
-      set last_delivered_at = current_time, deliveries = deliveries + 1
+      set last_delivered_at = claim_time, deliveries = deliveries + 1
       where sender_uid = claim_sender_uid
         and recipient_uid = claim_recipient_uid
         and notification_type = claim_notification_type;
@@ -373,7 +373,7 @@ begin
       sender_uid, recipient_uid, notification_type, event_key, delivered_at
     )
     values (
-      claim_sender_uid, claim_recipient_uid, claim_notification_type, claim_event_key, current_time
+      claim_sender_uid, claim_recipient_uid, claim_notification_type, claim_event_key, claim_time
     );
   end if;
   return true;
