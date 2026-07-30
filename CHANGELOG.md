@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- **Nudges failed with a database timestamp type error.** The notification claim
+  function now uses an unambiguous `timestamptz` variable, with a focused
+  production migration and regression coverage.
 - **Push notifications and nudges failed after the server-authorized notify
   deploy.** New-format opaque Supabase secret keys (`sb_secret_...`) were being
   sent as `Authorization: Bearer` tokens, which PostgREST rejects, so every

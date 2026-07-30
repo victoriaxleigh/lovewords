@@ -44,6 +44,9 @@ yarn-error.*
 # Local Netlify folder
 .netlify
 
+# Local Supabase CLI folder
+supabase/.temp/
+
 # Test coverage output
 coverage/
 

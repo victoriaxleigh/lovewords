@@ -1,6 +1,6 @@
 ---
 feature: notification-claim-timestamp-fix
-status: implementing
+status: complete
 created: 2026-07-29
 updated: 2026-07-29
 iteration: 1
@@ -33,23 +33,25 @@ declaration/usages and reject the keyword-shaped declaration.
 
 ## Acceptance Criteria
 
-- [ ] The rollback-only production reproduction no longer returns SQLSTATE `42804`.
+- [x] The rollback-only production reproduction no longer returns SQLSTATE `42804`.
 - [x] The first valid claim can insert `timestamptz` values into `window_started` and `last_delivered_at`.
 - [x] Existing cooldown and deduplication SQL remains present.
 - [x] The full test suite and production web build pass.
-- [ ] The corrective migration is applied to production and Nudge succeeds from the iOS PWA.
+- [x] The corrective migration is applied to production and Nudge succeeds from the iOS PWA.
 
 ## Findings
 
 ### Implementation Blockers
 
-- [ ] [iter 1] Applying and verifying the corrective migration requires Supabase project access.
+- [x] [iter 1] Resolved — Supabase project access granted; migration applied and rollback-only verification passed.
 
 ### QA
 
 ### Security
 
 ### User Notes
+
+- [x] [iter 1] Owner confirmed Nudge succeeds from the installed iOS PWA; matching production function executions and persisted Nudge claims were observed.
 
 ## Pipeline Log
 
@@ -59,3 +61,12 @@ declaration/usages and reject the keyword-shaped declaration.
 - [iter 1] implement: complete — Renamed the colliding variable, added a targeted corrective migration, and passed 212 tests plus the web build.
 - [iter 1] qa: complete — Clean review; 212 tests, targeted SQL contracts, exact function-body comparison, and web build pass.
 - [iter 1] security: complete — Clean review; service-role authorization, hardened search path, locking, limits, and dedupe remain intact.
+- [iter 1] deploy: complete — Reconciled the two manually applied migration-history entries, applied only `20260729000100`, and confirmed the former `42804` path now reaches the expected `23502` null constraint without persisting data.
+- [iter 1] acceptance: complete — Nudge succeeded from the installed iOS PWA, with matching Netlify `notify` executions and Supabase delivery claims.
+
+## Outcome
+
+Renamed the ambiguous PL/pgSQL timestamp variable, added regression coverage,
+and shipped a focused function-replacement migration without replaying older
+schema changes. Production no longer raises SQLSTATE `42804`, and Nudge was
+verified end to end from the installed iOS PWA.
