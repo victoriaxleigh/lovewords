@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Push notifications and nudges failed after the server-authorized notify
+  deploy.** New-format opaque Supabase secret keys (`sb_secret_...`) were being
+  sent as `Authorization: Bearer` tokens, which PostgREST rejects, so every
+  Data API read in the serverless functions failed with a 502 and no
+  notification was delivered. Opaque keys now travel only in the `apikey`
+  header, while legacy service-role JWTs keep the Bearer form. The same fix
+  covers account deletion and game-analysis/coach functions.
+- **Nudging from an installed iOS PWA reported "Could not nudge."** A suspended
+  PWA can hand back an expired access token; the client now refreshes the
+  session once and retries on a 401 before giving up.
+
 ### Added
 
 - Opt-in player discovery by display name with privacy-safe player codes and

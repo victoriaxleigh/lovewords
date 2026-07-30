@@ -3,7 +3,7 @@ jest.mock('../src/supabase/config', () => ({
     from: jest.fn(),
     channel: jest.fn(),
     removeChannel: jest.fn(),
-    auth: { getSession: jest.fn() },
+    auth: { getSession: jest.fn(), refreshSession: jest.fn() },
   },
 }));
 
@@ -208,5 +208,39 @@ describe('waiting game invitations', () => {
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
     await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('sent');
+  });
+
+  test('refreshes a stale session once and retries the nudge on a 401', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    (supabase.auth.refreshSession as jest.Mock).mockResolvedValue({
+      data: { session: { access_token: 'fresh-token', user: { id: INVITER } } },
+      error: null,
+    });
+
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('sent');
+
+    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect((global.fetch as jest.Mock).mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer access-token'
+    );
+    expect((global.fetch as jest.Mock).mock.calls[1][1].headers.Authorization).toBe(
+      'Bearer fresh-token'
+    );
+  });
+
+  test('reports failure without retrying when the session cannot be refreshed', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 401 });
+    (supabase.auth.refreshSession as jest.Mock).mockResolvedValue({
+      data: { session: null },
+      error: { message: 'refresh failed' },
+    });
+
+    await expect(sendNudge(RECIPIENT, 'invite-id')).resolves.toBe('failed');
+
+    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

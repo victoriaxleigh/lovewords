@@ -180,11 +180,14 @@ function getServerConfig() {
 }
 
 function supabaseHeaders(supabaseKey) {
-  return {
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-    'Content-Type': 'application/json',
-  };
+  // Opaque `sb_secret_...` keys are only valid in the `apikey` header; sending
+  // one as a Bearer token makes PostgREST reject the request. Legacy JWT
+  // service-role keys still expect the Bearer form.
+  const headers = { apikey: supabaseKey, 'Content-Type': 'application/json' };
+  if (!supabaseKey.startsWith('sb_secret_')) {
+    headers.Authorization = `Bearer ${supabaseKey}`;
+  }
+  return headers;
 }
 
 async function fetchSupabaseUser(supabaseUrl, supabaseKey, accessToken) {
