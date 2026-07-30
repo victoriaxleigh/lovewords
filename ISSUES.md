@@ -1,10 +1,23 @@
 # Lovewords — Active Bug & UX Issues
 
-> Updated 2026-07-25. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> Updated 2026-07-30. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
 > All file paths are relative to `C:\Users\victo\lovewords\`.
 > ✅ = resolved  🔴 = critical  🟠 = high  🟡 = medium
 
 ---
+
+## ✅ Issue — Push notifications & nudge broken after the invites deploy (FIXED — Session 11)
+
+**Symptom (user report):** after the last deploy, notifications "got messed up" and the nudge button reported **"Could not nudge."**
+**Root cause:** the player-discovery/invites deploy made `notify.js` server-authorized, and three things in that path failed:
+1. Opaque `sb_secret_…` service keys were sent as `Authorization: Bearer`, which PostgREST rejects → every Data-API read 502'd.
+2. A suspended iOS PWA returned an expired access token from `getSession()` → notify 401 → "Could not nudge."
+3. **The real culprit:** `claim_notification_delivery` declared a `current_time` variable that collides with the `CURRENT_TIME` keyword, so every delivery claim threw (`42804`) → 502.
+**Fix:**
+- `notify.js` / `delete-account.js` / `game-analysis-common.js`: opaque keys go in `apikey` only, legacy JWTs keep Bearer (PR #12).
+- `gameService.ts` `sendPushNotification`: refresh + retry once on 401; return a safe failure code (`E502`/`E403`/`E401`/`ESESSION`/`ENETWORK`) shown on the button (PR #12, #13).
+- SQL: renamed `current_time` → `claim_time` + corrective migration `20260729000100_notification_claim_timestamp_fix.sql`, applied to production (`3a8507c`, `ef395e3`).
+**Verification:** nudge confirmed working from the installed iOS PWA. 217 tests pass.
 
 ## ✅ Issue — "Swap passes my turn" mis-tap (FIXED — Session 10)
 
@@ -272,6 +285,7 @@ inside that trusted path.
 | 31 | No Home Screen icon / not installable as a PWA | `assets/logo/`, `public/manifest.json`, `scripts/` | ✅ Added | Session 7 |
 | 32 | No notification badge on Home Screen icon | `public/sw.js`, `src/utils/appBadge.ts`, `App.tsx` | ✅ Added | Session 7 |
 | 33 | Game state/completion are client-authoritative | `supabase_schema.sql`, gameplay backend | 🟡 Medium | Open — accepted |
+| 34 | Push/nudge broken after invites deploy (opaque key as Bearer; stale PWA session; `current_time` SQL keyword collision → E502) | `notify.js`, `gameService.ts`, `supabase_schema.sql`, notification migrations | ✅ Fixed | Session 11 |
 
 ---
 

@@ -1,6 +1,8 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-25 (Session 10 — finished-game analysis export deployed; in-app AI coaching (move-by-move, Sonnet); home-screen score labels + winner highlight; distinct Swap/Pass + swap confirm; tile-bag rebalance (E 13→11); WCAG re-verification. Also refreshed the Colors/Types/structure/test references, which had lagged since Session 9.)
+> Last updated: 2026-07-30 (Session 11 — fixed the push-notification & nudge regression from the player-discovery/invites deploy: server-authorized `notify` now handles opaque `sb_secret_…` service keys, refreshes stale iOS-PWA sessions, and surfaces a safe failure code on the nudge button. Root cause of the lingering `E502` was a `current_time` PL/pgSQL keyword collision in `claim_notification_delivery`, fixed via a corrective migration. See the updated Push Notifications Architecture + Supabase Tables sections below.)
+>
+> Earlier (Session 10 — 2026-07-25): finished-game analysis export; in-app AI coaching (move-by-move, Sonnet); home-screen score labels + winner highlight; distinct Swap/Pass + swap confirm; tile-bag rebalance (E 13→11); WCAG re-verification.
 >
 > **Deploying?** See `DEPLOY.md` for the full runbook (env vars + scopes, migrations, verify, rollback).
 
@@ -50,7 +52,9 @@ C:\Users\victo\lovewords\
 │   └── privacy.html                 ← Privacy policy (served at /privacy.html)
 ├── supabase/
 │   └── migrations/
-│       └── 20260723000100_private_game_analysis_events.sql  ← analysis events table + scrub trigger
+│       ├── 20260723000100_private_game_analysis_events.sql  ← analysis events table + scrub trigger
+│       ├── 20260728000100_player_discovery_invites.sql      ← discovery/invites + notification tables & claim RPC
+│       └── 20260729000100_notification_claim_timestamp_fix.sql  ← fixes current_time→claim_time (unblocks push/nudge)
 ├── scripts/
 │   ├── generate-icons.js            ← rasterizes assets/logo/icon.svg → PNGs
 │   ├── inject-web-meta.js           ← injects PWA/iOS meta into dist/index.html
@@ -255,6 +259,18 @@ Upserted on conflict of `user_id` (one row per user).
 | `p256dh` | text | encryption key |
 | `auth` | text | auth secret |
 
+### `notification_rate_limits` / `notification_delivery_events`
+Service-role-only bookkeeping behind the server-authorized `notify` function
+(migration `20260728000100`). `notification_rate_limits` enforces per
+sender→recipient→type cooldowns and hourly caps; `notification_delivery_events`
+dedupes immutable events (turn/lovenote/invite) so the same event can't be
+replayed. Both are written **only** by the `claim_notification_delivery(uuid,
+uuid, text, text)` RPC (security-definer, granted to `service_role` only), which
+`notify` calls before sending. **Do not name a PL/pgSQL variable `current_time`
+in that function** — it collides with the `CURRENT_TIME` keyword and every claim
+throws `42804` (this was the Session 11 `E502`); the corrected function uses
+`claim_time`.
+
 ---
 
 ## TypeScript Types (`src/types/index.ts`)
@@ -348,7 +364,7 @@ success: '#4CAF50'   error: '#F44336'   warning: '#FF9800'
 | `submitMove(gameId, game, playerUid, placedTiles)` | Validates turn, scores, updates board/rack/bag/current_turn, sends push notification |
 | `passTurn(gameId, game, playerUid)` | Flips current_turn to other player |
 | `swapTiles(gameId, game, playerUid, tileIds)` | Returns tiles to shuffled bag, draws new ones, flips turn |
-| `sendLoveNote(gameId, fromUid, toUid, message, emoji, senderName)` | Inserts note row, sends push notification |
+| `sendLoveNote(gameId, fromUid, toUid, message, emoji)` | Inserts note row, then sends a `lovenote` push (sender name/mode resolved server-side from the DB, not passed by the client) |
 | `subscribeToLoveNotes(gameId, cb)` | Fetches notes ordered by created_at desc + INSERT subscription |
 | `markNoteRead(noteId)` | Sets read = true |
 | `deleteGame(gameId)` | Deletes game row; requires RLS delete policy on games table |
@@ -560,17 +576,21 @@ Multiplayer swap clears state immediately in `finally` (unchanged).
 ### Full flow
 1. **`App.tsx`**: After login, waits 2 seconds then calls `registerPushSubscription(user.id)`
 2. **`pushSubscription.ts`**: Registers `/sw.js` service worker → requests Notification permission → calls `pushManager.subscribe()` with VAPID public key → upserts `{user_id, endpoint, p256dh, auth}` to Supabase `push_subscriptions`
-3. **`gameService.ts`**: After `submitMove` or `sendLoveNote` succeeds, calls `sendPushNotification(recipientUid, senderName, type)` which POSTs to `/.netlify/functions/notify`
-4. **`netlify/functions/notify.js`**: Fetches recipient's push subscription from Supabase using service role key → calls `webpush.sendNotification()` → if 410 (expired), deletes the stale row
+3. **`gameService.ts`**: `sendPushNotification(recipientUid, type, gameId, eventId?)` POSTs to `/.netlify/functions/notify` with the caller's **Supabase access token** as `Authorization: Bearer`. `submitMove` sends `type:'turn'` (eventId = move index), `sendLoveNote` sends `type:'lovenote'` (eventId = note id), invites send `type:'invite'`, and the nudge button sends `type:'nudge'` (no eventId). On a 401 it refreshes the session once and retries (covers suspended iOS PWAs handing back an expired token). Returns `'sent' | 'cooldown' | { status:'failed', code }` where `code` is a safe diagnostic (`E<status>` / `ESESSION` / `ENETWORK`).
+4. **`netlify/functions/notify.js`** (server-authorized): validates the Bearer token via `/auth/v1/user` to get the real `senderUid` → loads the game with the **service role key** → authorizes by type (participant match + turn/event/note binding) → **claims the delivery** atomically via the `claim_notification_delivery` RPC (dedupe + per-pair cooldown + hourly cap; nudge = 1/hr) → fetches the recipient's Web Push sub + Expo token → sends both best-effort. A 410 from Web Push deletes the stale subscription row. Sender name and `isFriend` come from the DB, never the client.
 5. **`public/sw.js`**: Receives `push` event → calls `self.registration.showNotification()` → on `notificationclick`, focuses existing window or opens new one
+
+### Service-role key handling (why push once 502'd)
+`notify` (and `delete-account`, `game-analysis-common`) talk to the Data API with `SUPABASE_SERVICE_KEY`. New-format **opaque secret keys (`sb_secret_…`) must go in the `apikey` header only** — sent as `Authorization: Bearer` they 401 (JWT parse fails) → the function returns 502. Legacy service-role JWTs still use the Bearer form. The helper sets Bearer only when the key does **not** start with `sb_secret_`. Use the secret/`service_role` key here, never the `anon`/`publishable` one.
 
 ### In-tab notifications
 `webNotifications.ts` also has `sendTurnNotification` and `sendLoveNoteNotification` which use `new Notification(...)` directly (works when tab is open/focused, no service worker needed).
 
 ### Notes
-- Fails silently everywhere — push errors never break game actions
+- Fails silently everywhere — push errors never break game actions (best-effort; the nudge button is the one place a failure is surfaced, as a safe code)
 - `node_bundler = "nft"` in `netlify.toml` is required for `web-push` to bundle correctly (esbuild fails)
 - Push subscription is stored one-per-user (upsert on conflict `user_id`)
+- Auth/rate-limit tables (`notification_rate_limits`, `notification_delivery_events`) and the `claim_notification_delivery` RPC come from the `20260728000100` migration; the `20260729000100` migration fixes the `current_time`→`claim_time` keyword collision that otherwise makes every claim throw (→ 502 → "Could not nudge (E502)")
 
 ---
 
