@@ -31,7 +31,7 @@ build) for functions to see it.
 | Variable | Secret? | Scope | Used by | Notes |
 |---|---|---|---|---|
 | `SUPABASE_URL` | no (public) | Builds, Functions, Runtime | all functions | Same value as `src/supabase/config.ts`. Listed in `SECRETS_SCAN_OMIT_KEYS`. |
-| `SUPABASE_SERVICE_KEY` | **yes** | Functions (+Runtime) | notify, analysis, coach, delete-account | Service-role key — full DB access. Never in the client bundle. |
+| `SUPABASE_SERVICE_KEY` | **yes** | Functions (+Runtime) | notify, analysis, coach, delete-account | Service-role key — full DB access. Never in the client bundle. Use the **secret** key (`sb_secret_…`) or the legacy **`service_role`** JWT — **not** the `anon`/`publishable` key. The functions send opaque `sb_secret_…` keys only in the `apikey` header (a Bearer JWT parse of them 401s → a 502); legacy JWTs still go in `Authorization: Bearer`. |
 | `ANALYSIS_TOKEN_SECRET` | **yes** | Functions (+Runtime) | game-analysis-token / game-analysis | HMAC secret for 1-hour analysis tokens. Generate: `openssl rand -base64 32` (≥32 bytes). |
 | `ANTHROPIC_API_KEY` | **yes** | Functions (+Runtime) | game-coach | Claude API key (`sk-ant-...`) from console.anthropic.com. Powers the AI coach. |
 | `VAPID_PUBLIC_KEY` | no (public) | Builds, Functions, Runtime | notify | Public half of the Web Push keypair. Listed in `SECRETS_SCAN_OMIT_KEYS`. |
@@ -63,10 +63,19 @@ to re-run.
 | `alter table games add column if not exists mode text not null default 'partner';` | Partner/Friend mode | apply once |
 | `supabase/migrations/20260723000100_private_game_analysis_events.sql` | Analysis export + AI coach (creates `game_analysis_events` + scrub trigger) | apply once |
 | RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | apply once |
+| `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | apply once |
+| `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | apply once |
 
 The analysis migration must be applied **before** the analysis/coach functions
 are used, or exports fall back to `recordingQuality: "basic"` (no per-turn rack
 data). See `AGENT_HANDOFF.md` for the full schema.
+
+⚠️ **The two notification migrations are what make push work at all.** The
+`notify` function reads games and claims each delivery through the service role;
+if `20260728000100` (RPC/tables) or `20260729000100` (timestamp fix) is not
+applied, notifications fail server-side with a **502** that surfaces in the app
+as **"Could not nudge (E502)"**. The whole schema also lives in
+`supabase_schema.sql` — applying that once brings a fresh project fully current.
 
 ---
 
@@ -115,6 +124,13 @@ Reading the result:
 
 Then the real end-to-end checks:
 - Sign in, start a **new** game, make a move — confirm play/realtime works.
+- **Push / nudge:** on a two-player game where it's the opponent's turn, tap
+  **👉 Nudge them**. Success shows **✅ Nudged!**; the server-owned cooldown
+  shows **⏳ Already nudged**. A **"Could not nudge (E502)"** means a server-side
+  Supabase call failed — check that both notification migrations are applied and
+  that `SUPABASE_SERVICE_KEY` is the secret/service_role key (see §2–§3). The
+  client also distinguishes `E401`/`ESESSION` (auth) and `ENETWORK` from the
+  `E502` Data-API failure, so the button code tells you which boundary broke.
 - Finish a game → **Coach me on this game** → a **new** game returns the
   move-by-move review with rack-based tips (`recordingQuality: "full"`). Games
   created before the analysis feature show a "played before full move tracking"

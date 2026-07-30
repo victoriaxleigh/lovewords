@@ -2,6 +2,43 @@
 
 ---
 
+## Session 11 — 2026-07-30
+
+### Push notifications & nudge regression fix
+The player-discovery/invites deploy rewrote `notify.js` into a **server-authorized**
+function (it now verifies the sender's session and the game relationship, and
+claims each delivery through a rate-limited RPC before sending). Three defects in
+that path broke notifications and the nudge button in production; this session
+tracked them down and fixed them:
+
+- **Opaque Supabase keys sent as Bearer tokens (PR #12).** New-format secret keys
+  (`sb_secret_…`) are only valid in the `apikey` header; sent as
+  `Authorization: Bearer`, PostgREST tries to parse them as a JWT and rejects the
+  request, so every service-role Data-API read 502'd and no push went out.
+  `notify.js`, `delete-account.js`, and the shared `game-analysis-common.js`
+  helper now route opaque keys through `apikey` only, keeping the Bearer form for
+  legacy service-role JWTs.
+- **Stale iOS-PWA session (PR #12).** A suspended installed PWA can hand back an
+  expired access token from `getSession()`; `sendPushNotification` now refreshes
+  the session once and retries on a 401 before giving up.
+- **`current_time` PL/pgSQL keyword collision (Tommy — `3a8507c`, `ef395e3`).**
+  `claim_notification_delivery` declared a variable named `current_time`, which
+  resolves to PostgreSQL's `CURRENT_TIME` (`timetz`) keyword and made every
+  delivery claim throw (SQLSTATE `42804`) → 502. Renamed to `claim_time` in the
+  schema + original migration and shipped a corrective migration
+  (`20260729000100_notification_claim_timestamp_fix.sql`), applied to production.
+  **This was the root cause of the lingering `E502`.**
+
+Also **surfaced a safe failure code on the nudge button** (PR #13): "Could not
+nudge" became "Could not nudge (E502 / E403 / E401 / ESESSION / ENETWORK)" so a
+failure is diagnosable from an installed iOS PWA without a network inspector —
+which is how the timestamp collision was pinned down. Docs updated: `DEPLOY.md`
+now lists both notification migrations and the `SUPABASE_SERVICE_KEY` key-format
+rule; `ISSUES.md` and `AGENT_HANDOFF.md` reflect the corrected push flow.
+**217 tests pass.**
+
+---
+
 ## Session 10 — 2026-07-25
 
 ### In-app AI coach (move-by-move)
