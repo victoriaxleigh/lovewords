@@ -500,9 +500,9 @@ export default function GameScreen() {
       setTimeout(() => setNudgeError(null), 3000);
       setTimeout(() => setNudgeCooldown(false), 60 * 60 * 1000);
     } else {
-      setNudgeError('Could not nudge');
+      setNudgeError(`Could not nudge (${result.code})`);
       setNudgeCooldown(false);
-      setTimeout(() => setNudgeError(null), 3000);
+      setTimeout(() => setNudgeError(null), 5000);
     }
   }
 
