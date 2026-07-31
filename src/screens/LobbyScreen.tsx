@@ -12,10 +12,12 @@ import {
 import {
   acceptGameInvite,
   cancelGameInvite,
+  createEmailInvite,
   createGame,
   createGameInvite,
   createSoloGame,
   declineGameInvite,
+  sendInviteEmail,
   subscribeToUserGames,
   deleteGame,
   getUserGameCount,
@@ -28,7 +30,7 @@ import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
 import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
-import NewGameModal from './NewGameModal';
+import NewGameModal, { PendingEmailInvite } from './NewGameModal';
 
 type Props = {
   currentUser: Player;
@@ -49,6 +51,7 @@ export default function LobbyScreen({ currentUser }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('active');
   const [showNewGame, setShowNewGame] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [emailInvite, setEmailInvite] = useState<PendingEmailInvite | null>(null);
   const [startingSolo, setStartingSolo] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -103,7 +106,10 @@ export default function LobbyScreen({ currentUser }: Props) {
       }
       const opponentData = await getUserByEmail(email);
       if (!opponentData) {
-        setErrorMsg('No one with that email yet. Ask them to sign up first.');
+        // Not on LoveWords yet — mint a shareable invite instead of a dead end.
+        const { code, link } = await createEmailInvite(email, mode);
+        const emailed = await sendInviteEmail(code);
+        setEmailInvite({ code, link, email: email.trim(), emailed });
         return;
       }
       const opponent: GameParticipant = {
@@ -243,6 +249,7 @@ export default function LobbyScreen({ currentUser }: Props) {
         style={styles.newGameBtn}
         onPress={() => {
           setErrorMsg(null);
+          setEmailInvite(null);
           setShowNewGame(true);
         }}
         accessibilityRole="button"
@@ -445,7 +452,10 @@ export default function LobbyScreen({ currentUser }: Props) {
 
       <NewGameModal
         visible={showNewGame}
-        onClose={() => setShowNewGame(false)}
+        onClose={() => {
+          setShowNewGame(false);
+          setEmailInvite(null);
+        }}
         onStart={handleStart}
         onInvite={handleInvite}
         onStartSolo={handleStartSolo}
@@ -453,6 +463,8 @@ export default function LobbyScreen({ currentUser }: Props) {
         startingSolo={startingSolo}
         errorMsg={errorMsg}
         onClearError={() => setErrorMsg(null)}
+        emailInvite={emailInvite}
+        onDismissInvite={() => setEmailInvite(null)}
       />
     </View>
   );

@@ -15,6 +15,8 @@ import { registerPushSubscription } from './src/utils/pushSubscription';
 import { registerForPushNotifications } from './src/utils/notifications';
 import { setupBadgeClearing } from './src/utils/appBadge';
 import { configurePurchases } from './src/utils/purchases';
+import { redeemEmailInvite } from './src/supabase/gameService';
+import { readPendingInvite, clearPendingInvite } from './src/utils/pendingInvite';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +40,29 @@ export default function App() {
   // Configure RevenueCat (no-op on web — the web app is free/unlimited)
   useEffect(() => {
     if (user?.id) configurePurchases(user.id);
+  }, [user?.id]);
+
+  // Redeem a stashed invite once we have a session. The new game shows up in the
+  // Lobby via the realtime subscription, so there's nothing to navigate to here.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const code = await readPendingInvite();
+      if (!code || cancelled) return;
+      const name =
+        user.user_metadata?.display_name ?? user.email?.split('@')[0] ?? 'You';
+      try {
+        await redeemEmailInvite(code, { uid: user.id, displayName: name });
+      } catch {
+        // Invite expired, already used, or belongs to this same account — drop it.
+      } finally {
+        await clearPendingInvite();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   if (loading) {

@@ -10,11 +10,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Share,
 } from 'react-native';
 import { GameMode } from '../types';
 import { Colors } from '../utils/colors';
 import { RADII } from '../utils/styles';
 import { PublicProfile, searchProfiles } from '../supabase/authService';
+import { formatInviteCode } from '../utils/invites';
+
+export type PendingEmailInvite = {
+  code: string;
+  link: string;
+  email: string;
+  emailed: boolean;
+};
 
 type Props = {
   visible: boolean;
@@ -26,6 +35,8 @@ type Props = {
   startingSolo: boolean;
   errorMsg: string | null;
   onClearError: () => void;
+  emailInvite: PendingEmailInvite | null;
+  onDismissInvite: () => void;
 };
 
 export default function NewGameModal({
@@ -38,6 +49,8 @@ export default function NewGameModal({
   startingSolo,
   errorMsg,
   onClearError,
+  emailInvite,
+  onDismissInvite,
 }: Props) {
   const [mode, setMode] = useState<GameMode>('partner');
   const [email, setEmail] = useState('');
@@ -47,8 +60,68 @@ export default function NewGameModal({
   const [useEmail, setUseEmail] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
+  const [copied, setCopied] = useState(false);
 
   const busy = inviting || startingSolo;
+
+  useEffect(() => {
+    setCopied(false);
+  }, [emailInvite?.code]);
+
+  function inviteMessage(invite: PendingEmailInvite) {
+    return (
+      `Play LoveWords with me 💌\n${invite.link}\n` +
+      `Or enter code ${formatInviteCode(invite.code)} in the app.`
+    );
+  }
+
+  async function handleShareInvite() {
+    if (!emailInvite) return;
+    const message = inviteMessage(emailInvite);
+    if (Platform.OS === 'web') {
+      try {
+        const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+        if (nav?.share) {
+          await nav.share({ title: 'LoveWords invite', text: message, url: emailInvite.link });
+          return;
+        }
+        await handleCopyLink();
+      } catch {
+        // User dismissed the share sheet — nothing to do.
+      }
+      return;
+    }
+    try {
+      await Share.share({ message });
+    } catch {
+      // Share cancelled.
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!emailInvite) return;
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+      if (Platform.OS === 'web' && nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(emailInvite.link);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      }
+      await Share.share({ message: emailInvite.link });
+    } catch {
+      // Copy/share failed or was cancelled — the link is still visible to read.
+    }
+  }
+
+  function handleDoneInvite() {
+    onDismissInvite();
+    setEmail('');
+    setQuery('');
+    setResults([]);
+    setUseEmail(false);
+    onClose();
+  }
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -109,6 +182,50 @@ export default function NewGameModal({
         </View>
 
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          {emailInvite ? (
+            <View style={styles.invitePanel}>
+              <Text style={styles.inviteHeadline}>Invite ready 💌</Text>
+              <Text style={styles.invitePanelSub}>
+                {emailInvite.emailed
+                  ? `We emailed an invite to ${emailInvite.email}. Want to reach them faster? Send this too:`
+                  : `Share this with ${emailInvite.email} so they can join you:`}
+              </Text>
+
+              <View style={styles.inviteCodeBox}>
+                <Text style={styles.inviteCodeLabel}>Invite code</Text>
+                <Text style={styles.inviteCodeValue} accessibilityLabel={`Invite code ${formatInviteCode(emailInvite.code)}`}>
+                  {formatInviteCode(emailInvite.code)}
+                </Text>
+              </View>
+
+              <Text style={styles.inviteLink} numberOfLines={2}>{emailInvite.link}</Text>
+
+              <TouchableOpacity
+                style={styles.startBtn}
+                onPress={handleShareInvite}
+                accessibilityRole="button"
+                accessibilityLabel="Share invite link"
+              >
+                <Text style={styles.startBtnText}>Share invite</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.inviteSecondaryBtn}
+                onPress={handleCopyLink}
+                accessibilityRole="button"
+                accessibilityLabel="Copy invite link"
+              >
+                <Text style={styles.inviteSecondaryText}>{copied ? 'Copied!' : 'Copy link'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={onDismissInvite} disabled={busy}>
+                <Text style={styles.fallbackLink}>Invite someone else</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDoneInvite}>
+                <Text style={styles.inviteDoneLink}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+          <>
           {/* Mode toggle */}
           <Text style={styles.label}>Who are you playing with?</Text>
           <View style={styles.modeRow}>
@@ -195,6 +312,9 @@ export default function NewGameModal({
           ) : (
             <>
               <Text style={[styles.label, { marginTop: 20 }]}>Their exact email</Text>
+              <Text style={styles.emailHint}>
+                We'll start the game if they're on LoveWords, or send them an invite to join if not.
+              </Text>
               <TextInput
                 style={styles.input}
                 placeholder="Email address"
@@ -217,7 +337,7 @@ export default function NewGameModal({
                 {inviting ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.startBtnText}>Start Game</Text>
+                  <Text style={styles.startBtnText}>Send invite</Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setUseEmail(false)} disabled={busy}>
@@ -251,6 +371,8 @@ export default function NewGameModal({
               <Text style={styles.soloBtnText}>🎯 Practice Solo</Text>
             )}
           </TouchableOpacity>
+          </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -321,6 +443,60 @@ const styles = StyleSheet.create({
   },
   startBtnDisabled: { backgroundColor: Colors.border },
   startBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  emailHint: { color: Colors.textLight, fontSize: 12, marginBottom: 10, marginTop: -2, lineHeight: 17 },
+  invitePanel: { alignItems: 'stretch' },
+  inviteHeadline: { fontSize: 20, fontWeight: '800', color: Colors.primaryDark, textAlign: 'center' },
+  invitePanelSub: {
+    fontSize: 14,
+    color: Colors.text,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 18,
+    lineHeight: 20,
+  },
+  inviteCodeBox: {
+    backgroundColor: Colors.tilePlaced,
+    borderRadius: RADII.lg,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  inviteCodeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  inviteCodeValue: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+    letterSpacing: 3,
+    marginTop: 4,
+  },
+  inviteLink: {
+    fontSize: 13,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  inviteSecondaryBtn: {
+    borderRadius: RADII.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    marginTop: 10,
+  },
+  inviteSecondaryText: { color: Colors.primaryDark, fontSize: 15, fontWeight: '800' },
+  inviteDoneLink: {
+    color: Colors.textLight,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 18,
+  },
   searchSpinner: { marginTop: 14 },
   searchHint: { color: Colors.textLight, fontSize: 13, marginTop: 12, textAlign: 'center' },
   searchError: {

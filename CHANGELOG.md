@@ -20,6 +20,14 @@
 
 ### Added
 
+- **Invite someone who isn't on LoveWords yet.** Entering an email that has no
+  account no longer dead-ends — it mints a single-use invite code and shareable
+  link (copy, share sheet, or texted code), and emails the invite when a
+  provider is configured. Opening the link (`?invite=CODE`) or entering the code
+  on sign-up redeems it into a real game with the inviter, created through the
+  same server-owned `create_active_game` grant path as every other game.
+  Requires the `email_invites` migration; email delivery is optional and set up
+  with `RESEND_API_KEY` (see DEPLOY.md).
 - Opt-in player discovery by display name with privacy-safe player codes and
   accept/decline/cancel game invitations.
 - Server-authorized game creation and event-bound, abuse-limited push notifications.
