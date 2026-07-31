@@ -1,10 +1,12 @@
 -- ============================================================
 -- LoveWords — Email / code invites for people not yet on the app
 -- ============================================================
--- Lets a signed-in player invite someone by email address even when that
--- person does not have an account yet. Inviting an *existing* member still
--- goes through the discovery / exact-email flow; this covers the gap where
--- the email belongs to nobody yet.
+-- Lets a signed-in player invite someone by email address or phone number
+-- even when that person does not have an account yet. Inviting an *existing*
+-- member still goes through the discovery / exact-email flow; this covers the
+-- gap where the contact belongs to nobody yet. (The table is named
+-- email_invites for history; it holds both email and phone invites — the code
+-- and link are the same either way, only the delivery channel differs.)
 --
 -- Flow:
 --   1. Inviter calls create_email_invite(email, mode) -> a short single-use
@@ -24,19 +26,28 @@ create table if not exists public.email_invites (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   inviter_uid uuid not null references auth.users(id) on delete cascade,
-  invitee_email text not null,
+  invitee_email text,
+  invitee_phone text,
   mode text not null default 'partner' check (mode in ('partner', 'friend')),
   status text not null default 'pending' check (status in ('pending', 'accepted', 'revoked')),
   redeemer_uid uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
-  expires_at timestamptz not null default (now() + interval '14 days')
+  expires_at timestamptz not null default (now() + interval '14 days'),
+  constraint email_invites_contact_present
+    check (invitee_email is not null or invitee_phone is not null)
 );
+-- Phone support was added alongside email; keep older installs idempotent.
+alter table public.email_invites add column if not exists invitee_phone text;
+alter table public.email_invites alter column invitee_email drop not null;
 
 create index if not exists email_invites_inviter_pending_idx
   on public.email_invites (inviter_uid, created_at)
   where status = 'pending';
 create index if not exists email_invites_inviter_email_pending_idx
   on public.email_invites (inviter_uid, lower(invitee_email))
+  where status = 'pending';
+create index if not exists email_invites_inviter_phone_pending_idx
+  on public.email_invites (inviter_uid, invitee_phone)
   where status = 'pending';
 
 alter table public.email_invites enable row level security;
@@ -143,6 +154,84 @@ begin
 end;
 $$;
 
+-- ── create_phone_invite ─────────────────────────────────────────────────────
+-- Same single-use code, minted for a phone number instead of an email. The app
+-- never sends the text itself — the inviter shares it from their Messages app —
+-- so there is no delivery side to this; it only allocates the code/link.
+create or replace function public.create_phone_invite(
+  invitee_phone text,
+  invite_mode text default 'partner'
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := auth.uid();
+  cleaned_phone text := regexp_replace(coalesce(invitee_phone, ''), '[^0-9+]', '', 'g');
+  digit_count integer := char_length(regexp_replace(coalesce(invitee_phone, ''), '[^0-9]', '', 'g'));
+  normalized_mode text := coalesce(nullif(trim(invite_mode), ''), 'partner');
+  code_alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  existing_code text;
+  new_code text;
+  attempt integer;
+  char_index integer;
+begin
+  if caller_id is null then
+    raise exception 'Authentication required';
+  end if;
+  if digit_count < 7 or digit_count > 15 then
+    raise exception 'Enter a valid phone number';
+  end if;
+  if normalized_mode not in ('partner', 'friend') then
+    raise exception 'Invalid game mode';
+  end if;
+
+  -- Share the per-inviter lock/rate bucket with email invites so the combined
+  -- pending cap can't be raced across both channels.
+  perform pg_advisory_xact_lock(hashtextextended('email-invite:' || caller_id::text, 0));
+
+  if (
+    select count(*) from public.email_invites e
+    where e.inviter_uid = caller_id
+      and e.status = 'pending'
+      and e.created_at >= clock_timestamp() - interval '1 hour'
+  ) >= 10 then
+    raise exception 'Too many invitations; try again later';
+  end if;
+
+  update public.email_invites
+  set expires_at = clock_timestamp() + interval '14 days'
+  where inviter_uid = caller_id
+    and invitee_phone = cleaned_phone
+    and status = 'pending'
+    and expires_at > clock_timestamp()
+  returning code into existing_code;
+  if existing_code is not null then
+    return existing_code;
+  end if;
+
+  for attempt in 1..12 loop
+    new_code := '';
+    for char_index in 1..8 loop
+      new_code := new_code
+        || substr(code_alphabet, 1 + floor(random() * length(code_alphabet))::int, 1);
+    end loop;
+    exit when not exists (select 1 from public.email_invites e where e.code = new_code);
+    new_code := null;
+  end loop;
+  if new_code is null then
+    raise exception 'Could not allocate an invite code; try again';
+  end if;
+
+  insert into public.email_invites (code, inviter_uid, invitee_phone, mode)
+  values (new_code, caller_id, cleaned_phone, normalized_mode);
+
+  return new_code;
+end;
+$$;
+
 -- ── redeem_email_invite ─────────────────────────────────────────────────────
 create or replace function public.redeem_email_invite(invite_code text)
 returns table (inviter_uid uuid, inviter_display_name text, mode text)
@@ -236,9 +325,11 @@ end;
 $$;
 
 revoke all on function public.create_email_invite(text, text) from public, anon;
+revoke all on function public.create_phone_invite(text, text) from public, anon;
 revoke all on function public.redeem_email_invite(text) from public, anon;
 revoke execute on function public.cleanup_email_invites() from public, anon, authenticated;
 grant execute on function public.create_email_invite(text, text) to authenticated;
+grant execute on function public.create_phone_invite(text, text) to authenticated;
 grant execute on function public.redeem_email_invite(text) to authenticated;
 
 -- Best-effort nightly sweep, same posture as the discovery bookkeeping cleanup:

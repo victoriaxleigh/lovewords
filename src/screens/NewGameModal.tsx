@@ -11,6 +11,7 @@ import {
   Platform,
   ScrollView,
   Share,
+  Linking,
 } from 'react-native';
 import { GameMode } from '../types';
 import { Colors } from '../utils/colors';
@@ -18,24 +19,28 @@ import { RADII } from '../utils/styles';
 import { PublicProfile, searchProfiles } from '../supabase/authService';
 import { formatInviteCode } from '../utils/invites';
 
-export type PendingEmailInvite = {
+export type PendingInvite = {
   code: string;
   link: string;
-  email: string;
-  emailed: boolean;
+  channel: 'email' | 'phone';
+  contact: string; // the email address or phone number the invite is for
+  emailed: boolean; // whether the app auto-emailed it (always false for phone)
 };
+
+type ContactMode = 'search' | 'email' | 'phone';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onStart: (email: string, mode: GameMode) => void;
+  onStartPhone: (phone: string, mode: GameMode) => void;
   onInvite: (profile: PublicProfile, mode: GameMode) => void;
   onStartSolo: () => void;
   inviting: boolean;
   startingSolo: boolean;
   errorMsg: string | null;
   onClearError: () => void;
-  emailInvite: PendingEmailInvite | null;
+  pendingInvite: PendingInvite | null;
   onDismissInvite: () => void;
 };
 
@@ -43,21 +48,23 @@ export default function NewGameModal({
   visible,
   onClose,
   onStart,
+  onStartPhone,
   onInvite,
   onStartSolo,
   inviting,
   startingSolo,
   errorMsg,
   onClearError,
-  emailInvite,
+  pendingInvite,
   onDismissInvite,
 }: Props) {
   const [mode, setMode] = useState<GameMode>('partner');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<PublicProfile[]>([]);
-  const [useEmail, setUseEmail] = useState(false);
+  const [contactMode, setContactMode] = useState<ContactMode>('search');
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -66,23 +73,47 @@ export default function NewGameModal({
 
   useEffect(() => {
     setCopied(false);
-  }, [emailInvite?.code]);
+  }, [pendingInvite?.code]);
 
-  function inviteMessage(invite: PendingEmailInvite) {
+  function inviteMessage(invite: PendingInvite) {
     return (
       `Play LoveWords with me 💌\n${invite.link}\n` +
       `Or enter code ${formatInviteCode(invite.code)} in the app.`
     );
   }
 
+  // Open the SMS composer prefilled with the recipient and the invite message.
+  // Cross-platform sms: URIs differ (iOS uses & before body, Android uses ?),
+  // and desktop has no composer, so fall back to the generic share/copy path.
+  async function handleTextInvite() {
+    if (!pendingInvite) return;
+    const message = inviteMessage(pendingInvite);
+    const number = pendingInvite.contact.replace(/[^0-9+]/g, '');
+    if (Platform.OS === 'web') {
+      await handleShareInvite();
+      return;
+    }
+    const separator = Platform.OS === 'ios' ? '&' : '?';
+    const url = `sms:${number}${separator}body=${encodeURIComponent(message)}`;
+    try {
+      if (await Linking.canOpenURL(url)) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // Fall through to the share sheet.
+    }
+    await handleShareInvite();
+  }
+
   async function handleShareInvite() {
-    if (!emailInvite) return;
-    const message = inviteMessage(emailInvite);
+    if (!pendingInvite) return;
+    const message = inviteMessage(pendingInvite);
     if (Platform.OS === 'web') {
       try {
         const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
         if (nav?.share) {
-          await nav.share({ title: 'LoveWords invite', text: message, url: emailInvite.link });
+          await nav.share({ title: 'LoveWords invite', text: message, url: pendingInvite.link });
           return;
         }
         await handleCopyLink();
@@ -99,33 +130,38 @@ export default function NewGameModal({
   }
 
   async function handleCopyLink() {
-    if (!emailInvite) return;
+    if (!pendingInvite) return;
     try {
       const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
       if (Platform.OS === 'web' && nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(emailInvite.link);
+        await nav.clipboard.writeText(pendingInvite.link);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
         return;
       }
-      await Share.share({ message: emailInvite.link });
+      await Share.share({ message: pendingInvite.link });
     } catch {
       // Copy/share failed or was cancelled — the link is still visible to read.
     }
   }
 
-  function handleDoneInvite() {
-    onDismissInvite();
+  function resetContactFields() {
     setEmail('');
+    setPhone('');
     setQuery('');
     setResults([]);
-    setUseEmail(false);
+    setContactMode('search');
+  }
+
+  function handleDoneInvite() {
+    onDismissInvite();
+    resetContactFields();
     onClose();
   }
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!visible || useEmail || trimmed.length < 3) {
+    if (!visible || contactMode !== 'search' || trimmed.length < 3) {
       setResults([]);
       setSearching(false);
       setSearchError(null);
@@ -154,14 +190,11 @@ export default function NewGameModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, useEmail, visible, searchAttempt]);
+  }, [query, contactMode, visible, searchAttempt]);
 
   function handleClose() {
     if (busy) return;
-    setEmail('');
-    setQuery('');
-    setResults([]);
-    setUseEmail(false);
+    resetContactFields();
     setSearchError(null);
     onClearError();
     onClose();
@@ -182,32 +215,45 @@ export default function NewGameModal({
         </View>
 
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {emailInvite ? (
+          {pendingInvite ? (
             <View style={styles.invitePanel}>
               <Text style={styles.inviteHeadline}>Invite ready 💌</Text>
               <Text style={styles.invitePanelSub}>
-                {emailInvite.emailed
-                  ? `We emailed an invite to ${emailInvite.email}. Want to reach them faster? Send this too:`
-                  : `Share this with ${emailInvite.email} so they can join you:`}
+                {pendingInvite.channel === 'phone'
+                  ? `Text this to ${pendingInvite.contact} so they can join you:`
+                  : pendingInvite.emailed
+                  ? `We emailed an invite to ${pendingInvite.contact}. Want to reach them faster? Send this too:`
+                  : `Share this with ${pendingInvite.contact} so they can join you:`}
               </Text>
 
               <View style={styles.inviteCodeBox}>
                 <Text style={styles.inviteCodeLabel}>Invite code</Text>
-                <Text style={styles.inviteCodeValue} accessibilityLabel={`Invite code ${formatInviteCode(emailInvite.code)}`}>
-                  {formatInviteCode(emailInvite.code)}
+                <Text style={styles.inviteCodeValue} accessibilityLabel={`Invite code ${formatInviteCode(pendingInvite.code)}`}>
+                  {formatInviteCode(pendingInvite.code)}
                 </Text>
               </View>
 
-              <Text style={styles.inviteLink} numberOfLines={2}>{emailInvite.link}</Text>
+              <Text style={styles.inviteLink} numberOfLines={2}>{pendingInvite.link}</Text>
 
-              <TouchableOpacity
-                style={styles.startBtn}
-                onPress={handleShareInvite}
-                accessibilityRole="button"
-                accessibilityLabel="Share invite link"
-              >
-                <Text style={styles.startBtnText}>Share invite</Text>
-              </TouchableOpacity>
+              {pendingInvite.channel === 'phone' ? (
+                <TouchableOpacity
+                  style={styles.startBtn}
+                  onPress={handleTextInvite}
+                  accessibilityRole="button"
+                  accessibilityLabel="Text invite"
+                >
+                  <Text style={styles.startBtnText}>💬 Text invite</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.startBtn}
+                  onPress={handleShareInvite}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share invite link"
+                >
+                  <Text style={styles.startBtnText}>Share invite</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.inviteSecondaryBtn}
                 onPress={handleCopyLink}
@@ -257,7 +303,7 @@ export default function NewGameModal({
             </TouchableOpacity>
           </View>
 
-          {!useEmail ? (
+          {contactMode === 'search' ? (
             <>
               <Text style={[styles.label, { marginTop: 20 }]}>Find by display name</Text>
               <TextInput
@@ -305,11 +351,14 @@ export default function NewGameModal({
                   <Text style={styles.resultAction}>Invite</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity onPress={() => setUseEmail(true)} disabled={busy}>
+              <TouchableOpacity onPress={() => setContactMode('email')} disabled={busy}>
                 <Text style={styles.fallbackLink}>Know their email? Invite that way</Text>
               </TouchableOpacity>
+              <TouchableOpacity onPress={() => setContactMode('phone')} disabled={busy}>
+                <Text style={styles.fallbackLink}>Have their number? Text them an invite</Text>
+              </TouchableOpacity>
             </>
-          ) : (
+          ) : contactMode === 'email' ? (
             <>
               <Text style={[styles.label, { marginTop: 20 }]}>Their exact email</Text>
               <Text style={styles.emailHint}>
@@ -340,7 +389,42 @@ export default function NewGameModal({
                   <Text style={styles.startBtnText}>Send invite</Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setUseEmail(false)} disabled={busy}>
+              <TouchableOpacity onPress={() => setContactMode('search')} disabled={busy}>
+                <Text style={styles.fallbackLink}>← Back to player search</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.label, { marginTop: 20 }]}>Their phone number</Text>
+              <Text style={styles.emailHint}>
+                We'll make an invite you can text them from your Messages app.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Phone number"
+                placeholderTextColor={Colors.textLight}
+                value={phone}
+                onChangeText={(text) => {
+                  setPhone(text);
+                  if (errorMsg) onClearError();
+                }}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Their phone number"
+              />
+              <TouchableOpacity
+                style={[styles.startBtn, (!phone.trim() || busy) && styles.startBtnDisabled]}
+                onPress={() => onStartPhone(phone, mode)}
+                disabled={!phone.trim() || busy}
+              >
+                {inviting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.startBtnText}>Create invite</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setContactMode('search')} disabled={busy}>
                 <Text style={styles.fallbackLink}>← Back to player search</Text>
               </TouchableOpacity>
             </>

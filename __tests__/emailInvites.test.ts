@@ -7,6 +7,7 @@ jest.mock('../src/supabase/config', () => ({
 
 import {
   createEmailInvite,
+  createPhoneInvite,
   redeemEmailInvite,
   sendInviteEmail,
 } from '../src/supabase/gameService';
@@ -37,6 +38,19 @@ describe('email invite creation', () => {
   test('surfaces RPC failures to the caller', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'Too many invitations; try again later' } });
     await expect(createEmailInvite('a@b.com', 'partner')).rejects.toBeTruthy();
+  });
+
+  test('mints a phone invite through the phone RPC', async () => {
+    rpc.mockResolvedValue({ data: 'PHON2345', error: null });
+
+    const result = await createPhoneInvite('  (555) 123-4567 ', 'partner');
+
+    expect(rpc).toHaveBeenCalledWith('create_phone_invite', {
+      invitee_phone: '(555) 123-4567',
+      invite_mode: 'partner',
+    });
+    expect(result.code).toBe('PHON2345');
+    expect(result.link).toContain('/?invite=PHON2345');
   });
 });
 

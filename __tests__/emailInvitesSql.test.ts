@@ -25,6 +25,19 @@ describe.each([
     expect(sql).toContain('using (auth.uid() = inviter_uid)');
   });
 
+  test('supports either an email or a phone contact', () => {
+    expect(sql).toContain('invitee_phone text');
+    // Email is nullable so a phone-only invite is valid, but at least one of the
+    // two contacts must be present.
+    expect(sql).toContain(
+      'check (invitee_email is not null or invitee_phone is not null)'
+    );
+    expect(sql).toContain('function public.create_phone_invite(');
+    expect(sql).toContain('enter a valid phone number');
+    expect(sql).toContain('grant execute on function public.create_phone_invite(text, text) to authenticated');
+    expect(sql).toContain('revoke all on function public.create_phone_invite(text, text) from public, anon');
+  });
+
   test('mints codes through a hardened, rate-limited definer function', () => {
     expect(sql).toContain('function public.create_email_invite(');
     expect(sql).toContain('security definer');

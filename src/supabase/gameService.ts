@@ -483,6 +483,22 @@ export async function createEmailInvite(
   return { code, link: buildInviteLink(code) };
 }
 
+// Same single-use code, minted for a phone number. There's no delivery side —
+// the inviter shares the code/link from their own Messages app.
+export async function createPhoneInvite(
+  phone: string,
+  mode: GameMode = 'partner'
+): Promise<EmailInviteResult> {
+  const { data, error } = await supabase.rpc('create_phone_invite', {
+    invitee_phone: phone.trim(),
+    invite_mode: mode,
+  });
+  if (error) throw error;
+  const code = typeof data === 'string' ? data : (data?.code ?? '');
+  if (!code) throw new Error('Could not create an invite.');
+  return { code, link: buildInviteLink(code) };
+}
+
 // Asks the serverless function to email the invite. Best-effort: returns true
 // only when the email was actually sent, so the UI can tell the inviter whether
 // they still need to share the link/code themselves. Never throws.
