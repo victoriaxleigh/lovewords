@@ -1066,10 +1066,10 @@ begin
 
   update public.email_invites
   set expires_at = clock_timestamp() + interval '14 days'
-  where inviter_uid = caller_id
-    and lower(invitee_email) = normalized_email
-    and status = 'pending'
-    and expires_at > clock_timestamp()
+  where email_invites.inviter_uid = caller_id
+    and lower(email_invites.invitee_email) = normalized_email
+    and email_invites.status = 'pending'
+    and email_invites.expires_at > clock_timestamp()
   returning code into existing_code;
   if existing_code is not null then
     return existing_code;
@@ -1123,10 +1123,10 @@ begin
 
   update public.email_invites
   set expires_at = clock_timestamp() + interval '14 days'
-  where inviter_uid = caller_id
-    and invitee_phone = cleaned_phone
-    and status = 'pending'
-    and expires_at > clock_timestamp()
+  where email_invites.inviter_uid = caller_id
+    and email_invites.invitee_phone = cleaned_phone
+    and email_invites.status = 'pending'
+    and email_invites.expires_at > clock_timestamp()
   returning code into existing_code;
   if existing_code is not null then
     return existing_code;
