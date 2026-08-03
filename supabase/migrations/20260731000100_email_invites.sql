@@ -22,9 +22,6 @@
 
 begin;
 
--- gen_random_bytes (CSPRNG) for authorization-bearing invite codes.
-create extension if not exists pgcrypto;
-
 create table if not exists public.email_invites (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
@@ -87,9 +84,11 @@ revoke all on table public.email_invite_claim_limits from public, anon, authenti
 grant all on table public.email_invite_claim_limits to service_role;
 
 -- ── Invite code generator (CSPRNG) ──────────────────────────────────────────
--- 8 characters from a 31-symbol, ambiguity-free alphabet. gen_random_bytes is
--- a CSPRNG; rejection sampling (bytes >= 248 discarded) removes modulo bias so
--- every symbol is equally likely. Not client-callable.
+-- 8 characters from a 31-symbol, ambiguity-free alphabet. Randomness comes from
+-- gen_random_uuid() — a version-4 UUID built on Postgres' strong RNG (pg core,
+-- the same source that fills this table's id) — so we don't depend on pgcrypto
+-- being on the search_path. Rejection sampling (bytes >= 248 discarded) removes
+-- modulo bias so every symbol is equally likely. Not client-callable.
 create or replace function public._generate_invite_code()
 returns text
 language plpgsql
@@ -100,17 +99,23 @@ declare
   code_alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   new_code text;
   attempt integer;
-  char_index integer;
+  hex text;
+  pos integer;
   sample integer;
 begin
   for attempt in 1..16 loop
     new_code := '';
-    for char_index in 1..8 loop
-      loop
-        sample := get_byte(gen_random_bytes(1), 0);
-        exit when sample < 248; -- 31 * 8, the largest unbiased multiple
+    while char_length(new_code) < 8 loop
+      -- 16 secure random bytes per UUID; take one byte at a time.
+      hex := replace(gen_random_uuid()::text, '-', '');
+      pos := 1;
+      while char_length(new_code) < 8 and pos <= 31 loop
+        sample := get_byte(decode(substr(hex, pos, 2), 'hex'), 0); -- 0..255
+        pos := pos + 2;
+        if sample < 248 then -- 31 * 8, the largest unbiased multiple
+          new_code := new_code || substr(code_alphabet, 1 + (sample % 31), 1);
+        end if;
       end loop;
-      new_code := new_code || substr(code_alphabet, 1 + (sample % 31), 1);
     end loop;
     exit when not exists (select 1 from public.email_invites e where e.code = new_code);
     new_code := null;

@@ -72,12 +72,14 @@ describe.each([
     expect(sql).not.toMatch(/raise exception 'invite is no longer available'/i);
   });
 
-  test('generates codes with a CSPRNG, not random()', () => {
-    expect(sql).toContain('create extension if not exists pgcrypto');
+  test('generates codes with a CSPRNG (gen_random_uuid), not random()', () => {
     expect(sql).toContain('function public._generate_invite_code()');
-    expect(sql).toContain('gen_random_bytes');
-    expect(sql).toContain('exit when sample < 248'); // rejection sampling removes modulo bias
+    // Strong RNG source that does not depend on pgcrypto being on search_path.
+    expect(sql).toContain('gen_random_uuid()');
+    expect(sql).toContain("get_byte(decode(substr(hex, pos, 2), 'hex'), 0)");
+    expect(sql).toContain('if sample < 248'); // rejection sampling removes modulo bias
     expect(sql).not.toContain('floor(random()');
+    expect(sql).not.toContain('gen_random_bytes');
   });
 
   test('rate-limits invite email delivery atomically', () => {

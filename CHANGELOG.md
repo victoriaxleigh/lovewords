@@ -20,6 +20,12 @@
 
 ### Added
 
+- **Streamlined "New game" flow.** Starting a game now leads with a single
+  "invite by email or phone" field that always works — it starts the game if
+  they're already a member, or sends an invite if not. Finding a player by
+  display name is now a clearly-secondary option that explains the
+  "Discoverable" opt-in instead of silently returning nothing, and points you to
+  the email/phone invite when no one matches.
 - **Invite someone who isn't on LoveWords yet, by email or phone.** Entering an
   email that has no account no longer dead-ends — it mints a single-use invite
   code and shareable link (copy, share sheet, or texted code), and emails the

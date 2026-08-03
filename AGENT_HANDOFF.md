@@ -1,8 +1,10 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-07-30 (Session 11 — fixed the push-notification & nudge regression from the player-discovery/invites deploy: server-authorized `notify` now handles opaque `sb_secret_…` service keys, refreshes stale iOS-PWA sessions, and surfaces a safe failure code on the nudge button. Root cause of the lingering `E502` was a `current_time` PL/pgSQL keyword collision in `claim_notification_delivery`, fixed via a corrective migration. See the updated Push Notifications Architecture + Supabase Tables sections below.)
+> Last updated: 2026-08-03 (Session 12 — **Player invites (email / phone) for people not yet on LoveWords**, and a reworked "New game" flow. Entering an email/phone that has no account no longer dead-ends: it mints a single-use invite (code + link); the invitee opens the link `?invite=CODE` or types the code on sign-up and is dropped into a real game with the inviter. Redemption is atomic and idempotent through the existing `create_active_game` contract. Delivery is by the inviter's **own email app (mailto) or Messages (sms)** — no email/SMS provider needed; optional Resend auto-send is wired but off by default. The New Game modal now leads with one "invite by email or phone" field and demotes name-search (which needs the other player's `discoverable` opt-in) to a secondary, self-explaining option. See the new **Player Invites** section below.)
 >
-> Earlier (Session 10 — 2026-07-25): finished-game analysis export; in-app AI coaching (move-by-move, Sonnet); home-screen score labels + winner highlight; distinct Swap/Pass + swap confirm; tile-bag rebalance (E 13→11); WCAG re-verification.
+> **Deploy state (read before shipping more):** PR #15 merged the base feature + Tom's review fixes at commit `1bc9fa5`. A follow-up carries the rest — the "open your email app" button, the **CSPRNG fix** (invite codes now use `gen_random_uuid()` instead of pgcrypto's `gen_random_bytes`, which a `SECURITY DEFINER` function with a pinned `search_path` can't resolve on Supabase — the old version could fail invite-code creation), and the flow rework. **The `20260731000100_email_invites.sql` migration is idempotent and must be (re-)run in Supabase** to pick up those fixes.
+>
+> Earlier (Session 11 — 2026-07-30): fixed the push-notification & nudge regression from the player-discovery/invites deploy (opaque `sb_secret_…` keys, stale iOS-PWA sessions, `current_time` keyword collision in `claim_notification_delivery`). Session 10 (2026-07-25): finished-game analysis export; in-app AI coaching; score labels; Swap/Pass; tile-bag rebalance; WCAG.
 >
 > **Deploying?** See `DEPLOY.md` for the full runbook (env vars + scopes, migrations, verify, rollback).
 
@@ -135,14 +137,29 @@ SUPABASE_URL=<same as src/supabase/config.ts>
 SUPABASE_SERVICE_KEY=<service role key, NOT anon key — has full DB access>
 ANALYSIS_TOKEN_SECRET=<HMAC secret for finished-game analysis-export tokens; openssl rand -base64 32; ≥32 bytes>
 ANTHROPIC_API_KEY=<Claude API key for the AI game-coach function (game-coach.js)>
+
+# OPTIONAL — invite email auto-send (send-invite.js). Leave ALL unset and email
+# invites still work: the inviter taps "📧 Email invite" and their own mail app
+# opens pre-written (mailto), so no provider/domain is required. Set these only
+# to have the app auto-send the email itself.
+RESEND_API_KEY=<Resend API key; when set, send-invite emails the invite via Resend>
+INVITE_FROM_EMAIL=<e.g. "LoveWords <play@yourdomain>"; needs a Resend-verified domain; else defaults to onboarding@resend.dev>
+APP_URL=<public origin for invite links; defaults to the Netlify site URL>
 ```
+> ⚠️ Resend's shared `onboarding@resend.dev` sender can only deliver to your own
+> Resend account email. To email invites to **anyone**, you must verify a domain
+> in Resend. Because of that, the shipped default is the mailto/Messages flow
+> (no provider), and `RESEND_API_KEY` is genuinely optional.
 
 **All server-only — Functions-scoped, Production context.** Set them so the
 `Functions` scope is enabled (not Builds-only), or the running function returns
 a 500 ("… is not configured"). Never add `SUPABASE_SERVICE_KEY`,
-`ANALYSIS_TOKEN_SECRET`, or `ANTHROPIC_API_KEY` to `SECRETS_SCAN_OMIT_KEYS` —
-they're server-only and must never appear in the client bundle. New env vars
-bind at **deploy time**: after adding one, redeploy (Clear cache and deploy).
+`ANALYSIS_TOKEN_SECRET`, `ANTHROPIC_API_KEY`, or `RESEND_API_KEY` to
+`SECRETS_SCAN_OMIT_KEYS` — they're server-only and must never appear in the
+client bundle. New env vars bind at **deploy time**: after adding one, redeploy
+(Clear cache and deploy). A **secret** var must not use the Post-processing
+scope — scope it to Functions (+Runtime), or Netlify rejects it ("access
+denied").
 
 ### Local `.env` (only needed for running Netlify functions locally)
 ```
@@ -271,6 +288,33 @@ in that function** — it collides with the `CURRENT_TIME` keyword and every cla
 throws `42804` (this was the Session 11 `E502`); the corrected function uses
 `claim_time`.
 
+### `email_invites` / `email_invite_claim_limits`
+Migration `20260731000100_email_invites.sql` (idempotent — safe to re-run).
+Holds invites to people **not yet on the app** (both email and phone; the name
+is historical). Columns: `code` (unique, 8 chars), `inviter_uid`,
+`invitee_email` / `invitee_phone` (at least one; email nullable), `mode`,
+`status` (`pending`/`accepted`/`revoked`), `redeemer_uid`, `game_id`,
+`emails_sent`, `last_email_at`, `expires_at` (+14d). RLS: inviter reads their
+own; all writes go through security-definer RPCs. Key functions:
+- `create_email_invite(email, mode)` / `create_phone_invite(phone, mode)` →
+  mint a code (dedupes per inviter+contact, caps 10 pending/hour). Codes come
+  from `_generate_invite_code()` using `gen_random_uuid()` (a strong-RNG CSPRNG
+  source that doesn't depend on pgcrypto being on the search_path) with
+  rejection sampling.
+- `redeem_email_invite(code, board, bag, rack1, rack2)` → **atomic**: creates
+  the active game (redeemer = player 1) via `create_active_game` AND marks the
+  invite accepted in one transaction; idempotent replay returns the same
+  `game_id`. **RETURNS null (never RAISEs) on expected failure** so the
+  per-account attempt counter in `email_invite_claim_limits` (20/hour) commits
+  even for a bad code — raising would roll the increment back.
+- `claim_invite_email_delivery(code, sender_uid)` (service-role only) → atomic
+  gate for `send-invite.js`: ownership + pending + not-expired + 60s cooldown +
+  5-emails-per-invite cap.
+- `find_profile_by_email` now **raises** `Too many lookups` on throttle (was a
+  silent empty result) so the New Game flow doesn't mistake a throttle/error
+  for "not a member." Client `getUserByEmail` throws on error, returns null only
+  for a confirmed miss.
+
 ---
 
 ## TypeScript Types (`src/types/index.ts`)
@@ -377,6 +421,17 @@ success: '#4CAF50'   error: '#F44336'   warning: '#FF9800'
 | `submitSoloMove(gameId, game, playerIndex, placedTiles)` | Updates board/rack/score for the given index; omits current_turn from update |
 | `passSoloTurn(gameId, game)` | Appends pass move to moves array; no current_turn change |
 | `swapSoloTiles(gameId, game, playerIndex, tileIds)` | Swaps tiles for given player index; no current_turn change |
+
+### Invite / matchmaking functions
+| Function | Description |
+|---|---|
+| `createGameInvite(p1, p2, mode)` | In-app invite between two **existing** members found via name search; inserts an inert `waiting` game the recipient accepts. |
+| `acceptGameInvite` / `declineGameInvite` / `cancelGameInvite` | Transition a `waiting` invite (deal tiles on accept; scoped, RLS-guarded). |
+| `createEmailInvite(email, mode)` / `createPhoneInvite(phone, mode)` | Mint a single-use code (+ shareable link) for someone **not on the app**; returns `{ code, link }`. |
+| `sendInviteEmail(code)` | Best-effort: asks `send-invite.js` to email the invite (only sends if `RESEND_API_KEY` set); returns whether it actually emailed. Never throws. |
+| `redeemEmailInvite(code)` | Generates tiles client-side, calls the atomic `redeem_email_invite` RPC; returns `{ status: 'created', gameId }` or `{ status: 'gone' }`. `App.tsx` clears the stashed code only on a confirmed outcome (keeps it to retry on transient error). |
+
+Pure helpers in `src/utils/invites.ts` (normalize/format/validate code, build/parse `?invite=` link) and `src/utils/pendingInvite.ts` (stash/read/clear the pending code across storage). `NewGameModal` routes an entered email→`onStart`, phone→`onStartPhone`; the invite panel opens the inviter's mail app (mailto) or Messages (sms) prefilled.
 
 ---
 
@@ -768,11 +823,11 @@ Turns that same export into a written coaching note shown **inside the app** (no
 
 ## Tests
 
-**129 unit tests across 11 suites**, all passing. Run with:
+**251 unit tests across 23 suites**, all passing. Run with:
 ```bash
 npx jest            # (package.json "test" script runs jest --coverage)
 ```
-Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysisStorage`, `analysisExport`, `analysisHandlers`, `contrast`. All located in `__tests__/` (not shown in the structure tree above). Always run after touching anything in `src/engine/`, `src/supabase/gameService.ts`, or the analysis functions.
+Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysis*`, `contrast`, `playerDiscovery*`, `gameInvites`, and the invite suites: `invites` (pure helpers), `emailInvites` (service layer), `emailInvitesSql` (SQL-contract assertions over the migration **and** `supabase_schema.sql`), plus `playerDiscoveryUiContract` (asserts the New Game modal's flow strings). All in `__tests__/`. Always run after touching `src/engine/`, `src/supabase/gameService.ts`, the analysis functions, the invite SQL/migration, or the New Game modal. **The SQL-contract tests read both the migration and the schema snapshot — keep the two in sync when editing invite SQL.**
 
 ---
 
@@ -783,11 +838,12 @@ Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`,
 1. **Native push** — ✅ **DONE.** `netlify/functions/notify.js` already sent Expo push (native) alongside Web Push (PWA); Session 9 made the copy **mode-aware** (`isFriend` threaded through `sendPushNotification`/`sendLoveNote`/`sendNudge` → friend games get neutral "💬 Message"/nudge text). Client registration in `src/utils/notifications.ts`. Still needs `eas init` (fills the placeholder `projectId` in `app.json`) and an APNs key (EAS auto-configures at build time).
 2. **Free launch wiring** — ✅ `MONETIZATION_ENABLED = false` in `src/utils/purchases.ts` (RevenueCat never initializes, paywall never fires). `FREE_GAME_LIMIT = 3` set in `LobbyScreen.tsx` for v1.1. Paywall/RevenueCat code intact but dormant. **v1.1:** flip the flag to `true`, paste the real RevenueCat key, create the $2.99 non-consumable IAP in App Store Connect + RevenueCat.
 3. **App icon** — ✅ Apple rejects icons with alpha; `assets/icon.png` was opaque-but-had-an-alpha-channel, so `assets/icon-ios.png` (alpha stripped via sharp) is wired via `app.json` `ios.icon`.
-4. **Privacy policy** — ✅ `public/privacy.html` (serves at `/privacy.html`). ⚠️ Replace the `ADD-YOUR-CONTACT-EMAIL-HERE` placeholder before submit. App does NOT collect device contacts (only Contact Info = email/name) — App Privacy answers are in `APP_STORE.md`.
+4. **Privacy policy** — ✅ `public/privacy.html` (serves at `/privacy.html`), updated Session 12 to disclose invite **contact details** (email/phone you enter — never the device address book) and **Resend** as the optional email processor. Matching App Privacy answers (added "Contact Info — Phone Number") in `APP_STORE.md`. ⚠️ Still replace the `ADD-YOUR-CONTACT-EMAIL-HERE` placeholder before submit.
 5. **Listing copy / keywords / review notes / App Privacy answers / pre-submit checklist** — ✅ all in `APP_STORE.md`.
 6. **EAS Build + submit** — ⏳ blocked on the Apple Developer Program account (user enrolling; $99/yr). Then `eas init` → `eas build --platform ios --profile production` → App Store Connect app record → `eas submit`. Bundle ID is `com.lovewords.app`.
 7. **Screenshots** — ⏳ best captured from the iOS Simulator at 1290×2796 once built; framing/captions in `APP_STORE.md`.
 8. **Friend mode** — ✅ **DONE (Session 9).** See the "Partner/Friend Mode + Home Screen" section below.
+9. **Player invites (email/phone) + New Game flow rework** — ✅ **DONE (Session 12).** See the header note and the `email_invites` / invite-function sections above. Delivery defaults to the inviter's own mail app / Messages (no provider). **Follow-up to land in `main`:** PR #15 merged at `1bc9fa5`; the "Email invite" button, the CSPRNG fix, and the flow rework are on `claude/invite-feature-js4o7j` beyond that point and need a follow-up merge, and the `20260731000100` migration must be (re-)run in Supabase.
 
 ⚠️ **User-generated content / review risk:** players send free-text messages. v1.0 is invite-only (low risk) but Apple may ask about UGC; block/report/filter becomes mandatory once **Phase 2 random matchmaking** ships.
 

@@ -27,8 +27,6 @@ export type PendingInvite = {
   emailed: boolean; // whether the app auto-emailed it (always false for phone)
 };
 
-type ContactMode = 'search' | 'email' | 'phone';
-
 type Props = {
   visible: boolean;
   onClose: () => void;
@@ -59,12 +57,12 @@ export default function NewGameModal({
   onDismissInvite,
 }: Props) {
   const [mode, setMode] = useState<GameMode>('partner');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [contact, setContact] = useState('');
+  const [contactError, setContactError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<PublicProfile[]>([]);
-  const [contactMode, setContactMode] = useState<ContactMode>('search');
+  const [showSearch, setShowSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -80,6 +78,30 @@ export default function NewGameModal({
       `Play LoveWords with me 💌\n${invite.link}\n` +
       `Or enter code ${formatInviteCode(invite.code)} in the app.`
     );
+  }
+
+  // Open the user's email app with the invite pre-addressed and pre-written, so
+  // they send it from their own account (no email provider / domain needed).
+  async function handleEmailInvite() {
+    if (!pendingInvite) return;
+    const subject = 'Play LoveWords with me 💌';
+    const body = inviteMessage(pendingInvite);
+    const url =
+      `mailto:${encodeURIComponent(pendingInvite.contact)}` +
+      `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.location.href = url;
+      return;
+    }
+    try {
+      if (await Linking.canOpenURL(url)) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // Fall through to the share sheet.
+    }
+    await handleShareInvite();
   }
 
   // Open the SMS composer prefilled with the recipient and the invite message.
@@ -146,11 +168,11 @@ export default function NewGameModal({
   }
 
   function resetContactFields() {
-    setEmail('');
-    setPhone('');
+    setContact('');
+    setContactError(null);
     setQuery('');
     setResults([]);
-    setContactMode('search');
+    setShowSearch(false);
   }
 
   function handleDoneInvite() {
@@ -159,9 +181,27 @@ export default function NewGameModal({
     onClose();
   }
 
+  // One field, either channel: route an email to onStart (start with an existing
+  // member, or mint an email invite) and a phone number to onStartPhone.
+  function handleContactSubmit() {
+    const value = contact.trim();
+    if (!value || busy) return;
+    if (value.includes('@')) {
+      setContactError(null);
+      onStart(value, mode);
+      return;
+    }
+    if (value.replace(/\D/g, '').length >= 7) {
+      setContactError(null);
+      onStartPhone(value, mode);
+      return;
+    }
+    setContactError('Enter an email address or a phone number.');
+  }
+
   useEffect(() => {
     const trimmed = query.trim();
-    if (!visible || contactMode !== 'search' || trimmed.length < 3) {
+    if (!visible || !showSearch || trimmed.length < 3) {
       setResults([]);
       setSearching(false);
       setSearchError(null);
@@ -190,7 +230,7 @@ export default function NewGameModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, contactMode, visible, searchAttempt]);
+  }, [query, showSearch, visible, searchAttempt]);
 
   function handleClose() {
     if (busy) return;
@@ -247,11 +287,11 @@ export default function NewGameModal({
               ) : (
                 <TouchableOpacity
                   style={styles.startBtn}
-                  onPress={handleShareInvite}
+                  onPress={handleEmailInvite}
                   accessibilityRole="button"
-                  accessibilityLabel="Share invite link"
+                  accessibilityLabel="Email invite"
                 >
-                  <Text style={styles.startBtnText}>Share invite</Text>
+                  <Text style={styles.startBtnText}>📧 Email invite</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -303,9 +343,58 @@ export default function NewGameModal({
             </TouchableOpacity>
           </View>
 
-          {contactMode === 'search' ? (
+          {/* Primary: invite anyone by email or phone — always works, whether or
+              not they're on LoveWords or discoverable. */}
+          <Text style={[styles.label, { marginTop: 20 }]}>Invite by email or phone</Text>
+          <Text style={styles.emailHint}>
+            We'll start the game if they're already on LoveWords, or send them an invite to join if not.
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Email address or phone number"
+            placeholderTextColor={Colors.textLight}
+            value={contact}
+            onChangeText={(text) => {
+              setContact(text);
+              if (contactError) setContactError(null);
+              if (errorMsg) onClearError();
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Their email address or phone number"
+          />
+          {contactError && <Text style={styles.contactError}>{contactError}</Text>}
+          <TouchableOpacity
+            style={[styles.startBtn, (!contact.trim() || busy) && styles.startBtnDisabled]}
+            onPress={handleContactSubmit}
+            disabled={!contact.trim() || busy}
+            accessibilityRole="button"
+          >
+            {inviting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.startBtnText}>Continue</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Secondary: find a discoverable player by name */}
+          <TouchableOpacity
+            onPress={() => setShowSearch((s) => !s)}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showSearch }}
+          >
+            <Text style={styles.searchToggle}>
+              {showSearch ? '− Hide name search' : '🔍 Find a player by name'}
+            </Text>
+          </TouchableOpacity>
+          {showSearch && (
             <>
-              <Text style={[styles.label, { marginTop: 20 }]}>Find by display name</Text>
+              <Text style={styles.searchNote}>
+                Only players who turn on “Discoverable” in their own Settings show up here. To reach
+                anyone else, invite them by email or phone above.
+              </Text>
               <TextInput
                 style={styles.input}
                 placeholder="Type at least 3 characters"
@@ -321,7 +410,10 @@ export default function NewGameModal({
               />
               {searching && <ActivityIndicator color={Colors.primary} style={styles.searchSpinner} />}
               {!searching && !searchError && query.trim().length >= 3 && results.length === 0 && (
-                <Text style={styles.searchHint}>No discoverable players found.</Text>
+                <Text style={styles.searchHint}>
+                  No discoverable players match — they may not have turned on Discoverable. Invite them
+                  by email or phone above instead.
+                </Text>
               )}
               {searchError && (
                 <View style={styles.searchError}>
@@ -351,82 +443,6 @@ export default function NewGameModal({
                   <Text style={styles.resultAction}>Invite</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity onPress={() => setContactMode('email')} disabled={busy}>
-                <Text style={styles.fallbackLink}>Know their email? Invite that way</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setContactMode('phone')} disabled={busy}>
-                <Text style={styles.fallbackLink}>Have their number? Text them an invite</Text>
-              </TouchableOpacity>
-            </>
-          ) : contactMode === 'email' ? (
-            <>
-              <Text style={[styles.label, { marginTop: 20 }]}>Their exact email</Text>
-              <Text style={styles.emailHint}>
-                We'll start the game if they're on LoveWords, or send them an invite to join if not.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Email address"
-                placeholderTextColor={Colors.textLight}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (errorMsg) onClearError();
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Their email address"
-              />
-              <TouchableOpacity
-                style={[styles.startBtn, (!email.trim() || busy) && styles.startBtnDisabled]}
-                onPress={() => onStart(email, mode)}
-                disabled={!email.trim() || busy}
-              >
-                {inviting ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.startBtnText}>Send invite</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setContactMode('search')} disabled={busy}>
-                <Text style={styles.fallbackLink}>← Back to player search</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <Text style={[styles.label, { marginTop: 20 }]}>Their phone number</Text>
-              <Text style={styles.emailHint}>
-                We'll make an invite you can text them from your Messages app.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Phone number"
-                placeholderTextColor={Colors.textLight}
-                value={phone}
-                onChangeText={(text) => {
-                  setPhone(text);
-                  if (errorMsg) onClearError();
-                }}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Their phone number"
-              />
-              <TouchableOpacity
-                style={[styles.startBtn, (!phone.trim() || busy) && styles.startBtnDisabled]}
-                onPress={() => onStartPhone(phone, mode)}
-                disabled={!phone.trim() || busy}
-              >
-                {inviting ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.startBtnText}>Create invite</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setContactMode('search')} disabled={busy}>
-                <Text style={styles.fallbackLink}>← Back to player search</Text>
-              </TouchableOpacity>
             </>
           )}
 
@@ -528,6 +544,16 @@ const styles = StyleSheet.create({
   startBtnDisabled: { backgroundColor: Colors.border },
   startBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   emailHint: { color: Colors.textLight, fontSize: 12, marginBottom: 10, marginTop: -2, lineHeight: 17 },
+  contactError: { color: Colors.errorDark, fontSize: 13, fontWeight: '600', marginTop: 8 },
+  searchToggle: {
+    color: Colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 22,
+    marginBottom: 4,
+  },
+  searchNote: { color: Colors.textLight, fontSize: 12, lineHeight: 17, marginBottom: 10 },
   invitePanel: { alignItems: 'stretch' },
   inviteHeadline: { fontSize: 20, fontWeight: '800', color: Colors.primaryDark, textAlign: 'center' },
   invitePanelSub: {
