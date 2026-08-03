@@ -15,6 +15,9 @@ import { registerPushSubscription } from './src/utils/pushSubscription';
 import { registerForPushNotifications } from './src/utils/notifications';
 import { setupBadgeClearing } from './src/utils/appBadge';
 import { configurePurchases } from './src/utils/purchases';
+import { redeemEmailInvite } from './src/supabase/gameService';
+import { readPendingInvite, clearPendingInvite, stashPendingInvite } from './src/utils/pendingInvite';
+import { getInviteCodeFromLocation } from './src/utils/invites';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +41,49 @@ export default function App() {
   // Configure RevenueCat (no-op on web — the web app is free/unlimited)
   useEffect(() => {
     if (user?.id) configurePurchases(user.id);
+  }, [user?.id]);
+
+  // Capture an invite link (?invite=CODE) at the app root — before auth — so it
+  // works whether or not a session already exists (a logged-in user opening the
+  // link never mounts AuthScreen). Stash it, then strip it from the URL so it
+  // isn't re-processed or shared onward.
+  useEffect(() => {
+    const code = getInviteCodeFromLocation();
+    if (!code) return;
+    void stashPendingInvite(code);
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', url.toString());
+      } catch {
+        // Non-standard URL — leaving it is harmless.
+      }
+    }
+  }, []);
+
+  // Redeem a stashed invite once we have a session. The new game shows up in the
+  // Lobby via the realtime subscription, so there's nothing to navigate to here.
+  // Only clear the stashed code on a confirmed outcome ('created' or a
+  // definitive 'gone'); a transient/network error keeps it for the next launch.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const code = await readPendingInvite();
+      if (!code || cancelled) return;
+      try {
+        const result = await redeemEmailInvite(code);
+        if (!cancelled && (result.status === 'created' || result.status === 'gone')) {
+          await clearPendingInvite();
+        }
+      } catch {
+        // Transient failure (offline, server error) — keep the code and retry later.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   if (loading) {

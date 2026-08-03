@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,16 +13,37 @@ import {
 import { login, register } from '../supabase/authService';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
+import { formatInviteCode, isValidInviteCode, normalizeInviteCode } from '../utils/invites';
+import { readPendingInvite, stashPendingInvite } from '../utils/pendingInvite';
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isRegister = mode === 'register';
+  const hasInvite = isValidInviteCode(inviteCode);
+
+  // The invite code from a ?invite= link is captured and stashed at the app root
+  // (see App.tsx). Read it back here so a new signer-up sees the banner and code
+  // prefilled, and lands on the sign-up tab.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stashed = await readPendingInvite();
+      if (!cancelled && stashed) {
+        setInviteCode(stashed);
+        setMode('register');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit() {
     setError(null);
@@ -31,6 +52,9 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
+      // Persist any invite code before auth so App can redeem it once a session
+      // exists — even if confirmation defers the session to a later sign-in.
+      if (hasInvite) await stashPendingInvite(normalizeInviteCode(inviteCode));
       if (mode === 'login') {
         await login(email.trim(), password);
       } else {
@@ -70,6 +94,16 @@ export default function AuthScreen() {
 
         {/* Card */}
         <View style={styles.card}>
+          {hasInvite && (
+            <View style={styles.inviteBanner}>
+              <Text style={styles.inviteBannerText}>
+                🎉 You've been invited to play! {isRegister ? 'Create your account' : 'Sign in'} to
+                start your game.
+              </Text>
+              <Text style={styles.inviteBannerCode}>Code {formatInviteCode(inviteCode)}</Text>
+            </View>
+          )}
+
           {/* Segmented toggle */}
           <View style={styles.segment}>
             <TouchableOpacity
@@ -120,6 +154,16 @@ export default function AuthScreen() {
             onChangeText={setPassword}
             secureTextEntry
             accessibilityLabel="Password"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Invite code (optional)"
+            placeholderTextColor={Colors.textLight}
+            value={inviteCode}
+            onChangeText={setInviteCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            accessibilityLabel="Invite code"
           />
 
           {error && (
@@ -191,6 +235,21 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     ...SHADOWS.card,
+  },
+  inviteBanner: {
+    backgroundColor: Colors.tilePlaced,
+    borderRadius: RADII.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  inviteBannerText: { fontSize: 13, color: Colors.primaryDark, fontWeight: '700', lineHeight: 18 },
+  inviteBannerCode: {
+    fontSize: 13,
+    color: Colors.primaryDark,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginTop: 6,
   },
   segment: {
     flexDirection: 'row',

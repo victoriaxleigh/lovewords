@@ -16,7 +16,7 @@ Functions**. Native/App Store builds are separate — see `APP_STORE.md`.
 | Piece | Where | Notes |
 |---|---|---|
 | Web app (PWA) | Netlify, published from `dist/` | Built with `npm run build:web` |
-| Serverless functions | Netlify Functions (`netlify/functions/`) | `notify`, `game-analysis*`, `game-coach`, `delete-account` |
+| Serverless functions | Netlify Functions (`netlify/functions/`) | `notify`, `game-analysis*`, `game-coach`, `delete-account`, `send-invite` |
 | Database + auth + realtime | Supabase (Postgres) | URL + anon key in `src/supabase/config.ts` |
 | Auto-deploy | Push to `main` | `netlify.toml` runs `npm run build:web` |
 
@@ -37,6 +37,9 @@ build) for functions to see it.
 | `VAPID_PUBLIC_KEY` | no (public) | Builds, Functions, Runtime | notify | Public half of the Web Push keypair. Listed in `SECRETS_SCAN_OMIT_KEYS`. |
 | `VAPID_PRIVATE_KEY` | **yes** | Functions (+Runtime) | notify | Web Push private key. If leaked, rotate the keypair. |
 | `VAPID_EMAIL` | no | Functions (+Runtime) | notify | Contact email for push services. |
+| `RESEND_API_KEY` | **yes** | Functions (+Runtime) | send-invite | [Resend](https://resend.com) API key. **Optional** — when unset, email invites still work; the inviter just copies/shares the link or texts the code (`send-invite` returns `emailed:false`). Set it to also email invites. |
+| `INVITE_FROM_EMAIL` | no | Functions (+Runtime) | send-invite | From address for invite emails, e.g. `LoveWords <play@yourdomain>`. Defaults to Resend's shared onboarding sender. Requires a verified domain to send from your own address. |
+| `APP_URL` | no | Functions (+Runtime) | send-invite | Public site origin used to build invite links (`<APP_URL>/?invite=CODE`). Defaults to the production Netlify URL. |
 
 ### ⚠️ Two rules that bite people
 
@@ -65,6 +68,7 @@ to re-run.
 | RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | apply once |
 | `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | apply once |
 | `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | apply once |
+| `supabase/migrations/20260731000100_email_invites.sql` | Email / code invites for people not yet on the app (creates `email_invites` + `create_email_invite` / `create_phone_invite` / `redeem_email_invite` RPCs). Redemption creates the game **atomically** inside the RPC via `create_active_game`; codes use `gen_random_bytes`; `claim_invite_email_delivery` rate-limits invite emails; `find_profile_by_email` now raises on throttle. Fully idempotent — **re-run it to pick up the review fixes** if you applied an earlier copy. Required for invites; the optional `send-invite` function only *delivers* email invites | apply once (re-run safe) |
 
 The analysis migration must be applied **before** the analysis/coach functions
 are used, or exports fall back to `recordingQuality: "basic"` (no per-turn rack

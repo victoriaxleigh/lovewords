@@ -32,6 +32,12 @@
     <li><strong>Account information</strong> — your email address and the display
       name you choose when you sign up. Your email is used to sign you in and to
       let people you know invite you to a game.</li>
+    <li><strong>Invite contact details</strong> — if you invite someone who isn't
+      on LoveWords yet, we store the email address or phone number you enter so we
+      can create the invite (and, for an email invite, send it). You provide these
+      details; we don't read them from your device's contacts. Invites are
+      single-use, expire on their own, and the stored contact detail is removed
+      when the invite is cleaned up.</li>
     <li><strong>Game data</strong> — the games you play, moves, scores, and any
       in-game notes or messages you send to the other player.</li>
     <li><strong>Notification token</strong> — if you allow notifications, a push
@@ -46,6 +52,7 @@
   <ul>
     <li>To create and secure your account and sign you in.</li>
     <li>To run your games and deliver notes/messages to the other player.</li>
+    <li>To create the invites you send and, for email invites, deliver them.</li>
     <li>To send the push notifications you opt into (turn alerts, messages, nudges).</li>
   </ul>
   <p>We do not sell your personal information, and we do not share it for
@@ -58,6 +65,10 @@
     <li><strong>Netlify</strong> — hosts the app and its notification service.</li>
     <li><strong>Apple / Google / Expo push services</strong> — deliver notifications
       to your device.</li>
+    <li><strong>Resend</strong> — delivers invite emails when you invite someone by
+      email. It receives the recipient's email address and the invite message only
+      to send that email. (Phone invites are sent by you from your own Messages app;
+      we don't transmit phone numbers to any provider.)</li>
   </ul>
   <p>These providers process data on our behalf and only as needed to provide their service.</p>
 

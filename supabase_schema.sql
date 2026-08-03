@@ -926,3 +926,448 @@ create policy "notes_update" on love_notes for update
 -- Enable realtime for live game updates and love notes
 alter publication supabase_realtime add table games;
 alter publication supabase_realtime add table love_notes;
+
+
+-- ============================================================
+-- Email / code invites for people not yet on the app
+-- ============================================================
+-- See supabase/migrations/20260731000100_email_invites.sql for the full
+-- rationale. Holds both email and phone invites. Redemption creates the game
+-- and marks the invite accepted in one atomic transaction via the server-owned
+-- create_active_game contract.
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.email_invites (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  inviter_uid uuid not null references auth.users(id) on delete cascade,
+  invitee_email text,
+  invitee_phone text,
+  mode text not null default 'partner' check (mode in ('partner', 'friend')),
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'revoked')),
+  redeemer_uid uuid references auth.users(id) on delete set null,
+  game_id uuid references public.games(id) on delete set null,
+  emails_sent integer not null default 0 check (emails_sent >= 0),
+  last_email_at timestamptz,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '14 days'),
+  constraint email_invites_contact_present
+    check (invitee_email is not null or invitee_phone is not null)
+);
+alter table public.email_invites add column if not exists invitee_phone text;
+alter table public.email_invites add column if not exists game_id uuid references public.games(id) on delete set null;
+alter table public.email_invites add column if not exists emails_sent integer not null default 0;
+alter table public.email_invites add column if not exists last_email_at timestamptz;
+alter table public.email_invites alter column invitee_email drop not null;
+
+create index if not exists email_invites_inviter_pending_idx
+  on public.email_invites (inviter_uid, created_at)
+  where status = 'pending';
+create index if not exists email_invites_inviter_email_pending_idx
+  on public.email_invites (inviter_uid, lower(invitee_email))
+  where status = 'pending';
+create index if not exists email_invites_inviter_phone_pending_idx
+  on public.email_invites (inviter_uid, invitee_phone)
+  where status = 'pending';
+
+alter table public.email_invites enable row level security;
+revoke all on table public.email_invites from public, anon, authenticated;
+grant select on table public.email_invites to authenticated;
+grant all on table public.email_invites to service_role;
+
+drop policy if exists "email_invites_owner_read" on public.email_invites;
+create policy "email_invites_owner_read" on public.email_invites
+  for select using (auth.uid() = inviter_uid);
+
+create table if not exists public.email_invite_claim_limits (
+  redeemer_id uuid primary key references auth.users(id) on delete cascade,
+  window_started timestamptz not null default now(),
+  attempts integer not null default 0 check (attempts >= 0)
+);
+
+alter table public.email_invite_claim_limits enable row level security;
+revoke all on table public.email_invite_claim_limits from public, anon, authenticated;
+grant all on table public.email_invite_claim_limits to service_role;
+
+create or replace function public._generate_invite_code()
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  code_alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  new_code text;
+  attempt integer;
+  char_index integer;
+  sample integer;
+begin
+  for attempt in 1..16 loop
+    new_code := '';
+    for char_index in 1..8 loop
+      loop
+        sample := get_byte(gen_random_bytes(1), 0);
+        exit when sample < 248;
+      end loop;
+      new_code := new_code || substr(code_alphabet, 1 + (sample % 31), 1);
+    end loop;
+    exit when not exists (select 1 from public.email_invites e where e.code = new_code);
+    new_code := null;
+  end loop;
+  if new_code is null then
+    raise exception 'Could not allocate an invite code; try again';
+  end if;
+  return new_code;
+end;
+$$;
+
+create or replace function public.create_email_invite(
+  invitee_email text,
+  invite_mode text default 'partner'
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := auth.uid();
+  normalized_email text := lower(trim(invitee_email));
+  normalized_mode text := coalesce(nullif(trim(invite_mode), ''), 'partner');
+  existing_code text;
+  new_code text;
+begin
+  if caller_id is null then
+    raise exception 'Authentication required';
+  end if;
+  if normalized_email is null or char_length(normalized_email) < 3
+    or position('@' in normalized_email) < 2
+  then
+    raise exception 'Enter a valid email address';
+  end if;
+  if normalized_mode not in ('partner', 'friend') then
+    raise exception 'Invalid game mode';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('email-invite:' || caller_id::text, 0));
+
+  if (
+    select count(*) from public.email_invites e
+    where e.inviter_uid = caller_id
+      and e.status = 'pending'
+      and e.created_at >= clock_timestamp() - interval '1 hour'
+  ) >= 10 then
+    raise exception 'Too many invitations; try again later';
+  end if;
+
+  update public.email_invites
+  set expires_at = clock_timestamp() + interval '14 days'
+  where inviter_uid = caller_id
+    and lower(invitee_email) = normalized_email
+    and status = 'pending'
+    and expires_at > clock_timestamp()
+  returning code into existing_code;
+  if existing_code is not null then
+    return existing_code;
+  end if;
+
+  new_code := public._generate_invite_code();
+  insert into public.email_invites (code, inviter_uid, invitee_email, mode)
+  values (new_code, caller_id, normalized_email, normalized_mode);
+
+  return new_code;
+end;
+$$;
+
+create or replace function public.create_phone_invite(
+  invitee_phone text,
+  invite_mode text default 'partner'
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := auth.uid();
+  cleaned_phone text := regexp_replace(coalesce(invitee_phone, ''), '[^0-9+]', '', 'g');
+  digit_count integer := char_length(regexp_replace(coalesce(invitee_phone, ''), '[^0-9]', '', 'g'));
+  normalized_mode text := coalesce(nullif(trim(invite_mode), ''), 'partner');
+  existing_code text;
+  new_code text;
+begin
+  if caller_id is null then
+    raise exception 'Authentication required';
+  end if;
+  if digit_count < 7 or digit_count > 15 then
+    raise exception 'Enter a valid phone number';
+  end if;
+  if normalized_mode not in ('partner', 'friend') then
+    raise exception 'Invalid game mode';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('email-invite:' || caller_id::text, 0));
+
+  if (
+    select count(*) from public.email_invites e
+    where e.inviter_uid = caller_id
+      and e.status = 'pending'
+      and e.created_at >= clock_timestamp() - interval '1 hour'
+  ) >= 10 then
+    raise exception 'Too many invitations; try again later';
+  end if;
+
+  update public.email_invites
+  set expires_at = clock_timestamp() + interval '14 days'
+  where inviter_uid = caller_id
+    and invitee_phone = cleaned_phone
+    and status = 'pending'
+    and expires_at > clock_timestamp()
+  returning code into existing_code;
+  if existing_code is not null then
+    return existing_code;
+  end if;
+
+  new_code := public._generate_invite_code();
+  insert into public.email_invites (code, inviter_uid, invitee_phone, mode)
+  values (new_code, caller_id, cleaned_phone, normalized_mode);
+
+  return new_code;
+end;
+$$;
+
+drop function if exists public.redeem_email_invite(text);
+create or replace function public.redeem_email_invite(
+  invite_code text,
+  game_board jsonb,
+  game_bag jsonb,
+  rack1 jsonb,
+  rack2 jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  redeemer_id uuid := auth.uid();
+  normalized_code text := upper(regexp_replace(coalesce(invite_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  claim_attempts integer;
+  invite public.email_invites%rowtype;
+  game_players jsonb;
+  created_game_id uuid;
+begin
+  if redeemer_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  insert into public.email_invite_claim_limits (redeemer_id, window_started, attempts)
+  values (redeemer_id, clock_timestamp(), 1)
+  on conflict (redeemer_id) do update
+  set
+    window_started = case
+      when email_invite_claim_limits.window_started < clock_timestamp() - interval '1 hour'
+        then clock_timestamp()
+      else email_invite_claim_limits.window_started
+    end,
+    attempts = case
+      when email_invite_claim_limits.window_started < clock_timestamp() - interval '1 hour'
+        then 1
+      else email_invite_claim_limits.attempts + 1
+    end
+  returning attempts into claim_attempts;
+  if claim_attempts > 20 then
+    return null;
+  end if;
+
+  if char_length(normalized_code) <> 8 then
+    return null;
+  end if;
+
+  select * into invite
+  from public.email_invites e
+  where e.code = normalized_code
+  for update;
+  if not found then
+    return null;
+  end if;
+
+  if invite.status = 'accepted' then
+    if invite.redeemer_uid = redeemer_id and invite.game_id is not null then
+      return invite.game_id;
+    end if;
+    return null;
+  end if;
+
+  if invite.status <> 'pending' or invite.expires_at <= clock_timestamp() then
+    return null;
+  end if;
+  if invite.inviter_uid = redeemer_id then
+    return null;
+  end if;
+  if not exists (select 1 from public.profiles p where p.id = invite.inviter_uid) then
+    return null;
+  end if;
+
+  insert into public.game_creation_grants (creator_uid, opponent_uid, expires_at)
+  values (redeemer_id, invite.inviter_uid, clock_timestamp() + interval '5 minutes')
+  on conflict (creator_uid, opponent_uid) do update
+  set expires_at = excluded.expires_at;
+
+  game_players := jsonb_build_array(
+    jsonb_build_object(
+      'uid', redeemer_id, 'rack', coalesce(rack1, '[]'::jsonb),
+      'score', 0, 'historyVersion', 2
+    ),
+    jsonb_build_object(
+      'uid', invite.inviter_uid, 'rack', coalesce(rack2, '[]'::jsonb),
+      'score', 0, 'historyVersion', 2
+    )
+  );
+
+  created_game_id := public.create_active_game(
+    game_players,
+    game_board,
+    game_bag,
+    redeemer_id,
+    invite.mode,
+    true,
+    null,
+    false
+  );
+
+  update public.email_invites
+  set status = 'accepted', redeemer_uid = redeemer_id, game_id = created_game_id
+  where id = invite.id;
+
+  return created_game_id;
+end;
+$$;
+
+create or replace function public.claim_invite_email_delivery(
+  invite_code text,
+  sender_uid uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  normalized_code text := upper(regexp_replace(coalesce(invite_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  invite public.email_invites%rowtype;
+begin
+  if char_length(normalized_code) <> 8 then
+    return false;
+  end if;
+  select * into invite
+  from public.email_invites e
+  where e.code = normalized_code
+  for update;
+  if not found
+    or invite.inviter_uid <> sender_uid
+    or invite.status <> 'pending'
+    or invite.expires_at <= clock_timestamp()
+    or invite.invitee_email is null
+  then
+    return false;
+  end if;
+  if invite.last_email_at is not null
+    and invite.last_email_at > clock_timestamp() - interval '60 seconds'
+  then
+    return false;
+  end if;
+  if invite.emails_sent >= 5 then
+    return false;
+  end if;
+
+  update public.email_invites
+  set emails_sent = emails_sent + 1, last_email_at = clock_timestamp()
+  where id = invite.id;
+  return true;
+end;
+$$;
+
+create or replace function public.find_profile_by_email(lookup_email text)
+returns table (id uuid, display_name text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  lookup_attempts integer;
+  matched_id uuid;
+  matched_display_name text;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  insert into public.profile_email_lookup_limits (caller_id, window_started, attempts)
+  values (auth.uid(), clock_timestamp(), 1)
+  on conflict (caller_id) do update
+  set
+    window_started = case
+      when profile_email_lookup_limits.window_started < clock_timestamp() - interval '1 hour'
+        then clock_timestamp()
+      else profile_email_lookup_limits.window_started
+    end,
+    attempts = case
+      when profile_email_lookup_limits.window_started < clock_timestamp() - interval '1 hour'
+        then 1
+      else profile_email_lookup_limits.attempts + 1
+    end
+  returning attempts into lookup_attempts;
+
+  if lookup_attempts > 20 then
+    raise exception 'Too many lookups; try again later';
+  end if;
+
+  select p.id, p.display_name
+  into matched_id, matched_display_name
+  from auth.users u
+  join public.profiles p on p.id = u.id
+  where lower(u.email) = lower(trim(lookup_email))
+  limit 1;
+
+  if matched_id is null or matched_id = auth.uid() then
+    return;
+  end if;
+
+  insert into public.game_creation_grants (creator_uid, opponent_uid, expires_at)
+  values (auth.uid(), matched_id, clock_timestamp() + interval '5 minutes')
+  on conflict (creator_uid, opponent_uid) do update
+  set expires_at = excluded.expires_at;
+
+  return query select matched_id, matched_display_name;
+end;
+$$;
+
+create or replace function public.cleanup_email_invites()
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  delete from public.email_invites
+  where (status <> 'pending' or expires_at < clock_timestamp())
+    and created_at < clock_timestamp() - interval '30 days';
+  delete from public.email_invite_claim_limits
+  where window_started < clock_timestamp() - interval '2 days';
+end;
+$$;
+
+revoke all on function public._generate_invite_code() from public, anon, authenticated;
+revoke all on function public.create_email_invite(text, text) from public, anon;
+revoke all on function public.create_phone_invite(text, text) from public, anon;
+revoke all on function public.redeem_email_invite(text, jsonb, jsonb, jsonb, jsonb) from public, anon;
+revoke all on function public.claim_invite_email_delivery(text, uuid) from public, anon, authenticated;
+revoke execute on function public.cleanup_email_invites() from public, anon, authenticated;
+revoke all on function public.find_profile_by_email(text) from public, anon;
+grant execute on function public.create_email_invite(text, text) to authenticated;
+grant execute on function public.create_phone_invite(text, text) to authenticated;
+grant execute on function public.redeem_email_invite(text, jsonb, jsonb, jsonb, jsonb) to authenticated;
+grant execute on function public.claim_invite_email_delivery(text, uuid) to service_role;
+grant execute on function public.find_profile_by_email(text) to authenticated;

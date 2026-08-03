@@ -10,6 +10,7 @@ import {
   trailingPassCount,
 } from '../engine/gameHistory';
 import { FUNCTIONS_BASE } from '../utils/apiBase';
+import { buildInviteLink, normalizeInviteCode } from '../utils/invites';
 
 // Game ends after this many consecutive passes (2 each in a 2-player game).
 // Covers the "stuck" case where neither player has a valid play.
@@ -455,6 +456,97 @@ export async function createGameInvite(
   if (error) throw error;
   void sendPushNotification(player2.uid, 'invite', data.id, data.id);
   return data.id;
+}
+
+// ─── Email / code invites (for people not yet on the app) ─────────────────────
+// Inviting someone whose email has no account yet mints a single-use code
+// through the create_email_invite RPC. The inviter shares the resulting link or
+// code (and, when an email provider is configured, the send-invite function
+// emails it). When the invitee signs up, redeemEmailInvite() turns the code
+// into a real active game via the same grant path exact-email games use.
+export type EmailInviteResult = {
+  code: string;
+  link: string;
+};
+
+export async function createEmailInvite(
+  inviteeEmail: string,
+  mode: GameMode = 'partner'
+): Promise<EmailInviteResult> {
+  const { data, error } = await supabase.rpc('create_email_invite', {
+    invitee_email: inviteeEmail.toLowerCase().trim(),
+    invite_mode: mode,
+  });
+  if (error) throw error;
+  const code = typeof data === 'string' ? data : (data?.code ?? '');
+  if (!code) throw new Error('Could not create an invite.');
+  return { code, link: buildInviteLink(code) };
+}
+
+// Same single-use code, minted for a phone number. There's no delivery side —
+// the inviter shares the code/link from their own Messages app.
+export async function createPhoneInvite(
+  phone: string,
+  mode: GameMode = 'partner'
+): Promise<EmailInviteResult> {
+  const { data, error } = await supabase.rpc('create_phone_invite', {
+    invitee_phone: phone.trim(),
+    invite_mode: mode,
+  });
+  if (error) throw error;
+  const code = typeof data === 'string' ? data : (data?.code ?? '');
+  if (!code) throw new Error('Could not create an invite.');
+  return { code, link: buildInviteLink(code) };
+}
+
+// Asks the serverless function to email the invite. Best-effort: returns true
+// only when the email was actually sent, so the UI can tell the inviter whether
+// they still need to share the link/code themselves. Never throws.
+export async function sendInviteEmail(code: string): Promise<boolean> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) return false;
+    const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/send-invite`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code: normalizeInviteCode(code) }),
+    });
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => ({}));
+    return Boolean(body?.emailed);
+  } catch {
+    return false;
+  }
+}
+
+// Redeem a code as the signed-in user. The redemption RPC creates the active
+// game (redeemer becomes player one) and marks the invite accepted in a single
+// transaction, so there is no window where the invite is spent but no game
+// exists. 'gone' means the code was invalid/expired/taken (a definitive dead
+// end); a thrown error is transient and the caller should keep the code to
+// retry. The tiles are generated here, exactly as createGame does.
+export type RedeemResult = { status: 'created'; gameId: string } | { status: 'gone' };
+
+export async function redeemEmailInvite(code: string): Promise<RedeemResult> {
+  const bag = createTileBag();
+  const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
+  const { drawn: rack2, remaining: finalBag } = drawTiles(bag2, 7);
+  const { data, error } = await supabase.rpc('redeem_email_invite', {
+    invite_code: normalizeInviteCode(code),
+    game_board: createEmptyBoard(),
+    game_bag: finalBag,
+    rack1,
+    rack2,
+  });
+  if (error) throw new Error(error.message ?? 'Could not redeem invite.');
+  const gameId = typeof data === 'string' ? data : (data ?? null);
+  if (!gameId) return { status: 'gone' };
+  return { status: 'created', gameId };
 }
 
 async function currentUid(): Promise<string> {

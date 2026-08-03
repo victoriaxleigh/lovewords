@@ -12,10 +12,13 @@ import {
 import {
   acceptGameInvite,
   cancelGameInvite,
+  createEmailInvite,
   createGame,
   createGameInvite,
+  createPhoneInvite,
   createSoloGame,
   declineGameInvite,
+  sendInviteEmail,
   subscribeToUserGames,
   deleteGame,
   getUserGameCount,
@@ -28,7 +31,7 @@ import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
 import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
-import NewGameModal from './NewGameModal';
+import NewGameModal, { PendingInvite } from './NewGameModal';
 
 type Props = {
   currentUser: Player;
@@ -49,6 +52,7 @@ export default function LobbyScreen({ currentUser }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('active');
   const [showNewGame, setShowNewGame] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(null);
   const [startingSolo, setStartingSolo] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -103,7 +107,10 @@ export default function LobbyScreen({ currentUser }: Props) {
       }
       const opponentData = await getUserByEmail(email);
       if (!opponentData) {
-        setErrorMsg('No one with that email yet. Ask them to sign up first.');
+        // Not on LoveWords yet — mint a shareable invite instead of a dead end.
+        const { code, link } = await createEmailInvite(email, mode);
+        const emailed = await sendInviteEmail(code);
+        setPendingInvite({ code, link, channel: 'email', contact: email.trim(), emailed });
         return;
       }
       const opponent: GameParticipant = {
@@ -115,6 +122,26 @@ export default function LobbyScreen({ currentUser }: Props) {
       navigation.navigate('Game', { gameId, myUid: currentUser.uid, myDisplayName: currentUser.displayName });
     } catch (err: any) {
       setErrorMsg(err.message);
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleStartPhone(phone: string, mode: GameMode) {
+    if (!phone.trim()) return;
+    setInviting(true);
+    setErrorMsg(null);
+    try {
+      if (await isBlockedByPaywall()) {
+        setShowNewGame(false);
+        navigation.navigate('Paywall');
+        return;
+      }
+      // No member lookup by phone — always mint a shareable/textable invite.
+      const { code, link } = await createPhoneInvite(phone, mode);
+      setPendingInvite({ code, link, channel: 'phone', contact: phone.trim(), emailed: false });
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Could not create an invite.');
     } finally {
       setInviting(false);
     }
@@ -243,6 +270,7 @@ export default function LobbyScreen({ currentUser }: Props) {
         style={styles.newGameBtn}
         onPress={() => {
           setErrorMsg(null);
+          setPendingInvite(null);
           setShowNewGame(true);
         }}
         accessibilityRole="button"
@@ -445,14 +473,20 @@ export default function LobbyScreen({ currentUser }: Props) {
 
       <NewGameModal
         visible={showNewGame}
-        onClose={() => setShowNewGame(false)}
+        onClose={() => {
+          setShowNewGame(false);
+          setPendingInvite(null);
+        }}
         onStart={handleStart}
+        onStartPhone={handleStartPhone}
         onInvite={handleInvite}
         onStartSolo={handleStartSolo}
         inviting={inviting}
         startingSolo={startingSolo}
         errorMsg={errorMsg}
         onClearError={() => setErrorMsg(null)}
+        pendingInvite={pendingInvite}
+        onDismissInvite={() => setPendingInvite(null)}
       />
     </View>
   );

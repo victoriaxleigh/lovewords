@@ -20,6 +20,19 @@
 
 ### Added
 
+- **Invite someone who isn't on LoveWords yet, by email or phone.** Entering an
+  email that has no account no longer dead-ends — it mints a single-use invite
+  code and shareable link (copy, share sheet, or texted code), and emails the
+  invite when a provider is configured. You can also invite by **phone number**:
+  the app builds the same invite and opens your Messages app prefilled so you
+  text it yourself (no SMS provider needed). Opening the link (`?invite=CODE`) or
+  entering the code on sign-up redeems it into a real game with the inviter,
+  created through the same server-owned `create_active_game` grant path as every
+  other game — redemption is **atomic** (the invite is only spent once the game
+  exists) and idempotent for the redeemer. Invite codes use a CSPRNG, redemption
+  guesses are throttled durably, and invite emails are rate-limited (60s cooldown,
+  5 per invite). Requires the `email_invites` migration; auto-sending email
+  invites is optional and set up with `RESEND_API_KEY` (see DEPLOY.md).
 - Opt-in player discovery by display name with privacy-safe player codes and
   accept/decline/cancel game invitations.
 - Server-authorized game creation and event-bound, abuse-limited push notifications.
