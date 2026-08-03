@@ -92,6 +92,16 @@ describe.each([
     );
   });
 
+  test('dedupe qualifies the contact column (no param/column ambiguity)', () => {
+    // create_email_invite/create_phone_invite each have a param named after the
+    // column; the dedupe UPDATE must qualify the column with the table name or
+    // Postgres throws "column reference is ambiguous" at call time.
+    expect(sql).toContain('lower(email_invites.invitee_email) = normalized_email');
+    expect(sql).toContain('email_invites.invitee_phone = cleaned_phone');
+    expect(sql).not.toContain('lower(invitee_email) = normalized_email');
+    expect(sql).not.toContain('and invitee_phone = cleaned_phone');
+  });
+
   test('exact-email lookup raises on throttle so misses are distinguishable', () => {
     expect(sql).toContain('function public.find_profile_by_email(lookup_email text)');
     expect(sql).toContain("raise exception 'too many lookups; try again later'");
