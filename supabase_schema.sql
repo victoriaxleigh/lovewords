@@ -936,8 +936,6 @@ alter publication supabase_realtime add table love_notes;
 -- and marks the invite accepted in one atomic transaction via the server-owned
 -- create_active_game contract.
 
-create extension if not exists pgcrypto;
-
 create table if not exists public.email_invites (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
@@ -1000,17 +998,22 @@ declare
   code_alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   new_code text;
   attempt integer;
-  char_index integer;
+  hex text;
+  pos integer;
   sample integer;
 begin
   for attempt in 1..16 loop
     new_code := '';
-    for char_index in 1..8 loop
-      loop
-        sample := get_byte(gen_random_bytes(1), 0);
-        exit when sample < 248;
+    while char_length(new_code) < 8 loop
+      hex := replace(gen_random_uuid()::text, '-', '');
+      pos := 1;
+      while char_length(new_code) < 8 and pos <= 31 loop
+        sample := get_byte(decode(substr(hex, pos, 2), 'hex'), 0);
+        pos := pos + 2;
+        if sample < 248 then
+          new_code := new_code || substr(code_alphabet, 1 + (sample % 31), 1);
+        end if;
       end loop;
-      new_code := new_code || substr(code_alphabet, 1 + (sample % 31), 1);
     end loop;
     exit when not exists (select 1 from public.email_invites e where e.code = new_code);
     new_code := null;

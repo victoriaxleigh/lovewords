@@ -82,6 +82,30 @@ export default function NewGameModal({
     );
   }
 
+  // Open the user's email app with the invite pre-addressed and pre-written, so
+  // they send it from their own account (no email provider / domain needed).
+  async function handleEmailInvite() {
+    if (!pendingInvite) return;
+    const subject = 'Play LoveWords with me 💌';
+    const body = inviteMessage(pendingInvite);
+    const url =
+      `mailto:${encodeURIComponent(pendingInvite.contact)}` +
+      `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.location.href = url;
+      return;
+    }
+    try {
+      if (await Linking.canOpenURL(url)) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // Fall through to the share sheet.
+    }
+    await handleShareInvite();
+  }
+
   // Open the SMS composer prefilled with the recipient and the invite message.
   // Cross-platform sms: URIs differ (iOS uses & before body, Android uses ?),
   // and desktop has no composer, so fall back to the generic share/copy path.
@@ -247,11 +271,11 @@ export default function NewGameModal({
               ) : (
                 <TouchableOpacity
                   style={styles.startBtn}
-                  onPress={handleShareInvite}
+                  onPress={handleEmailInvite}
                   accessibilityRole="button"
-                  accessibilityLabel="Share invite link"
+                  accessibilityLabel="Email invite"
                 >
-                  <Text style={styles.startBtnText}>Share invite</Text>
+                  <Text style={styles.startBtnText}>📧 Email invite</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
