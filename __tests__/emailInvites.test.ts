@@ -16,8 +16,6 @@ import { supabase } from '../src/supabase/config';
 const rpc = supabase.rpc as jest.Mock;
 const getSession = supabase.auth.getSession as jest.Mock;
 
-const INVITER = '11111111-1111-4111-8111-111111111111';
-const REDEEMER = '22222222-2222-4222-8222-222222222222';
 
 describe('email invite creation', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -98,36 +96,31 @@ describe('sending an invite email', () => {
 describe('redeeming an invite', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  test('redeems then opens an active game with the inviter as the caller-created game', async () => {
-    rpc
-      .mockResolvedValueOnce({
-        data: [{ inviter_uid: INVITER, inviter_display_name: 'Vic', mode: 'partner' }],
-        error: null,
-      })
-      .mockResolvedValueOnce({ data: 'new-game-id', error: null });
+  test('redeems atomically in a single RPC that returns the created game id', async () => {
+    rpc.mockResolvedValueOnce({ data: 'new-game-id', error: null });
 
-    const gameId = await redeemEmailInvite('love-2345', {
-      uid: REDEEMER,
-      displayName: 'Newbie',
-    });
+    const result = await redeemEmailInvite('love-2345');
 
-    expect(gameId).toBe('new-game-id');
-    expect(rpc.mock.calls[0]).toEqual(['redeem_email_invite', { invite_code: 'LOVE2345' }]);
-
-    const [fnName, args] = rpc.mock.calls[1];
-    expect(fnName).toBe('create_active_game');
-    // Redeemer is player one; the invite grant authorizes the pairing.
-    expect(args.game_players[0].uid).toBe(REDEEMER);
-    expect(args.game_players[1].uid).toBe(INVITER);
-    expect(args.email_grant).toBe(true);
-    expect(args.solo_game).toBe(false);
-    expect(args.game_current_turn).toBe(REDEEMER);
+    expect(result).toEqual({ status: 'created', gameId: 'new-game-id' });
+    // One atomic call — the game is created inside redeem, not a second RPC.
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [fnName, args] = rpc.mock.calls[0];
+    expect(fnName).toBe('redeem_email_invite');
+    expect(args.invite_code).toBe('LOVE2345');
+    // The client supplies the tiles, exactly as createGame does.
+    expect(args.rack1).toHaveLength(7);
+    expect(args.rack2).toHaveLength(7);
+    expect(args.game_bag).toHaveLength(90);
+    expect(Array.isArray(args.game_board)).toBe(true);
   });
 
-  test('throws a friendly error when the invite is gone', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'Invite is no longer available' } });
-    await expect(
-      redeemEmailInvite('LOVE2345', { uid: REDEEMER, displayName: 'Newbie' })
-    ).rejects.toThrow('no longer available');
+  test('reports a definitive "gone" when the RPC returns no game id', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+    await expect(redeemEmailInvite('LOVE2345')).resolves.toEqual({ status: 'gone' });
+  });
+
+  test('throws (retryable) on a transient RPC error', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'network down' } });
+    await expect(redeemEmailInvite('LOVE2345')).rejects.toThrow('network down');
   });
 });

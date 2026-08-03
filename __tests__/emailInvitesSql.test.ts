@@ -48,22 +48,51 @@ describe.each([
     expect(sql).toContain('grant execute on function public.create_email_invite(text, text) to authenticated');
   });
 
-  test('redeems through a grant into the shared active-game contract', () => {
-    expect(sql).toContain('function public.redeem_email_invite(invite_code text)');
-    expect(sql).toContain('you cannot redeem your own invite');
-    expect(sql).toContain('invite is no longer available');
+  test('redeems atomically into the shared active-game contract', () => {
+    expect(sql).toContain('function public.redeem_email_invite(');
+    // The game is created inside redemption (one transaction), not a second RPC.
+    expect(sql).toContain('created_game_id := public.create_active_game(');
     // Redemption must not forge a game row; it authorizes create_active_game.
     expect(sql).toContain('insert into public.game_creation_grants (creator_uid, opponent_uid, expires_at)');
     expect(sql).toContain("clock_timestamp() + interval '5 minutes'");
-    expect(sql).toContain('grant execute on function public.redeem_email_invite(text) to authenticated');
+    // Idempotent replay returns the game created the first time, not a duplicate.
+    expect(sql).toContain('return invite.game_id');
+    expect(sql).toContain('grant execute on function public.redeem_email_invite(text, jsonb, jsonb, jsonb, jsonb) to authenticated');
   });
 
-  test('throttles redemption guesses in private state', () => {
+  test('records redemption attempts durably (returns, never raises, on failure)', () => {
     expect(sql).toContain('create table if not exists public.email_invite_claim_limits');
     expect(sql).toContain(
       'revoke all on table public.email_invite_claim_limits from public, anon, authenticated'
     );
     expect(sql).toContain('if claim_attempts > 20');
+    // The over-limit and not-found paths must RETURN, not RAISE, or the attempt
+    // increment is rolled back and the throttle never counts invalid guesses.
+    expect(sql).toContain('return null');
+    expect(sql).not.toMatch(/raise exception 'invite is no longer available'/i);
+  });
+
+  test('generates codes with a CSPRNG, not random()', () => {
+    expect(sql).toContain('create extension if not exists pgcrypto');
+    expect(sql).toContain('function public._generate_invite_code()');
+    expect(sql).toContain('gen_random_bytes');
+    expect(sql).toContain('exit when sample < 248'); // rejection sampling removes modulo bias
+    expect(sql).not.toContain('floor(random()');
+  });
+
+  test('rate-limits invite email delivery atomically', () => {
+    expect(sql).toContain('function public.claim_invite_email_delivery(');
+    expect(sql).toContain("interval '60 seconds'"); // cooldown
+    expect(sql).toContain('invite.emails_sent >= 5'); // hard cap
+    expect(sql).toContain('or invite.expires_at <= clock_timestamp()'); // expiry gate
+    expect(sql).toContain(
+      'grant execute on function public.claim_invite_email_delivery(text, uuid) to service_role'
+    );
+  });
+
+  test('exact-email lookup raises on throttle so misses are distinguishable', () => {
+    expect(sql).toContain('function public.find_profile_by_email(lookup_email text)');
+    expect(sql).toContain("raise exception 'too many lookups; try again later'");
   });
 
   test('bounds retention for accepted and expired invites', () => {

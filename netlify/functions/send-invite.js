@@ -90,7 +90,7 @@ exports.handler = async (event) => {
   // Only the inviter may send their own pending invite.
   const inviteRes = await fetch(
     `${supabaseUrl}/rest/v1/email_invites?code=eq.${encodeURIComponent(code)}` +
-      '&select=inviter_uid,invitee_email,mode,status&limit=1',
+      '&select=inviter_uid,invitee_email,mode,status,expires_at&limit=1',
     { headers: supabaseHeaders }
   );
   if (!inviteRes.ok) {
@@ -100,6 +100,14 @@ exports.handler = async (event) => {
   const invite = inviteRows && inviteRows[0];
   if (!invite || invite.status !== 'pending' || invite.inviter_uid !== senderUid) {
     return { statusCode: 403, body: 'Not authorized' };
+  }
+
+  if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailed: false, reason: 'expired' }),
+    };
   }
 
   const inviteeEmail = invite.invitee_email;
@@ -125,6 +133,28 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ emailed: false, reason: 'not_configured' }),
+    };
+  }
+
+  // Atomically reserve a send: verifies ownership + pending + not-expired and
+  // enforces a 60s cooldown and a hard cap of 5 emails per invite, so a pending
+  // invite can't be replayed to spam the recipient or burn Resend quota. The
+  // claim increments the counter only when it returns true, so we do it *after*
+  // the provider check and immediately before sending.
+  const claimRes = await fetch(`${supabaseUrl}/rest/v1/rpc/claim_invite_email_delivery`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invite_code: code, sender_uid: senderUid }),
+  });
+  if (!claimRes.ok) {
+    return { statusCode: 502, body: 'Could not reserve invite delivery' };
+  }
+  const claimAllowed = await claimRes.json().catch(() => false);
+  if (claimAllowed !== true) {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailed: false, reason: 'rate_limited' }),
     };
   }
 

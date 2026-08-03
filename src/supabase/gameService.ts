@@ -524,21 +524,29 @@ export async function sendInviteEmail(code: string): Promise<boolean> {
   }
 }
 
-// Redeem a code as the signed-in user and open the active game with the
-// inviter. The redeemer becomes player one (new games start on player one).
-export async function redeemEmailInvite(code: string, me: GameParticipant): Promise<string> {
+// Redeem a code as the signed-in user. The redemption RPC creates the active
+// game (redeemer becomes player one) and marks the invite accepted in a single
+// transaction, so there is no window where the invite is spent but no game
+// exists. 'gone' means the code was invalid/expired/taken (a definitive dead
+// end); a thrown error is transient and the caller should keep the code to
+// retry. The tiles are generated here, exactly as createGame does.
+export type RedeemResult = { status: 'created'; gameId: string } | { status: 'gone' };
+
+export async function redeemEmailInvite(code: string): Promise<RedeemResult> {
+  const bag = createTileBag();
+  const { drawn: rack1, remaining: bag2 } = drawTiles(bag, 7);
+  const { drawn: rack2, remaining: finalBag } = drawTiles(bag2, 7);
   const { data, error } = await supabase.rpc('redeem_email_invite', {
     invite_code: normalizeInviteCode(code),
+    game_board: createEmptyBoard(),
+    game_bag: finalBag,
+    rack1,
+    rack2,
   });
-  if (error) throw new Error(error.message ?? 'Invite is no longer available.');
-  const row = Array.isArray(data) ? (data[0] ?? null) : data;
-  if (!row?.inviter_uid) throw new Error('Invite is no longer available.');
-  const inviter: GameParticipant = {
-    uid: row.inviter_uid,
-    displayName: row.inviter_display_name ?? 'Your partner',
-  };
-  const mode: GameMode = row.mode === 'friend' ? 'friend' : 'partner';
-  return createGame(me, inviter, mode, { kind: 'email' });
+  if (error) throw new Error(error.message ?? 'Could not redeem invite.');
+  const gameId = typeof data === 'string' ? data : (data ?? null);
+  if (!gameId) return { status: 'gone' };
+  return { status: 'created', gameId };
 }
 
 async function currentUid(): Promise<string> {

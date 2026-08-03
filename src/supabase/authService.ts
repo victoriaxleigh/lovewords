@@ -68,11 +68,16 @@ export async function deleteAccount(): Promise<{ success: boolean; error?: strin
   }
 }
 
+// Resolves to the matching member, or null for a *confirmed* miss (no such
+// account). A lookup error — network failure, or the per-account lookup
+// allowance being exhausted (the RPC now raises "Too many lookups") — throws,
+// so callers don't mistake an error for "not a member" and create an
+// onboarding invite for someone who already has an account.
 export async function getUserByEmail(email: string) {
   const { data, error } = await supabase.rpc('find_profile_by_email', {
     lookup_email: email.toLowerCase().trim(),
   });
-  if (error) return null;
+  if (error) throw new Error(error.message ?? 'Could not look up that email. Try again.');
   const row = Array.isArray(data) ? data[0] ?? null : data;
   return row ? { id: row.id, display_name: row.display_name } : null;
 }

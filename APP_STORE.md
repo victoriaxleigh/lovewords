@@ -85,6 +85,7 @@ Contact Info, never the address book.
 | Data type | Collected? | Linked to identity? | Used for tracking? | Purpose |
 |---|---|---|---|---|
 | Contact Info — Email Address | ✅ Yes | Yes | No | App Functionality (account, invites) |
+| Contact Info — Phone Number | ✅ Yes | Yes | No | App Functionality (invite someone by phone — you enter it; not read from the address book) |
 | Contact Info — Name (display name) | ✅ Yes | Yes | No | App Functionality |
 | User Content — in-game messages/notes | ✅ Yes | Yes | No | App Functionality |
 | Identifiers — push token | ✅ Yes | Yes | No | App Functionality (notifications) |
@@ -93,6 +94,12 @@ Contact Info, never the address book.
 | Usage Data / Analytics | ❌ No | — | — | — |
 | Advertising / Third-party ads | ❌ No | — | — | — |
 
+- **Invites:** the email address or phone number you type to invite someone who
+  isn't on LoveWords yet is Contact Info you enter — it is never read from your
+  device's address book. Email invites are delivered by **Resend** (a processor);
+  phone invites are sent by you from your own Messages app, so no phone number is
+  transmitted to a provider. Disclose Resend alongside Supabase/Netlify in your
+  processor list.
 - Overall answer to "Do you or your partners use data to **track** users?" → **No.**
 - This yields a clean label: "Data Linked to You" (for functionality), **no**
   "Data Used to Track You."

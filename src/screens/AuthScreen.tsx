@@ -13,13 +13,8 @@ import {
 import { login, register } from '../supabase/authService';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
-import {
-  formatInviteCode,
-  getInviteCodeFromLocation,
-  isValidInviteCode,
-  normalizeInviteCode,
-} from '../utils/invites';
-import { stashPendingInvite } from '../utils/pendingInvite';
+import { formatInviteCode, isValidInviteCode, normalizeInviteCode } from '../utils/invites';
+import { readPendingInvite, stashPendingInvite } from '../utils/pendingInvite';
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -33,16 +28,21 @@ export default function AuthScreen() {
   const isRegister = mode === 'register';
   const hasInvite = isValidInviteCode(inviteCode);
 
-  // Someone opening an invite link (?invite=CODE) lands here to sign up. Capture
-  // the code, nudge them toward creating an account, and stash it so it survives
-  // the round-trip through registration (which may require email confirmation).
+  // The invite code from a ?invite= link is captured and stashed at the app root
+  // (see App.tsx). Read it back here so a new signer-up sees the banner and code
+  // prefilled, and lands on the sign-up tab.
   useEffect(() => {
-    const fromUrl = getInviteCodeFromLocation();
-    if (fromUrl) {
-      setInviteCode(fromUrl);
-      setMode('register');
-      void stashPendingInvite(fromUrl);
-    }
+    let cancelled = false;
+    (async () => {
+      const stashed = await readPendingInvite();
+      if (!cancelled && stashed) {
+        setInviteCode(stashed);
+        setMode('register');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleSubmit() {
