@@ -19,6 +19,19 @@ describe('player discovery UI regressions', () => {
     expect(modal).toContain('accessibilityLabel="Retry player search"');
   });
 
+  test('leads with one email-or-phone action and demotes name search', () => {
+    // Primary path: a single field that routes to email or phone by content.
+    expect(modal).toContain('Invite by email or phone');
+    expect(modal).toContain('function handleContactSubmit');
+    expect(modal).toContain('onStart(value, mode)');
+    expect(modal).toContain('onStartPhone(value, mode)');
+    // Name search is now a secondary, collapsible option that explains the
+    // discoverability requirement instead of dead-ending.
+    expect(modal).toContain('Find a player by name');
+    expect(modal).toContain('Discoverable');
+    expect(modal).toMatch(/invite them\s+by email or phone above instead/i);
+  });
+
   test('checks the native paywall before accepting without consuming the invitation', () => {
     expect(lobby).toMatch(
       /if \(action === 'accept'\) \{\s*if \(await isBlockedByPaywall\(\)\) \{[\s\S]*?navigation\.navigate\('Paywall'\);[\s\S]*?return;[\s\S]*?\}\s*await acceptGameInvite/
