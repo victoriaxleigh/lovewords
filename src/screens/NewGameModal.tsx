@@ -271,18 +271,22 @@ export default function NewGameModal({
           onPress={() => setMode('partner')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'partner' }}
+          accessibilityLabel="Partner mode — love letters, sweet nothings between moves"
         >
           <Text style={[styles.modePillText, mode === 'partner' && styles.modePillTextActive]}>💕 Partner</Text>
-          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>Love notes &amp; sweet talk</Text>
+          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>&ldquo;Love letters&rdquo;</Text>
+          <Text style={[styles.modeGloss, mode === 'partner' && styles.modeGlossActive]}>sweet nothings between moves</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modePill, mode === 'friend' && styles.modePillActive]}
           onPress={() => setMode('friend')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'friend' }}
+          accessibilityLabel="Friend mode — fighting words, friendly trash talk between moves"
         >
           <Text style={[styles.modePillText, mode === 'friend' && styles.modePillTextActive]}>🎲 Friend</Text>
-          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>Keep it casual &amp; competitive</Text>
+          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>&ldquo;Fighting words&rdquo;</Text>
+          <Text style={[styles.modeGloss, mode === 'friend' && styles.modeGlossActive]}>friendly trash talk between moves</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -618,8 +622,10 @@ const styles = StyleSheet.create({
   },
   modePillText: { fontSize: 16, fontWeight: '800', color: Colors.textLight },
   modePillTextActive: { color: Colors.primaryDark },
-  modeSub: { fontSize: 11, color: Colors.textLight, marginTop: 4, textAlign: 'center' },
+  modeSub: { fontSize: 11, fontWeight: '700', fontStyle: 'italic', color: Colors.textLight, marginTop: 4, textAlign: 'center' },
   modeSubActive: { color: Colors.primaryDark },
+  modeGloss: { fontSize: 10, color: Colors.textLight, marginTop: 2, textAlign: 'center' },
+  modeGlossActive: { color: Colors.primaryDark },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: RADII.md,
