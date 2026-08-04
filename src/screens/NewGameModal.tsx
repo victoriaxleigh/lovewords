@@ -82,14 +82,20 @@ export default function NewGameModal({
     );
   }
 
+  // Browsers only allow a mailto:/sms: hand-off when it's the direct,
+  // synchronous result of a user gesture — an `await` before it (e.g. for a
+  // clipboard write) breaks that chain and the navigation gets silently
+  // swallowed. So on web, navigate first and let the clipboard copy race in
+  // the background as a safety net; native has no such gesture restriction.
+  const isIOSWeb =
+    Platform.OS === 'web' &&
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent);
+
   // Open the user's email app with the invite pre-addressed and pre-written, so
   // they send it from their own account (no email provider / domain needed).
-  // Whether a mailto: handler is even registered varies by OS/browser and we
-  // have no way to detect a silent no-op, so the message is copied first —
-  // it's always in the clipboard to paste even if nothing visibly opens.
   async function handleEmailInvite() {
     if (!pendingInvite) return;
-    await copyInviteMessage();
     const subject = 'Play LoveWords with me 💌';
     const body = inviteMessage(pendingInvite);
     const url =
@@ -97,8 +103,10 @@ export default function NewGameModal({
       `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined') window.location.href = url;
+      void copyInviteMessage();
       return;
     }
+    await copyInviteMessage();
     try {
       if (await Linking.canOpenURL(url)) {
         await Linking.openURL(url);
@@ -111,18 +119,21 @@ export default function NewGameModal({
   }
 
   // Open the SMS composer prefilled with the recipient and the invite message.
-  // Cross-platform sms: URIs differ (iOS uses & before body, Android uses ?),
-  // and desktop has no composer, so fall back to the generic share/copy path.
-  // Same clipboard safety net as email — sms: handlers are just as unreliable.
+  // Cross-platform sms: URIs differ (iOS uses & before body, everything else
+  // uses ?) — Platform.OS is always 'web' in a browser regardless of the
+  // underlying phone, so iOS is detected from the user agent instead.
   async function handleTextInvite() {
     if (!pendingInvite) return;
-    await copyInviteMessage();
     const message = inviteMessage(pendingInvite);
     const number = pendingInvite.contact.replace(/[^0-9+]/g, '');
     if (Platform.OS === 'web') {
-      await handleShareInvite();
+      const separator = isIOSWeb ? '&' : '?';
+      const url = `sms:${number}${separator}body=${encodeURIComponent(message)}`;
+      if (typeof window !== 'undefined') window.location.href = url;
+      void copyInviteMessage();
       return;
     }
+    await copyInviteMessage();
     const separator = Platform.OS === 'ios' ? '&' : '?';
     const url = `sms:${number}${separator}body=${encodeURIComponent(message)}`;
     try {
@@ -281,22 +292,20 @@ export default function NewGameModal({
           onPress={() => setMode('partner')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'partner' }}
-          accessibilityLabel="Partner mode — love letters, sweet nothings between moves"
+          accessibilityLabel="Partner mode — love letters"
         >
           <Text style={[styles.modePillText, mode === 'partner' && styles.modePillTextActive]}>💕 Partner</Text>
-          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>&ldquo;Love letters&rdquo;</Text>
-          <Text style={[styles.modeGloss, mode === 'partner' && styles.modeGlossActive]}>sweet nothings between moves</Text>
+          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>Love letters</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modePill, mode === 'friend' && styles.modePillActive]}
           onPress={() => setMode('friend')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'friend' }}
-          accessibilityLabel="Friend mode — fighting words, friendly trash talk between moves"
+          accessibilityLabel="Friend mode — fighting words"
         >
           <Text style={[styles.modePillText, mode === 'friend' && styles.modePillTextActive]}>🎲 Friend</Text>
-          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>&ldquo;Fighting words&rdquo;</Text>
-          <Text style={[styles.modeGloss, mode === 'friend' && styles.modeGlossActive]}>friendly trash talk between moves</Text>
+          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>Fighting words</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -638,8 +647,6 @@ const styles = StyleSheet.create({
   modePillTextActive: { color: Colors.primaryDark },
   modeSub: { fontSize: 11, fontWeight: '700', fontStyle: 'italic', color: Colors.textLight, marginTop: 4, textAlign: 'center' },
   modeSubActive: { color: Colors.primaryDark },
-  modeGloss: { fontSize: 10, color: Colors.textLight, marginTop: 2, textAlign: 'center' },
-  modeGlossActive: { color: Colors.primaryDark },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: RADII.md,
