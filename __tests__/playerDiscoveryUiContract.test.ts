@@ -29,7 +29,16 @@ describe('player discovery UI regressions', () => {
     // discoverability requirement instead of dead-ending.
     expect(modal).toContain('Find a player by name');
     expect(modal).toContain('Discoverable');
-    expect(modal).toMatch(/invite them\s+by email or phone above instead/i);
+    expect(modal).toMatch(/invite them\s+by email or phone instead/i);
+  });
+
+  test('opens to a menu that branches into focused steps', () => {
+    expect(modal).toContain("useState<Step>('menu')");
+    expect(modal).toContain("setStep('find')");
+    expect(modal).toContain("setStep('invite')");
+    // Solo starts straight from the menu; the other two branch to their own step.
+    expect(modal).toContain('Practice solo');
+    expect(modal).toContain('Back to menu');
   });
 
   test('checks the native paywall before accepting without consuming the invitation', () => {

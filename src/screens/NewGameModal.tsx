@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { GameMode } from '../types';
 import { Colors } from '../utils/colors';
-import { RADII } from '../utils/styles';
+import { RADII, SHADOWS } from '../utils/styles';
 import { PublicProfile, searchProfiles } from '../supabase/authService';
 import { formatInviteCode } from '../utils/invites';
 
@@ -26,6 +26,8 @@ export type PendingInvite = {
   contact: string; // the email address or phone number the invite is for
   emailed: boolean; // whether the app auto-emailed it (always false for phone)
 };
+
+type Step = 'menu' | 'invite' | 'find';
 
 type Props = {
   visible: boolean;
@@ -57,12 +59,12 @@ export default function NewGameModal({
   onDismissInvite,
 }: Props) {
   const [mode, setMode] = useState<GameMode>('partner');
+  const [step, setStep] = useState<Step>('menu');
   const [contact, setContact] = useState('');
   const [contactError, setContactError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<PublicProfile[]>([]);
-  const [showSearch, setShowSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -172,13 +174,29 @@ export default function NewGameModal({
     setContactError(null);
     setQuery('');
     setResults([]);
-    setShowSearch(false);
+    setSearchError(null);
+    setStep('menu');
+  }
+
+  // ‹ back — return to the menu with the current step's inputs cleared.
+  function goToMenu() {
+    resetContactFields();
+    onClearError();
   }
 
   function handleDoneInvite() {
     onDismissInvite();
     resetContactFields();
     onClose();
+  }
+
+  // "Invite someone else" from the ready panel: clear the last contact and drop
+  // back onto a fresh Invite step.
+  function handleInviteAnother() {
+    onDismissInvite();
+    setContact('');
+    setContactError(null);
+    setStep('invite');
   }
 
   // One field, either channel: route an email to onStart (start with an existing
@@ -201,7 +219,7 @@ export default function NewGameModal({
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!visible || !showSearch || trimmed.length < 3) {
+    if (!visible || step !== 'find' || trimmed.length < 3) {
       setResults([]);
       setSearching(false);
       setSearchError(null);
@@ -230,7 +248,7 @@ export default function NewGameModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, showSearch, visible, searchAttempt]);
+  }, [query, step, visible, searchAttempt]);
 
   function handleClose() {
     if (busy) return;
@@ -240,6 +258,36 @@ export default function NewGameModal({
     onClose();
   }
 
+  const inSubStep = !pendingInvite && step !== 'menu';
+  const stepTitle = step === 'invite' ? 'Invite' : 'Find a player';
+
+  // Partner/Friend chooser — shown on the Invite and Find steps, where it applies.
+  const modeToggle = (
+    <>
+      <Text style={styles.label}>Who are you playing with?</Text>
+      <View style={styles.modeRow}>
+        <TouchableOpacity
+          style={[styles.modePill, mode === 'partner' && styles.modePillActive]}
+          onPress={() => setMode('partner')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === 'partner' }}
+        >
+          <Text style={[styles.modePillText, mode === 'partner' && styles.modePillTextActive]}>💕 Partner</Text>
+          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>Love notes &amp; sweet talk</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modePill, mode === 'friend' && styles.modePillActive]}
+          onPress={() => setMode('friend')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === 'friend' }}
+        >
+          <Text style={[styles.modePillText, mode === 'friend' && styles.modePillTextActive]}>🎲 Friend</Text>
+          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>Keep it casual &amp; competitive</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <KeyboardAvoidingView
@@ -248,7 +296,18 @@ export default function NewGameModal({
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>New Game 💌</Text>
+          {inSubStep ? (
+            <TouchableOpacity
+              onPress={goToMenu}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Back to menu"
+            >
+              <Text style={styles.backLead}>‹  {stepTitle}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.title}>New Game 💌</Text>
+          )}
           <TouchableOpacity onPress={handleClose} accessibilityLabel="Close new game" accessibilityRole="button">
             <Text style={styles.close}>Cancel</Text>
           </TouchableOpacity>
@@ -303,97 +362,121 @@ export default function NewGameModal({
                 <Text style={styles.inviteSecondaryText}>{copied ? 'Copied!' : 'Copy link'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={onDismissInvite} disabled={busy}>
+              <TouchableOpacity onPress={handleInviteAnother} disabled={busy}>
                 <Text style={styles.fallbackLink}>Invite someone else</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleDoneInvite}>
                 <Text style={styles.inviteDoneLink}>Done</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-          <>
-          {/* Mode toggle */}
-          <Text style={styles.label}>Who are you playing with?</Text>
-          <View style={styles.modeRow}>
-            <TouchableOpacity
-              style={[styles.modePill, mode === 'partner' && styles.modePillActive]}
-              onPress={() => setMode('partner')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === 'partner' }}
-            >
-              <Text style={[styles.modePillText, mode === 'partner' && styles.modePillTextActive]}>
-                💕 Partner
-              </Text>
-              <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>
-                Love notes & the works
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modePill, mode === 'friend' && styles.modePillActive]}
-              onPress={() => setMode('friend')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === 'friend' }}
-            >
-              <Text style={[styles.modePillText, mode === 'friend' && styles.modePillTextActive]}>
-                🎲 Friend
-              </Text>
-              <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>
-                Just messages & smack talk
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Primary: invite anyone by email or phone — always works, whether or
-              not they're on LoveWords or discoverable. */}
-          <Text style={[styles.label, { marginTop: 20 }]}>Invite by email or phone</Text>
-          <Text style={styles.emailHint}>
-            We'll start the game if they're already on LoveWords, or send them an invite to join if not.
-          </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email address or phone number"
-            placeholderTextColor={Colors.textLight}
-            value={contact}
-            onChangeText={(text) => {
-              setContact(text);
-              if (contactError) setContactError(null);
-              if (errorMsg) onClearError();
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Their email address or phone number"
-          />
-          {contactError && <Text style={styles.contactError}>{contactError}</Text>}
-          <TouchableOpacity
-            style={[styles.startBtn, (!contact.trim() || busy) && styles.startBtnDisabled]}
-            onPress={handleContactSubmit}
-            disabled={!contact.trim() || busy}
-            accessibilityRole="button"
-          >
-            {inviting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.startBtnText}>Continue</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Secondary: find a discoverable player by name */}
-          <TouchableOpacity
-            onPress={() => setShowSearch((s) => !s)}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showSearch }}
-          >
-            <Text style={styles.searchToggle}>
-              {showSearch ? '− Hide name search' : '🔍 Find a player by name'}
-            </Text>
-          </TouchableOpacity>
-          {showSearch && (
+          ) : step === 'menu' ? (
             <>
+              <Text style={styles.menuIntro}>How do you want to start?</Text>
+
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => setStep('find')}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Find a player by name"
+              >
+                <View style={styles.menuIcon}><Text style={styles.menuEmoji}>🔍</Text></View>
+                <View style={styles.menuText}>
+                  <Text style={styles.menuTitle}>Find a player by name</Text>
+                  <Text style={styles.menuSub}>Search players who have made themselves discoverable</Text>
+                </View>
+                <Text style={styles.menuChev}>›</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => setStep('invite')}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Invite by email or phone"
+              >
+                <View style={styles.menuIcon}><Text style={styles.menuEmoji}>💌</Text></View>
+                <View style={styles.menuText}>
+                  <Text style={styles.menuTitle}>Invite by email or phone</Text>
+                  <Text style={styles.menuSub}>Start a game with anyone by sending a message</Text>
+                </View>
+                <Text style={styles.menuChev}>›</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuRow, styles.menuRowSolo]}
+                onPress={onStartSolo}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Practice solo"
+              >
+                <View style={styles.menuIconSolo}><Text style={styles.menuEmoji}>🎯</Text></View>
+                <View style={styles.menuText}>
+                  <Text style={styles.menuTitle}>Practice solo</Text>
+                  <Text style={styles.menuSub}>Play both sides yourself</Text>
+                </View>
+                {startingSolo ? (
+                  <ActivityIndicator color={Colors.primary} size="small" />
+                ) : (
+                  <Text style={styles.menuChev}>›</Text>
+                )}
+              </TouchableOpacity>
+
+              {errorMsg ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>{errorMsg}</Text>
+                </View>
+              ) : null}
+            </>
+          ) : step === 'invite' ? (
+            <>
+              {modeToggle}
+              <Text style={[styles.label, { marginTop: 20 }]}>Their email or phone</Text>
+              <Text style={styles.emailHint}>
+                We'll start the game if they're already on LoveWords, or send them an invite to join if not.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Email address or phone number"
+                placeholderTextColor={Colors.textLight}
+                value={contact}
+                onChangeText={(text) => {
+                  setContact(text);
+                  if (contactError) setContactError(null);
+                  if (errorMsg) onClearError();
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Their email address or phone number"
+              />
+              {contactError && <Text style={styles.contactError}>{contactError}</Text>}
+              <TouchableOpacity
+                style={[styles.startBtn, (!contact.trim() || busy) && styles.startBtnDisabled]}
+                onPress={handleContactSubmit}
+                disabled={!contact.trim() || busy}
+                accessibilityRole="button"
+              >
+                {inviting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.startBtnText}>Continue</Text>
+                )}
+              </TouchableOpacity>
+
+              {errorMsg ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>{errorMsg}</Text>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {modeToggle}
+              <Text style={[styles.label, { marginTop: 20 }]}>Search by display name</Text>
               <Text style={styles.searchNote}>
-                Only players who turn on “Discoverable” in their own Settings show up here. To reach
-                anyone else, invite them by email or phone above.
+                Only players who turn on “Discoverable” in their own Settings show up here — to reach
+                anyone else, go back and invite them by email or phone.
               </Text>
               <TextInput
                 style={styles.input}
@@ -411,8 +494,8 @@ export default function NewGameModal({
               {searching && <ActivityIndicator color={Colors.primary} style={styles.searchSpinner} />}
               {!searching && !searchError && query.trim().length >= 3 && results.length === 0 && (
                 <Text style={styles.searchHint}>
-                  No discoverable players match — they may not have turned on Discoverable. Invite them
-                  by email or phone above instead.
+                  No discoverable players match — they may not have turned on Discoverable. Go back and
+                  invite them by email or phone instead.
                 </Text>
               )}
               {searchError && (
@@ -443,35 +526,13 @@ export default function NewGameModal({
                   <Text style={styles.resultAction}>Invite</Text>
                 </TouchableOpacity>
               ))}
+
+              {errorMsg ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>{errorMsg}</Text>
+                </View>
+              ) : null}
             </>
-          )}
-
-          {errorMsg ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>{errorMsg}</Text>
-            </View>
-          ) : null}
-
-          {/* Solo practice */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.soloBtn}
-            onPress={onStartSolo}
-            disabled={busy}
-            accessibilityRole="button"
-          >
-            {startingSolo ? (
-              <ActivityIndicator color={Colors.primary} size="small" />
-            ) : (
-              <Text style={styles.soloBtnText}>🎯 Practice Solo</Text>
-            )}
-          </TouchableOpacity>
-          </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -494,7 +555,51 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', color: Colors.primaryDark },
   close: { fontSize: 16, color: Colors.primaryDark, fontWeight: '600' },
+  backLead: { fontSize: 18, color: Colors.primaryDark, fontWeight: '700' },
   body: { padding: 20 },
+  // ── New Game menu ──
+  menuIntro: { fontSize: 14, color: Colors.textLight, fontWeight: '600', marginBottom: 14 },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    marginBottom: 12,
+    ...SHADOWS.card,
+  },
+  menuRowSolo: {
+    backgroundColor: 'transparent',
+    borderStyle: 'dashed',
+    borderColor: Colors.primary,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  menuIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: Colors.tilePlaced,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconSolo: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: Colors.tilePlaced,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuEmoji: { fontSize: 21 },
+  menuText: { flex: 1 },
+  menuTitle: { fontSize: 15.5, fontWeight: '800', color: Colors.text },
+  menuSub: { fontSize: 12, color: Colors.textLight, marginTop: 2, lineHeight: 16 },
+  menuChev: { fontSize: 24, fontWeight: '700', color: Colors.primary },
   label: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 10 },
   modeRow: { flexDirection: 'row', gap: 12 },
   modePill: {
