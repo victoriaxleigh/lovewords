@@ -72,6 +72,12 @@ describe.each([
     expect(sql).not.toMatch(/raise exception 'invite is no longer available'/i);
   });
 
+  test('keeps the redeemer variable distinct from the rate-limit column', () => {
+    expect(sql).toContain('claimant_uid uuid := auth.uid()');
+    expect(sql).toContain('values (claimant_uid, clock_timestamp(), 1)');
+    expect(sql).not.toContain('redeemer_id uuid := auth.uid()');
+  });
+
   test('generates codes with a CSPRNG (gen_random_uuid), not random()', () => {
     expect(sql).toContain('function public._generate_invite_code()');
     // Strong RNG source that does not depend on pgcrypto being on search_path.

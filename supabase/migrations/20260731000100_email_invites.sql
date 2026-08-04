@@ -275,21 +275,21 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  redeemer_id uuid := auth.uid();
+  claimant_uid uuid := auth.uid();
   normalized_code text := upper(regexp_replace(coalesce(invite_code, ''), '[^A-Za-z0-9]', '', 'g'));
   claim_attempts integer;
   invite public.email_invites%rowtype;
   game_players jsonb;
   created_game_id uuid;
 begin
-  if redeemer_id is null then
+  if claimant_uid is null then
     raise exception 'Authentication required';
   end if;
 
   -- Record the attempt FIRST, then only RETURN (never RAISE) on expected
   -- failures below, so the increment survives even an invalid guess.
   insert into public.email_invite_claim_limits (redeemer_id, window_started, attempts)
-  values (redeemer_id, clock_timestamp(), 1)
+  values (claimant_uid, clock_timestamp(), 1)
   on conflict (redeemer_id) do update
   set
     window_started = case
@@ -322,7 +322,7 @@ begin
   -- Idempotent replay: the same redeemer re-running an already-accepted invite
   -- gets the game created the first time, never a duplicate.
   if invite.status = 'accepted' then
-    if invite.redeemer_uid = redeemer_id and invite.game_id is not null then
+    if invite.redeemer_uid = claimant_uid and invite.game_id is not null then
       return invite.game_id;
     end if;
     return null;
@@ -331,7 +331,7 @@ begin
   if invite.status <> 'pending' or invite.expires_at <= clock_timestamp() then
     return null;
   end if;
-  if invite.inviter_uid = redeemer_id then
+  if invite.inviter_uid = claimant_uid then
     return null;
   end if;
   if not exists (select 1 from public.profiles p where p.id = invite.inviter_uid) then
@@ -342,13 +342,13 @@ begin
   -- rejects the tiles, everything rolls back and the invite stays pending and
   -- retryable — the invite is only marked accepted once the game truly exists.
   insert into public.game_creation_grants (creator_uid, opponent_uid, expires_at)
-  values (redeemer_id, invite.inviter_uid, clock_timestamp() + interval '5 minutes')
+  values (claimant_uid, invite.inviter_uid, clock_timestamp() + interval '5 minutes')
   on conflict (creator_uid, opponent_uid) do update
   set expires_at = excluded.expires_at;
 
   game_players := jsonb_build_array(
     jsonb_build_object(
-      'uid', redeemer_id, 'rack', coalesce(rack1, '[]'::jsonb),
+      'uid', claimant_uid, 'rack', coalesce(rack1, '[]'::jsonb),
       'score', 0, 'historyVersion', 2
     ),
     jsonb_build_object(
@@ -361,7 +361,7 @@ begin
     game_players,
     game_board,
     game_bag,
-    redeemer_id,
+    claimant_uid,
     invite.mode,
     true,   -- email_grant
     null,   -- source_game_id
@@ -369,7 +369,7 @@ begin
   );
 
   update public.email_invites
-  set status = 'accepted', redeemer_uid = redeemer_id, game_id = created_game_id
+  set status = 'accepted', redeemer_uid = claimant_uid, game_id = created_game_id
   where id = invite.id;
 
   return created_game_id;

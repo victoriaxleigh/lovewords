@@ -10,6 +10,10 @@ const notificationClaimFixPath = path.join(
   process.cwd(),
   'supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql'
 );
+const notificationClaimRestorePath = path.join(
+  process.cwd(),
+  'supabase/migrations/20260804000100_restore_notification_claim_timestamp_fix.sql'
+);
 
 describe.each([
   ['standalone migration', migrationPath],
@@ -162,6 +166,7 @@ describe.each([
   ['standalone migration', migrationPath],
   ['reference schema', schemaPath],
   ['corrective migration', notificationClaimFixPath],
+  ['restorative migration', notificationClaimRestorePath],
 ])('%s notification claim timestamp contract', (_label, filePath) => {
   const sql = fs.readFileSync(filePath, 'utf8').toLowerCase();
 
@@ -174,8 +179,11 @@ describe.each([
   });
 });
 
-describe('notification claim timestamp corrective migration', () => {
-  const sql = fs.readFileSync(notificationClaimFixPath, 'utf8').toLowerCase();
+describe.each([
+  ['corrective migration', notificationClaimFixPath],
+  ['restorative migration', notificationClaimRestorePath],
+])('%s protections', (_label, filePath) => {
+  const sql = fs.readFileSync(filePath, 'utf8').toLowerCase();
 
   test('replaces only the claim function while preserving its protections', () => {
     expect(sql).toContain(
