@@ -887,42 +887,46 @@ export default function GameScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
-                <Text style={styles.actionBtnSecondaryText}>Recall</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtnSwap}
-                onPress={handleEnterSwapMode}
-                accessibilityLabel="Swap tiles (uses your turn)"
-              >
-                <Text style={styles.actionBtnSwapText}>🔄 Swap</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionBtnPass}
-                onPress={() => setShowPassConfirm(true)}
-                accessibilityLabel="Pass your turn"
-              >
-                <Text style={styles.actionBtnPassText}>⏭ Pass</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
-                onPress={handleSubmit}
-                disabled={pendingTiles.length === 0 || submitting || validating}
-              >
-                {submitting || validating ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.actionBtnText}>
-                    {!dictReady
-                      ? 'Loading…'
-                      : previewScore !== null
-                      ? `Submit  +${previewScore} pts`
-                      : 'Submit'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <>
+              <View style={styles.actions}>
+                <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleRecall} disabled={pendingTiles.length === 0}>
+                  <Text style={styles.actionBtnSecondaryText}>Recall</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtnSwap}
+                  onPress={handleEnterSwapMode}
+                  accessibilityLabel="Swap tiles (uses your turn)"
+                >
+                  <Text style={styles.actionBtnSwapText}>🔄 Swap</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtnPass}
+                  onPress={() => setShowPassConfirm(true)}
+                  accessibilityLabel="Pass your turn"
+                >
+                  <Text style={styles.actionBtnPassText}>⏭ Pass</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.actions, styles.actionsSubmitRow]}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnFull, (pendingTiles.length === 0 || submitting || validating || !dictReady) && styles.actionBtnDisabled]}
+                  onPress={handleSubmit}
+                  disabled={pendingTiles.length === 0 || submitting || validating}
+                >
+                  {submitting || validating ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.actionBtnText}>
+                      {!dictReady
+                        ? 'Loading…'
+                        : previewScore !== null
+                        ? `Submit  +${previewScore} pts`
+                        : 'Submit'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
       )}
@@ -1051,21 +1055,34 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
   },
+  // Stacked directly under the Recall/Swap/Pass row — no need to repeat the
+  // top padding those already provide.
+  actionsSubmitRow: {
+    paddingTop: 0,
+  },
   actionBtn: {
     flex: 2,
+    minWidth: 0,
     backgroundColor: Colors.primary,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
   },
+  // Web flexbox refuses to shrink a flex child below its content's natural
+  // width unless minWidth is explicitly reset — without this, a row with
+  // several text-bearing buttons (Recall/Swap/Pass/Submit) overflows the
+  // viewport sideways on narrow screens instead of shrinking to fit.
+  actionBtnFull: { flex: 1 },
   actionBtnDisabled: { backgroundColor: Colors.border },
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   actionBtnSecondary: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 14,
@@ -1078,6 +1095,7 @@ const styles = StyleSheet.create({
   // mistaken for each other — swap = blue "exchange", pass = amber "skip".
   actionBtnSwap: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.swapBg,
     borderRadius: 12,
     padding: 14,
@@ -1088,6 +1106,7 @@ const styles = StyleSheet.create({
   actionBtnSwapText: { color: Colors.swapText, fontWeight: '700', fontSize: 14 },
   actionBtnPass: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.passBg,
     borderRadius: 12,
     padding: 14,
