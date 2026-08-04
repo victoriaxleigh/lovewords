@@ -84,8 +84,12 @@ export default function NewGameModal({
 
   // Open the user's email app with the invite pre-addressed and pre-written, so
   // they send it from their own account (no email provider / domain needed).
+  // Whether a mailto: handler is even registered varies by OS/browser and we
+  // have no way to detect a silent no-op, so the message is copied first —
+  // it's always in the clipboard to paste even if nothing visibly opens.
   async function handleEmailInvite() {
     if (!pendingInvite) return;
+    await copyInviteMessage();
     const subject = 'Play LoveWords with me 💌';
     const body = inviteMessage(pendingInvite);
     const url =
@@ -109,8 +113,10 @@ export default function NewGameModal({
   // Open the SMS composer prefilled with the recipient and the invite message.
   // Cross-platform sms: URIs differ (iOS uses & before body, Android uses ?),
   // and desktop has no composer, so fall back to the generic share/copy path.
+  // Same clipboard safety net as email — sms: handlers are just as unreliable.
   async function handleTextInvite() {
     if (!pendingInvite) return;
+    await copyInviteMessage();
     const message = inviteMessage(pendingInvite);
     const number = pendingInvite.contact.replace(/[^0-9+]/g, '');
     if (Platform.OS === 'web') {
@@ -140,7 +146,7 @@ export default function NewGameModal({
           await nav.share({ title: 'LoveWords invite', text: message, url: pendingInvite.link });
           return;
         }
-        await handleCopyLink();
+        await copyInviteMessage();
       } catch {
         // User dismissed the share sheet — nothing to do.
       }
@@ -153,19 +159,23 @@ export default function NewGameModal({
     }
   }
 
-  async function handleCopyLink() {
+  // Copies the full greeting + link + code, not just the bare URL, so it's
+  // ready to paste straight into any messaging/email app as-is. This is also
+  // the fallback the Email/Text invite buttons lean on when a mailto:/sms:
+  // handler isn't registered on the device and silently does nothing.
+  async function copyInviteMessage() {
     if (!pendingInvite) return;
     try {
       const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
       if (Platform.OS === 'web' && nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(pendingInvite.link);
+        await nav.clipboard.writeText(inviteMessage(pendingInvite));
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
         return;
       }
-      await Share.share({ message: pendingInvite.link });
+      await Share.share({ message: inviteMessage(pendingInvite) });
     } catch {
-      // Copy/share failed or was cancelled — the link is still visible to read.
+      // Copy/share failed or was cancelled — the message is still visible to read.
     }
   }
 
@@ -271,18 +281,22 @@ export default function NewGameModal({
           onPress={() => setMode('partner')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'partner' }}
+          accessibilityLabel="Partner mode — love letters, sweet nothings between moves"
         >
           <Text style={[styles.modePillText, mode === 'partner' && styles.modePillTextActive]}>💕 Partner</Text>
-          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>Love notes &amp; sweet talk</Text>
+          <Text style={[styles.modeSub, mode === 'partner' && styles.modeSubActive]}>&ldquo;Love letters&rdquo;</Text>
+          <Text style={[styles.modeGloss, mode === 'partner' && styles.modeGlossActive]}>sweet nothings between moves</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modePill, mode === 'friend' && styles.modePillActive]}
           onPress={() => setMode('friend')}
           accessibilityRole="button"
           accessibilityState={{ selected: mode === 'friend' }}
+          accessibilityLabel="Friend mode — fighting words, friendly trash talk between moves"
         >
           <Text style={[styles.modePillText, mode === 'friend' && styles.modePillTextActive]}>🎲 Friend</Text>
-          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>Keep it casual &amp; competitive</Text>
+          <Text style={[styles.modeSub, mode === 'friend' && styles.modeSubActive]}>&ldquo;Fighting words&rdquo;</Text>
+          <Text style={[styles.modeGloss, mode === 'friend' && styles.modeGlossActive]}>friendly trash talk between moves</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -353,13 +367,17 @@ export default function NewGameModal({
                   <Text style={styles.startBtnText}>📧 Email invite</Text>
                 </TouchableOpacity>
               )}
+              <Text style={styles.inviteFallbackHint}>
+                Doesn&rsquo;t open the right app, or came in blank? Tap below to copy the whole
+                message — link and code included — and paste it yourself.
+              </Text>
               <TouchableOpacity
                 style={styles.inviteSecondaryBtn}
-                onPress={handleCopyLink}
+                onPress={copyInviteMessage}
                 accessibilityRole="button"
-                accessibilityLabel="Copy invite link"
+                accessibilityLabel="Copy invite message"
               >
-                <Text style={styles.inviteSecondaryText}>{copied ? 'Copied!' : 'Copy link'}</Text>
+                <Text style={styles.inviteSecondaryText}>{copied ? '✓ Copied!' : '📋 Copy message'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={handleInviteAnother} disabled={busy}>
@@ -618,8 +636,10 @@ const styles = StyleSheet.create({
   },
   modePillText: { fontSize: 16, fontWeight: '800', color: Colors.textLight },
   modePillTextActive: { color: Colors.primaryDark },
-  modeSub: { fontSize: 11, color: Colors.textLight, marginTop: 4, textAlign: 'center' },
+  modeSub: { fontSize: 11, fontWeight: '700', fontStyle: 'italic', color: Colors.textLight, marginTop: 4, textAlign: 'center' },
   modeSubActive: { color: Colors.primaryDark },
+  modeGloss: { fontSize: 10, color: Colors.textLight, marginTop: 2, textAlign: 'center' },
+  modeGlossActive: { color: Colors.primaryDark },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: RADII.md,
@@ -696,13 +716,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
+  inviteFallbackHint: {
+    fontSize: 11.5,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 10,
+  },
   inviteSecondaryBtn: {
     borderRadius: RADII.md,
     paddingVertical: 13,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: Colors.primary,
-    marginTop: 10,
+    marginTop: 8,
   },
   inviteSecondaryText: { color: Colors.primaryDark, fontSize: 15, fontWeight: '800' },
   inviteDoneLink: {
