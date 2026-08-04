@@ -69,6 +69,7 @@ const styles = StyleSheet.create({
   },
   playerCard: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     borderRadius: 8,
     padding: 8,
