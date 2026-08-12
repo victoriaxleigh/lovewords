@@ -24,6 +24,7 @@ export default function AuthScreen() {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const isRegister = mode === 'register';
   const hasInvite = isValidInviteCode(inviteCode);
@@ -72,6 +73,40 @@ export default function AuthScreen() {
     setError(null);
   }
 
+  // Copies the invite code to the system clipboard — the one thing that
+  // actually carries across the Safari-tab-vs-installed-Home-Screen-app
+  // storage boundary on iOS. Someone who opened the invite link in Safari can
+  // tap this, then switch to the already-installed app and use Paste below
+  // instead of re-reading the message to retype an 8-character code.
+  async function copyInviteCode() {
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+      if (Platform.OS === 'web' && nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(formatInviteCode(inviteCode));
+        setCodeCopied(true);
+        setTimeout(() => setCodeCopied(false), 2000);
+      }
+    } catch {
+      // Clipboard write failed — the code is still visible to copy by hand.
+    }
+  }
+
+  // Fills the invite code field from the clipboard in one tap, for anyone
+  // whose auto-filled code didn't carry over (e.g. the link opened in Safari
+  // but they're signing up from the app already on their Home Screen, a
+  // separate storage context on iOS).
+  async function pasteInviteCode() {
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+      if (Platform.OS === 'web' && nav?.clipboard?.readText) {
+        const text = await nav.clipboard.readText();
+        if (text) setInviteCode(normalizeInviteCode(text));
+      }
+    } catch {
+      // Clipboard read denied/unsupported — they can still type the code.
+    }
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -100,7 +135,22 @@ export default function AuthScreen() {
                 🎉 You've been invited to play! {isRegister ? 'Create your account' : 'Sign in'} to
                 start your game.
               </Text>
-              <Text style={styles.inviteBannerCode}>Code {formatInviteCode(inviteCode)}</Text>
+              <View style={styles.inviteBannerCodeRow}>
+                <Text style={styles.inviteBannerCode}>Code {formatInviteCode(inviteCode)}</Text>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    onPress={copyInviteCode}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy invite code"
+                  >
+                    <Text style={styles.inviteBannerCopy}>{codeCopied ? '✓ Copied' : 'Copy'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.inviteBannerHint}>
+                Signing up from your Home Screen app instead? The code may not have followed you
+                over — use Paste below.
+              </Text>
             </View>
           )}
 
@@ -155,16 +205,28 @@ export default function AuthScreen() {
             secureTextEntry
             accessibilityLabel="Password"
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Invite code (optional)"
-            placeholderTextColor={Colors.textLight}
-            value={inviteCode}
-            onChangeText={setInviteCode}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            accessibilityLabel="Invite code"
-          />
+          <View style={styles.inviteInputRow}>
+            <TextInput
+              style={[styles.input, styles.inviteInput]}
+              placeholder="Invite code (optional)"
+              placeholderTextColor={Colors.textLight}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Invite code"
+            />
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={styles.pasteBtn}
+                onPress={pasteInviteCode}
+                accessibilityRole="button"
+                accessibilityLabel="Paste invite code from clipboard"
+              >
+                <Text style={styles.pasteBtnText}>Paste</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {error && (
             <View style={styles.errorBanner}>
@@ -244,12 +306,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inviteBannerText: { fontSize: 13, color: Colors.primaryDark, fontWeight: '700', lineHeight: 18 },
+  inviteBannerCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
   inviteBannerCode: {
     fontSize: 13,
     color: Colors.primaryDark,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  inviteBannerCopy: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  inviteBannerHint: {
+    fontSize: 11,
+    color: Colors.primaryDark,
+    opacity: 0.75,
     marginTop: 6,
+    lineHeight: 15,
   },
   segment: {
     flexDirection: 'row',
@@ -282,6 +361,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     marginBottom: 12,
   },
+  inviteInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inviteInput: { flex: 1, marginBottom: 0 },
+  pasteBtn: {
+    backgroundColor: Colors.tilePlaced,
+    borderRadius: RADII.md,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  pasteBtnText: { color: Colors.primaryDark, fontWeight: '800', fontSize: 13 },
   errorBanner: {
     width: '100%',
     flexDirection: 'row',

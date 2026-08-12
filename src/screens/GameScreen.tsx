@@ -423,7 +423,11 @@ export default function GameScreen() {
 
     // Validate placement
     if (!isValidPlacement(game.board, pendingTiles, isFirstMove ?? false)) {
-      setSubmitError('Tiles must form a line and connect to existing tiles (first move must cover the center ★).');
+      setSubmitError(
+        isFirstMove
+          ? 'Your first word must cover the center ★.'
+          : 'Tiles must form a straight line and connect to a word already on the board.'
+      );
       return;
     }
 

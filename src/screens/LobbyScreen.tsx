@@ -439,11 +439,11 @@ export default function LobbyScreen({ currentUser }: Props) {
                   <View style={styles.gameCardRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, myWins && styles.scoreNameWin]} numberOfLines={1}>{myLabel}</Text>
-                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]}>{myScore}</Text>
+                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]} numberOfLines={1}>{myScore}</Text>
                     </View>
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, oppWins && styles.scoreNameWin]} numberOfLines={1}>{oppLabel}</Text>
-                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]}>{oppScore}</Text>
+                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]} numberOfLines={1}>{oppScore}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -602,9 +602,9 @@ const styles = StyleSheet.create({
   statusChipTextActive: { color: '#fff' },
   gameCardRight: { minWidth: 84, maxWidth: 132, gap: 3, marginLeft: 8 },
   scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6 },
-  scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, textAlign: 'right' },
+  scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, minWidth: 0, textAlign: 'right' },
   scoreNameWin: { color: Colors.text, fontWeight: '800' },
-  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 24, textAlign: 'right' },
+  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 24, textAlign: 'right', flexShrink: 0 },
   scoreValueWin: { fontSize: 20, fontWeight: '900', color: Colors.primary },
   errorBanner: {
     flexDirection: 'row',
