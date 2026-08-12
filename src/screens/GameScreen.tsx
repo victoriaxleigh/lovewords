@@ -29,6 +29,7 @@ import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
 import LoveNotesModal from './LoveNotesModal';
 import { Colors } from '../utils/colors';
+import { SHADOWS } from '../utils/styles';
 import { requestNotificationPermission, sendTurnNotification } from '../utils/webNotifications';
 import { isDictionaryLoaded } from '../engine/dictionary';
 
@@ -795,18 +796,23 @@ export default function GameScreen() {
       {/* Action buttons */}
       {isMyTurn && (
         <View>
-          {/* Inline submit feedback */}
-          {submitError && (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>⚠️ {submitError}</Text>
-              <TouchableOpacity onPress={() => setSubmitError(null)} accessibilityLabel="Dismiss error" accessibilityRole="button">
-                <Text style={styles.errorBannerDismiss}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {submitSuccess && (
-            <View style={styles.successBanner}>
-              <Text style={styles.successBannerText}>{submitSuccess}</Text>
+          {/* Inline submit feedback — floats above the bar so it never pushes
+              the board out of view (see styles.inlineFeedback). */}
+          {(submitError || submitSuccess) && (
+            <View style={styles.inlineFeedback}>
+              {submitError && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>⚠️ {submitError}</Text>
+                  <TouchableOpacity onPress={() => setSubmitError(null)} accessibilityLabel="Dismiss error" accessibilityRole="button">
+                    <Text style={styles.errorBannerDismiss}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {submitSuccess && (
+                <View style={styles.successBanner}>
+                  <Text style={styles.successBannerText}>{submitSuccess}</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -1014,6 +1020,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    position: 'relative',
+  },
+  // Floats above bottomBar instead of taking up flow space inside it — the
+  // rack/action row live in a fixed-height sibling of the scrollable board
+  // (see "Rack + action row pinned outside ScrollView" below), so letting the
+  // banner grow that sibling's height shrinks the ScrollView and hides part
+  // of the board every time an error/success message appears.
+  inlineFeedback: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
   header: {
@@ -1270,11 +1289,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0F0',
     borderRadius: 8,
     marginHorizontal: 12,
-    marginBottom: 4,
+    marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#FFB3B3',
+    ...SHADOWS.card,
   },
   errorBannerText: {
     flex: 1,
@@ -1293,12 +1313,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FFF4',
     borderRadius: 8,
     marginHorizontal: 12,
-    marginBottom: 4,
+    marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#A8E6B0',
     alignItems: 'center',
+    ...SHADOWS.card,
   },
   successBannerText: {
     fontSize: 13,
