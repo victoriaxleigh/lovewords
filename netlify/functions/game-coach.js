@@ -16,9 +16,11 @@ const {
   serializePromptPayload,
 } = require('./lib/analysisLimits');
 
-// Netlify's synchronous timeout is 10s and the Claude call needs most of it, so
-// the solver gets a tighter budget here than the standalone solve endpoint.
-const SOLVE_BUDGET_MS = 4000;
+// Netlify's synchronous execution limit is 60s (fixed). The Claude call needs a
+// good chunk of it, so the solver gets a tighter budget here than the standalone
+// solve endpoint — but not so tight that a normal game truncates, which is what
+// the previous 4000 did in production (hard numbers stopped at turn 26 of 39).
+const SOLVE_BUDGET_MS = 15000;
 
 // Which model writes the coaching. The solver now supplies the moves and the
 // numbers, so the model's job is explanation — Sonnet handles that well

@@ -10,9 +10,17 @@ const {
 const { solveGame } = require('./lib/solver');
 const { capResponseSize, checkCooldown } = require('./lib/analysisLimits');
 
-// Netlify's synchronous function timeout is 10s. Leave room for the Supabase
-// round trips and the cold-start trie build on either side of the solve.
-const SOLVE_BUDGET_MS = 6000;
+// Netlify's synchronous execution limit is 60s (fixed, not configurable), which
+// leaves plenty of room for the Supabase round trips and the cold-start trie
+// build on either side of the solve.
+//
+// Sized against PRODUCTION speed, not a dev machine. A Lambda's vCPU is
+// proportional to its memory, so the solver runs roughly 15x slower there than
+// on a laptop: a 41-turn game measured 969ms locally but only reached 10 of 41
+// turns inside a 6s budget on the deploy preview. Raising memory (Pro/
+// Enterprise) would buy speed directly; caching the solve per finished game is
+// the real fix, since a finished game's solution never changes.
+const SOLVE_BUDGET_MS = 25000;
 
 function gameIdFromEvent(event) {
   const fromQuery = event.queryStringParameters?.gameId;

@@ -449,3 +449,12 @@ issues, which no earlier test covered.
 - [iter 3] qa: complete — PR-ready. 3 low findings, all fixed by the orchestrator. Independent oracle (own dictionary/scorer/enumerator) agreed on the full top-5 across 75 positions + 240 randomized racks, 0 mismatches; oracle proven sensitive (mutant solver -> 40/75).
 - [iter 3] security: complete — safe to PR. 3 findings (1 medium, 2 low), all fixed by the orchestrator. Word list verified byte-identical to upstream ENABLE (sha256); secrets sweep over 18 files: 0 hits.
 - [iter 3] orchestrator: complete — fixed the 6 residual reviewer findings directly rather than opening a 4th iteration: finalRack clamp (625,311 B -> 1,493 B prompt), delimiter regex leading-space gap, COACH_SYSTEM `unanalyzed` rule, spec timestamp self-disclosure, and a recount test pinning BOTH cappers (mutation-verified: each site fails independently). 344 tests pass. Live coach re-probed after the prompt change: 0 fabricated words, 0 score mismatches, 0 `~`.
+- [iter 3] deploy-preview: verified on PR #24 — `nft` + `included_files` DOES ship
+  `enable1.txt.gz`; `/api/games/:id/solve` returned 200 with 39/39 turns solved on a real production
+  game. Two production-only findings the local runs could not surface: (a) Netlify's synchronous
+  limit is 60s, not the 10s this spec assumed, and (b) a Lambda's vCPU scales with its memory, so the
+  solver runs ~15x slower than on a dev machine — a 41-turn game that solves in 969ms locally reached
+  only 10 of 41 turns inside the old 6s budget, and the coach's 4s budget cut hard numbers at turn 26
+  of 39. Budgets raised to 25s (solve) / 15s (coach). The durable fix is caching the solve per
+  finished game — a finished game is immutable and the per-turn best plays are player-independent, so
+  one cached row per game serves both endpoints and every repeat view.
