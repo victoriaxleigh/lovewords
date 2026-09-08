@@ -1,0 +1,3038 @@
+{
+  "schemaVersion": 1,
+  "recordingQuality": "basic",
+  "gameId": "00000000-0000-4000-8000-000000000002",
+  "status": "finished",
+  "mode": "partner",
+  "gameType": "multiplayer",
+  "createdAt": "2015-07-28T09:49:11.829+00:00",
+  "finishedAt": "2015-08-09T03:36:36.406+00:00",
+  "bagCount": 0,
+  "boardMetadata": {
+    "version": 1,
+    "size": 15,
+    "coordinates": {
+      "base": 0,
+      "origin": "top-left",
+      "rowDirection": "down",
+      "columnDirection": "right"
+    },
+    "bonusSquares": {
+      "TW": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          0,
+          14
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          7,
+          14
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          14,
+          7
+        ],
+        [
+          14,
+          14
+        ]
+      ],
+      "DW": [
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          13
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          12
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          11
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          10
+        ],
+        [
+          10,
+          4
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          11,
+          3
+        ],
+        [
+          11,
+          11
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          12,
+          12
+        ],
+        [
+          13,
+          1
+        ],
+        [
+          13,
+          13
+        ]
+      ],
+      "TL": [
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          9
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          5,
+          9
+        ],
+        [
+          5,
+          13
+        ],
+        [
+          9,
+          1
+        ],
+        [
+          9,
+          5
+        ],
+        [
+          9,
+          9
+        ],
+        [
+          9,
+          13
+        ],
+        [
+          13,
+          5
+        ],
+        [
+          13,
+          9
+        ]
+      ],
+      "DL": [
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          11
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          14
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          6,
+          6
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          6,
+          12
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          7,
+          11
+        ],
+        [
+          8,
+          2
+        ],
+        [
+          8,
+          6
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          12
+        ],
+        [
+          11,
+          0
+        ],
+        [
+          11,
+          7
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          12,
+          6
+        ],
+        [
+          12,
+          8
+        ],
+        [
+          14,
+          3
+        ],
+        [
+          14,
+          11
+        ]
+      ],
+      "START": [
+        [
+          7,
+          7
+        ]
+      ]
+    }
+  },
+  "rules": {
+    "version": 1,
+    "rackSize": 7,
+    "bingoTileCount": 7,
+    "bingoBonus": 35,
+    "consecutivePassLimit": 4
+  },
+  "players": [
+    {
+      "alias": "player-1",
+      "displayName": "Player 1",
+      "finalScore": 313,
+      "finalRack": []
+    },
+    {
+      "alias": "player-2",
+      "displayName": "Player 2",
+      "finalScore": 352,
+      "finalRack": [
+        {
+          "letter": "U",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "moves": [
+    {
+      "turn": 1,
+      "action": "play",
+      "player": "player-1",
+      "score": 16,
+      "timestamp": 1438080510840,
+      "placements": [
+        {
+          "letter": "B",
+          "value": 4,
+          "row": 7,
+          "col": 7
+        },
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 7,
+          "col": 8
+        },
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 7,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 2,
+      "action": "play",
+      "player": "player-2",
+      "score": 10,
+      "timestamp": 1438162273482,
+      "placements": [
+        {
+          "letter": "M",
+          "value": 4,
+          "row": 6,
+          "col": 8
+        }
+      ]
+    },
+    {
+      "turn": 3,
+      "action": "play",
+      "player": "player-1",
+      "score": 21,
+      "timestamp": 1438162438882,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 8,
+          "col": 9
+        },
+        {
+          "letter": "V",
+          "value": 5,
+          "row": 9,
+          "col": 9
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 10,
+          "col": 9
+        },
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 11,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 4,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1438163415823,
+      "placements": [
+        {
+          "letter": "C",
+          "value": 4,
+          "row": 10,
+          "col": 10
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 10,
+          "col": 11
+        }
+      ]
+    },
+    {
+      "turn": 5,
+      "action": "play",
+      "player": "player-1",
+      "score": 16,
+      "timestamp": 1438166325598,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 8,
+          "col": 11
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 9,
+          "col": 11
+        },
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 11,
+          "col": 11
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 7,
+          "col": 11
+        }
+      ]
+    },
+    {
+      "turn": 6,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1438238971471,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 7,
+          "col": 12
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 7,
+          "col": 13
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 7,
+          "col": 14
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "C",
+          "value": 4
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "T",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "TOTE",
+          "score": 12
+        }
+      ],
+      "resultingScore": 34,
+      "drawnTiles": [
+        {
+          "letter": "D",
+          "value": 2
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "bagCount": 73
+    },
+    {
+      "turn": 7,
+      "action": "play",
+      "player": "player-1",
+      "score": 21,
+      "timestamp": 1438240520010,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 8,
+          "col": 7
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 8,
+          "col": 8
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 8,
+          "col": 6
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "NOTE",
+          "score": 8
+        },
+        {
+          "word": "BO",
+          "score": 5
+        },
+        {
+          "word": "MUT",
+          "score": 8
+        }
+      ],
+      "resultingScore": 74,
+      "drawnTiles": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "M",
+          "value": 4
+        },
+        {
+          "letter": "I",
+          "value": 1
+        }
+      ],
+      "bagCount": 70
+    },
+    {
+      "turn": 8,
+      "action": "play",
+      "player": "player-2",
+      "score": 22,
+      "timestamp": 1438372376325,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 10,
+          "col": 12
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 11,
+          "col": 12
+        },
+        {
+          "letter": "C",
+          "value": 4,
+          "row": 12,
+          "col": 12
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "C",
+          "value": 4
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "D",
+          "value": 2
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "SEC",
+          "score": 12
+        },
+        {
+          "word": "ICES",
+          "score": 7
+        },
+        {
+          "word": "DE",
+          "score": 3
+        }
+      ],
+      "resultingScore": 56,
+      "drawnTiles": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "L",
+          "value": 2
+        }
+      ],
+      "bagCount": 67
+    },
+    {
+      "turn": 9,
+      "action": "play",
+      "player": "player-1",
+      "score": 15,
+      "timestamp": 1438377918742,
+      "placements": [
+        {
+          "letter": "M",
+          "value": 4,
+          "row": 5,
+          "col": 13
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 6,
+          "col": 13
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 8,
+          "col": 13
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "M",
+          "value": 4
+        },
+        {
+          "letter": "I",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "MITT",
+          "score": 15
+        }
+      ],
+      "resultingScore": 89,
+      "drawnTiles": [
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "bagCount": 64
+    },
+    {
+      "turn": 10,
+      "action": "play",
+      "player": "player-2",
+      "score": 15,
+      "timestamp": 1438505124356,
+      "placements": [
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 6,
+          "col": 14
+        },
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 6,
+          "col": 12
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "D",
+          "value": 2
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "L",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "LID",
+          "score": 7
+        },
+        {
+          "word": "DE",
+          "score": 3
+        },
+        {
+          "word": "LO",
+          "score": 5
+        }
+      ],
+      "resultingScore": 71,
+      "drawnTiles": [
+        {
+          "letter": "W",
+          "value": 4
+        },
+        {
+          "letter": "H",
+          "value": 3
+        }
+      ],
+      "bagCount": 62
+    },
+    {
+      "turn": 11,
+      "action": "play",
+      "player": "player-1",
+      "score": 18,
+      "timestamp": 1438508637038,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 12,
+          "col": 9
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 12,
+          "col": 6
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 12,
+          "col": 7
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 12,
+          "col": 8
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "EATS",
+          "score": 6
+        },
+        {
+          "word": "DEVILS",
+          "score": 12
+        }
+      ],
+      "resultingScore": 107,
+      "drawnTiles": [
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "W",
+          "value": 4
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "H",
+          "value": 3
+        }
+      ],
+      "bagCount": 58
+    },
+    {
+      "turn": 12,
+      "action": "play",
+      "player": "player-2",
+      "score": 36,
+      "timestamp": 1438518477847,
+      "placements": [
+        {
+          "letter": "W",
+          "value": 4,
+          "row": 11,
+          "col": 7
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 13,
+          "col": 7
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 14,
+          "col": 7
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "W",
+          "value": 4
+        },
+        {
+          "letter": "H",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "WARN",
+          "score": 36
+        }
+      ],
+      "resultingScore": 107,
+      "drawnTiles": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "X",
+          "value": 8
+        }
+      ],
+      "bagCount": 55
+    },
+    {
+      "turn": 13,
+      "action": "play",
+      "player": "player-1",
+      "score": 17,
+      "timestamp": 1438532126860,
+      "placements": [
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 12,
+          "col": 5
+        },
+        {
+          "letter": "W",
+          "value": 4,
+          "row": 14,
+          "col": 5
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 13,
+          "col": 5
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "W",
+          "value": 4
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "H",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "HOW",
+          "score": 10
+        },
+        {
+          "word": "HEATS",
+          "score": 7
+        }
+      ],
+      "resultingScore": 124,
+      "drawnTiles": [
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "bagCount": 52
+    },
+    {
+      "turn": 14,
+      "action": "play",
+      "player": "player-2",
+      "score": 37,
+      "timestamp": 1438534986587,
+      "placements": [
+        {
+          "letter": "F",
+          "value": 4,
+          "row": 9,
+          "col": 5
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 9,
+          "col": 6
+        },
+        {
+          "letter": "X",
+          "value": 8,
+          "row": 9,
+          "col": 7
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "X",
+          "value": 8
+        }
+      ],
+      "words": [
+        {
+          "word": "FOX",
+          "score": 21
+        },
+        {
+          "word": "NO",
+          "score": 3
+        },
+        {
+          "word": "BOX",
+          "score": 13
+        }
+      ],
+      "resultingScore": 144,
+      "drawnTiles": [
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        }
+      ],
+      "bagCount": 49
+    },
+    {
+      "turn": 15,
+      "action": "play",
+      "player": "player-1",
+      "score": 9,
+      "timestamp": 1438537919235,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 14,
+          "col": 6
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 14,
+          "col": 8
+        },
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 14,
+          "col": 9
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "WANES",
+          "score": 9
+        }
+      ],
+      "resultingScore": 133,
+      "drawnTiles": [
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "bagCount": 46
+    },
+    {
+      "turn": 16,
+      "action": "play",
+      "player": "player-2",
+      "score": 14,
+      "timestamp": 1438573174454,
+      "placements": [
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 13,
+          "col": 2
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 13,
+          "col": 3
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 13,
+          "col": 4
+        },
+        {
+          "letter": "R",
+          "value": 0,
+          "isBlank": true,
+          "row": 13,
+          "col": 1
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        }
+      ],
+      "words": [
+        {
+          "word": "RHINO",
+          "score": 14
+        }
+      ],
+      "resultingScore": 158,
+      "drawnTiles": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        }
+      ],
+      "bagCount": 42
+    },
+    {
+      "turn": 17,
+      "action": "play",
+      "player": "player-1",
+      "score": 14,
+      "timestamp": 1438576390753,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 12,
+          "col": 2
+        },
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 11,
+          "col": 2
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "A",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "HAH",
+          "score": 14
+        }
+      ],
+      "resultingScore": 147,
+      "drawnTiles": [
+        {
+          "letter": "D",
+          "value": 2
+        },
+        {
+          "letter": "Y",
+          "value": 3
+        }
+      ],
+      "bagCount": 40
+    },
+    {
+      "turn": 18,
+      "action": "play",
+      "player": "player-2",
+      "score": 16,
+      "timestamp": 1438581720597,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 11,
+          "col": 3
+        },
+        {
+          "letter": "P",
+          "value": 4,
+          "row": 11,
+          "col": 4
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "HIP",
+          "score": 16
+        }
+      ],
+      "resultingScore": 174,
+      "drawnTiles": [
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        }
+      ],
+      "bagCount": 38
+    },
+    {
+      "turn": 19,
+      "action": "play",
+      "player": "player-1",
+      "score": 9,
+      "timestamp": 1438582413015,
+      "placements": [
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 10,
+          "col": 8
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "D",
+          "value": 2
+        },
+        {
+          "letter": "Y",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "DICES",
+          "score": 9
+        }
+      ],
+      "resultingScore": 156,
+      "drawnTiles": [
+        {
+          "letter": "Y",
+          "value": 3
+        }
+      ],
+      "bagCount": 37
+    },
+    {
+      "turn": 20,
+      "action": "play",
+      "player": "player-2",
+      "score": 7,
+      "timestamp": 1438596095477,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 14,
+          "col": 1
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 14,
+          "col": 0
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "P",
+          "value": 4
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "OE",
+          "score": 6
+        },
+        {
+          "word": "RE",
+          "score": 1
+        }
+      ],
+      "resultingScore": 181,
+      "drawnTiles": [
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        }
+      ],
+      "bagCount": 35
+    },
+    {
+      "turn": 21,
+      "action": "play",
+      "player": "player-1",
+      "score": 8,
+      "timestamp": 1438645048147,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 12,
+          "col": 13
+        },
+        {
+          "letter": "Y",
+          "value": 3,
+          "row": 12,
+          "col": 14
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "Y",
+          "value": 3
+        },
+        {
+          "letter": "Y",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "CAY",
+          "score": 8
+        }
+      ],
+      "resultingScore": 164,
+      "drawnTiles": [
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "L",
+          "value": 2
+        }
+      ],
+      "bagCount": 33
+    },
+    {
+      "turn": 22,
+      "action": "play",
+      "player": "player-2",
+      "score": 30,
+      "timestamp": 1438713907409,
+      "placements": [
+        {
+          "letter": "P",
+          "value": 4,
+          "row": 10,
+          "col": 14
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 11,
+          "col": 14
+        },
+        {
+          "letter": "E",
+          "value": 0,
+          "isBlank": true,
+          "row": 13,
+          "col": 14
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 14,
+          "col": 14
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "P",
+          "value": 4
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "",
+          "value": 0,
+          "isBlank": true
+        },
+        {
+          "letter": "F",
+          "value": 4
+        }
+      ],
+      "words": [
+        {
+          "word": "PAYER",
+          "score": 30
+        }
+      ],
+      "resultingScore": 211,
+      "drawnTiles": [
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        }
+      ],
+      "bagCount": 29
+    },
+    {
+      "turn": 23,
+      "action": "play",
+      "player": "player-1",
+      "score": 14,
+      "timestamp": 1438713991166,
+      "placements": [
+        {
+          "letter": "Y",
+          "value": 3,
+          "row": 13,
+          "col": 13
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "Y",
+          "value": 3
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "L",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "YE",
+          "score": 6
+        },
+        {
+          "word": "AY",
+          "score": 8
+        }
+      ],
+      "resultingScore": 178,
+      "drawnTiles": [
+        {
+          "letter": "T",
+          "value": 1
+        }
+      ],
+      "bagCount": 28
+    },
+    {
+      "turn": 24,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1438737184923,
+      "placements": [
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 10,
+          "col": 4
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "UP",
+          "score": 12
+        }
+      ],
+      "resultingScore": 223,
+      "drawnTiles": [
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "bagCount": 27
+    },
+    {
+      "turn": 25,
+      "action": "play",
+      "player": "player-1",
+      "score": 11,
+      "timestamp": 1438737250412,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 5,
+          "col": 14
+        },
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 4,
+          "col": 14
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "L",
+          "value": 2
+        },
+        {
+          "letter": "T",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "LADE",
+          "score": 6
+        },
+        {
+          "word": "MA",
+          "score": 5
+        }
+      ],
+      "resultingScore": 189,
+      "drawnTiles": [
+        {
+          "letter": "B",
+          "value": 4
+        },
+        {
+          "letter": "Z",
+          "value": 10
+        }
+      ],
+      "bagCount": 25
+    },
+    {
+      "turn": 26,
+      "action": "play",
+      "player": "player-2",
+      "score": 8,
+      "timestamp": 1438738191442,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 5,
+          "col": 8
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "SMUT",
+          "score": 8
+        }
+      ],
+      "resultingScore": 231,
+      "drawnTiles": [
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "bagCount": 24
+    },
+    {
+      "turn": 27,
+      "action": "play",
+      "player": "player-1",
+      "score": 33,
+      "timestamp": 1438744187410,
+      "placements": [
+        {
+          "letter": "Z",
+          "value": 10,
+          "row": 5,
+          "col": 5
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 5,
+          "col": 6
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 5,
+          "col": 7
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "B",
+          "value": 4
+        },
+        {
+          "letter": "Z",
+          "value": 10
+        }
+      ],
+      "words": [
+        {
+          "word": "ZITS",
+          "score": 33
+        }
+      ],
+      "resultingScore": 222,
+      "drawnTiles": [
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        }
+      ],
+      "bagCount": 21
+    },
+    {
+      "turn": 28,
+      "action": "play",
+      "player": "player-2",
+      "score": 30,
+      "timestamp": 1438747875629,
+      "placements": [
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 2,
+          "col": 7
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 3,
+          "col": 7
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 0,
+          "col": 7
+        },
+        {
+          "letter": "F",
+          "value": 4,
+          "row": 1,
+          "col": 7
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 4,
+          "col": 7
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "F",
+          "value": 4
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "AFREET",
+          "score": 30
+        }
+      ],
+      "resultingScore": 261,
+      "drawnTiles": [
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "J",
+          "value": 10
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "G",
+          "value": 3
+        }
+      ],
+      "bagCount": 16
+    },
+    {
+      "turn": 29,
+      "action": "play",
+      "player": "player-1",
+      "score": 16,
+      "timestamp": 1438748327579,
+      "placements": [
+        {
+          "letter": "B",
+          "value": 4,
+          "row": 14,
+          "col": 11
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 14,
+          "col": 12
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 14,
+          "col": 13
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "B",
+          "value": 4
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "BEER",
+          "score": 11
+        },
+        {
+          "word": "AYE",
+          "score": 5
+        }
+      ],
+      "resultingScore": 238,
+      "drawnTiles": [
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "V",
+          "value": 5
+        }
+      ],
+      "bagCount": 13
+    },
+    {
+      "turn": 30,
+      "action": "play",
+      "player": "player-2",
+      "score": 30,
+      "timestamp": 1438793794025,
+      "placements": [
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 3,
+          "col": 14
+        },
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 3,
+          "col": 11
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 3,
+          "col": 12
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 3,
+          "col": 13
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "T",
+          "value": 1
+        },
+        {
+          "letter": "J",
+          "value": 10
+        },
+        {
+          "letter": "S",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "G",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "STAG",
+          "score": 18
+        },
+        {
+          "word": "GLADE",
+          "score": 12
+        }
+      ],
+      "resultingScore": 291,
+      "drawnTiles": [
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        }
+      ],
+      "bagCount": 9
+    },
+    {
+      "turn": 31,
+      "action": "play",
+      "player": "player-1",
+      "score": 22,
+      "timestamp": 1438825652724,
+      "placements": [
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 3,
+          "col": 3
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 3,
+          "col": 4
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 3,
+          "col": 5
+        },
+        {
+          "letter": "V",
+          "value": 5,
+          "row": 3,
+          "col": 6
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "V",
+          "value": 5
+        }
+      ],
+      "words": [
+        {
+          "word": "GROVE",
+          "score": 22
+        }
+      ],
+      "resultingScore": 260,
+      "drawnTiles": [
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        }
+      ],
+      "bagCount": 5
+    },
+    {
+      "turn": 32,
+      "action": "play",
+      "player": "player-2",
+      "score": 24,
+      "timestamp": 1438831402492,
+      "placements": [
+        {
+          "letter": "J",
+          "value": 10,
+          "row": 1,
+          "col": 12
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 2,
+          "col": 12
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "J",
+          "value": 10
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "JET",
+          "score": 24
+        }
+      ],
+      "resultingScore": 315,
+      "drawnTiles": [
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "D",
+          "value": 2
+        }
+      ],
+      "bagCount": 3
+    },
+    {
+      "turn": 33,
+      "action": "play",
+      "player": "player-1",
+      "score": 14,
+      "timestamp": 1438832132479,
+      "placements": [
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 1,
+          "col": 4
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 2,
+          "col": 4
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 4,
+          "col": 4
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "N",
+          "value": 2
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "H",
+          "value": 3
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "O",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "HORN",
+          "score": 14
+        }
+      ],
+      "resultingScore": 274,
+      "drawnTiles": [
+        {
+          "letter": "L",
+          "value": 2
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "K",
+          "value": 5
+        }
+      ],
+      "bagCount": 0
+    },
+    {
+      "turn": 34,
+      "action": "play",
+      "player": "player-2",
+      "score": 24,
+      "timestamp": 1438983750287,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 1,
+          "col": 13
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 1,
+          "col": 14
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "A",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "D",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "JAR",
+          "score": 24
+        }
+      ],
+      "resultingScore": 339,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 35,
+      "action": "play",
+      "player": "player-1",
+      "score": 16,
+      "timestamp": 1439001094486,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 1,
+          "col": 8
+        },
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 1,
+          "col": 9
+        },
+        {
+          "letter": "K",
+          "value": 5,
+          "row": 1,
+          "col": 10
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "E",
+          "value": 1
+        },
+        {
+          "letter": "L",
+          "value": 2
+        },
+        {
+          "letter": "O",
+          "value": 1
+        },
+        {
+          "letter": "K",
+          "value": 5
+        }
+      ],
+      "words": [
+        {
+          "word": "FOLK",
+          "score": 16
+        }
+      ],
+      "resultingScore": 290,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 36,
+      "action": "play",
+      "player": "player-2",
+      "score": 5,
+      "timestamp": 1439011699148,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 2,
+          "col": 9
+        },
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 3,
+          "col": 9
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "D",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "LID",
+          "score": 5
+        }
+      ],
+      "resultingScore": 344,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 37,
+      "action": "play",
+      "player": "player-1",
+      "score": 4,
+      "timestamp": 1439015829473,
+      "placements": [
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 4,
+          "col": 11
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 5,
+          "col": 11
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "U",
+          "value": 2
+        },
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "G",
+          "value": 3
+        },
+        {
+          "letter": "E",
+          "value": 1
+        }
+      ],
+      "words": [
+        {
+          "word": "SUE",
+          "score": 4
+        }
+      ],
+      "resultingScore": 294,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 38,
+      "action": "play",
+      "player": "player-2",
+      "score": 6,
+      "timestamp": 1439090673379,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 1,
+          "col": 5
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "I",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "HI",
+          "score": 6
+        }
+      ],
+      "resultingScore": 350,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 39,
+      "action": "play",
+      "player": "player-1",
+      "score": 11,
+      "timestamp": 1439090931154,
+      "placements": [
+        {
+          "letter": "Q",
+          "value": 10,
+          "row": 0,
+          "col": 5
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "Q",
+          "value": 10
+        },
+        {
+          "letter": "G",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "QI",
+          "score": 11
+        }
+      ],
+      "resultingScore": 305,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 40,
+      "action": "play",
+      "player": "player-2",
+      "score": 2,
+      "timestamp": 1439090992257,
+      "placements": [
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 5,
+          "col": 10
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "R",
+          "value": 1
+        },
+        {
+          "letter": "U",
+          "value": 2
+        }
+      ],
+      "words": [
+        {
+          "word": "RE",
+          "score": 2
+        }
+      ],
+      "resultingScore": 352,
+      "drawnTiles": [],
+      "bagCount": 0
+    },
+    {
+      "turn": 41,
+      "action": "play",
+      "player": "player-1",
+      "score": 8,
+      "timestamp": 1439091396406,
+      "placements": [
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 0,
+          "col": 8
+        }
+      ],
+      "version": 2,
+      "rackBefore": [
+        {
+          "letter": "G",
+          "value": 3
+        }
+      ],
+      "words": [
+        {
+          "word": "AG",
+          "score": 4
+        },
+        {
+          "word": "GO",
+          "score": 4
+        }
+      ],
+      "resultingScore": 313,
+      "drawnTiles": [],
+      "bagCount": 0
+    }
+  ]
+}

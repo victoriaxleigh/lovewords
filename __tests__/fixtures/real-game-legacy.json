@@ -1,0 +1,1312 @@
+{
+  "schemaVersion": 1,
+  "recordingQuality": "basic",
+  "gameId": "00000000-0000-4000-8000-000000000003",
+  "status": "finished",
+  "mode": "partner",
+  "gameType": "multiplayer",
+  "createdAt": "2015-07-22T17:34:19.076+00:00",
+  "finishedAt": "2015-07-27T21:00:07.119+00:00",
+  "bagCount": 0,
+  "boardMetadata": {
+    "version": 1,
+    "size": 15,
+    "coordinates": {
+      "base": 0,
+      "origin": "top-left",
+      "rowDirection": "down",
+      "columnDirection": "right"
+    },
+    "bonusSquares": {
+      "TW": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          0,
+          14
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          7,
+          14
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          14,
+          7
+        ],
+        [
+          14,
+          14
+        ]
+      ],
+      "DW": [
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          13
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          12
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          11
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          10
+        ],
+        [
+          10,
+          4
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          11,
+          3
+        ],
+        [
+          11,
+          11
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          12,
+          12
+        ],
+        [
+          13,
+          1
+        ],
+        [
+          13,
+          13
+        ]
+      ],
+      "TL": [
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          9
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          5,
+          9
+        ],
+        [
+          5,
+          13
+        ],
+        [
+          9,
+          1
+        ],
+        [
+          9,
+          5
+        ],
+        [
+          9,
+          9
+        ],
+        [
+          9,
+          13
+        ],
+        [
+          13,
+          5
+        ],
+        [
+          13,
+          9
+        ]
+      ],
+      "DL": [
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          11
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          14
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          6,
+          6
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          6,
+          12
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          7,
+          11
+        ],
+        [
+          8,
+          2
+        ],
+        [
+          8,
+          6
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          12
+        ],
+        [
+          11,
+          0
+        ],
+        [
+          11,
+          7
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          12,
+          6
+        ],
+        [
+          12,
+          8
+        ],
+        [
+          14,
+          3
+        ],
+        [
+          14,
+          11
+        ]
+      ],
+      "START": [
+        [
+          7,
+          7
+        ]
+      ]
+    }
+  },
+  "rules": {
+    "version": 1,
+    "rackSize": 7,
+    "bingoTileCount": 7,
+    "bingoBonus": 35,
+    "consecutivePassLimit": 4
+  },
+  "players": [
+    {
+      "alias": "player-1",
+      "displayName": "Player 1",
+      "finalScore": 375,
+      "finalRack": [
+        {
+          "letter": "I",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "alias": "player-2",
+      "displayName": "Player 2",
+      "finalScore": 318,
+      "finalRack": []
+    }
+  ],
+  "moves": [
+    {
+      "turn": 1,
+      "action": "play",
+      "player": "player-1",
+      "score": 24,
+      "timestamp": 1437586567352,
+      "placements": [
+        {
+          "letter": "J",
+          "value": 10,
+          "row": 7,
+          "col": 7
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 7,
+          "col": 8
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 7,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 2,
+      "action": "play",
+      "player": "player-2",
+      "score": 25,
+      "timestamp": 1437593629021,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 7,
+          "col": 10
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 5,
+          "col": 10
+        },
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 6,
+          "col": 10
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 3,
+          "col": 10
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 4,
+          "col": 10
+        }
+      ]
+    },
+    {
+      "turn": 3,
+      "action": "play",
+      "player": "player-1",
+      "score": 18,
+      "timestamp": 1437598810239,
+      "placements": [
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 8,
+          "col": 8
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 5,
+          "col": 8
+        },
+        {
+          "letter": "B",
+          "value": 4,
+          "row": 4,
+          "col": 8
+        },
+        {
+          "letter": "P",
+          "value": 4,
+          "row": 6,
+          "col": 8
+        }
+      ]
+    },
+    {
+      "turn": 4,
+      "action": "play",
+      "player": "player-2",
+      "score": 14,
+      "timestamp": 1437598848159,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 3,
+          "col": 11
+        },
+        {
+          "letter": "C",
+          "value": 4,
+          "row": 3,
+          "col": 12
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 3,
+          "col": 13
+        }
+      ]
+    },
+    {
+      "turn": 5,
+      "action": "play",
+      "player": "player-1",
+      "score": 24,
+      "timestamp": 1437599003680,
+      "placements": [
+        {
+          "letter": "F",
+          "value": 4,
+          "row": 0,
+          "col": 13
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 1,
+          "col": 13
+        },
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 2,
+          "col": 13
+        },
+        {
+          "letter": "Y",
+          "value": 3,
+          "row": 4,
+          "col": 13
+        }
+      ]
+    },
+    {
+      "turn": 6,
+      "action": "play",
+      "player": "player-2",
+      "score": 15,
+      "timestamp": 1437599389621,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 0,
+          "col": 14
+        }
+      ]
+    },
+    {
+      "turn": 7,
+      "action": "play",
+      "player": "player-1",
+      "score": 12,
+      "timestamp": 1437603028995,
+      "placements": [
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 4,
+          "col": 11
+        },
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 5,
+          "col": 11
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 2,
+          "col": 11
+        },
+        {
+          "letter": "B",
+          "value": 4,
+          "row": 1,
+          "col": 11
+        }
+      ]
+    },
+    {
+      "turn": 8,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1437717125275,
+      "placements": [
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 1,
+          "col": 9
+        },
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 1,
+          "col": 10
+        }
+      ]
+    },
+    {
+      "turn": 9,
+      "action": "play",
+      "player": "player-1",
+      "score": 14,
+      "timestamp": 1437720785207,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 8,
+          "col": 9
+        },
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 9,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 10,
+      "action": "play",
+      "player": "player-2",
+      "score": 45,
+      "timestamp": 1437724993087,
+      "placements": [
+        {
+          "letter": "Z",
+          "value": 10,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 0,
+          "col": 7
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 0,
+          "col": 8
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 0,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 11,
+      "action": "play",
+      "player": "player-1",
+      "score": 17,
+      "timestamp": 1437740983092,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 0,
+          "isBlank": true,
+          "row": 10,
+          "col": 9
+        },
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 10,
+          "col": 10
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 10,
+          "col": 11
+        },
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 10,
+          "col": 12
+        }
+      ]
+    },
+    {
+      "turn": 12,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1437743449509,
+      "placements": [
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 11,
+          "col": 12
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 12,
+          "col": 12
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 13,
+          "col": 12
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 14,
+          "col": 12
+        }
+      ]
+    },
+    {
+      "turn": 13,
+      "action": "play",
+      "player": "player-1",
+      "score": 42,
+      "timestamp": 1437743889267,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 14,
+          "col": 13
+        },
+        {
+          "letter": "P",
+          "value": 4,
+          "row": 14,
+          "col": 14
+        },
+        {
+          "letter": "C",
+          "value": 4,
+          "row": 14,
+          "col": 11
+        }
+      ]
+    },
+    {
+      "turn": 14,
+      "action": "play",
+      "player": "player-2",
+      "score": 12,
+      "timestamp": 1437743917464,
+      "placements": [
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 13,
+          "col": 13
+        }
+      ]
+    },
+    {
+      "turn": 15,
+      "action": "play",
+      "player": "player-1",
+      "score": 18,
+      "timestamp": 1437747048572,
+      "placements": [
+        {
+          "letter": "X",
+          "value": 8,
+          "row": 1,
+          "col": 14
+        }
+      ]
+    },
+    {
+      "turn": 16,
+      "action": "play",
+      "player": "player-2",
+      "score": 26,
+      "timestamp": 1437747153497,
+      "placements": [
+        {
+          "letter": "F",
+          "value": 4,
+          "row": 11,
+          "col": 11
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 11,
+          "col": 13
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 11,
+          "col": 14
+        }
+      ]
+    },
+    {
+      "turn": 17,
+      "action": "play",
+      "player": "player-1",
+      "score": 31,
+      "timestamp": 1437747436810,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "letter": "K",
+          "value": 5,
+          "row": 1,
+          "col": 5
+        }
+      ]
+    },
+    {
+      "turn": 18,
+      "action": "play",
+      "player": "player-2",
+      "score": 5,
+      "timestamp": 1437747772983,
+      "placements": [
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 2,
+          "col": 9
+        }
+      ]
+    },
+    {
+      "turn": 19,
+      "action": "play",
+      "player": "player-1",
+      "score": 17,
+      "timestamp": 1437748027617,
+      "placements": [
+        {
+          "letter": "V",
+          "value": 5,
+          "row": 2,
+          "col": 6
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 2,
+          "col": 7
+        },
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 2,
+          "col": 8
+        }
+      ]
+    },
+    {
+      "turn": 20,
+      "action": "play",
+      "player": "player-2",
+      "score": 22,
+      "timestamp": 1437810626256,
+      "placements": [
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 1,
+          "col": 2
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 1,
+          "col": 3
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 1,
+          "col": 4
+        }
+      ]
+    },
+    {
+      "turn": 21,
+      "action": "play",
+      "player": "player-1",
+      "score": 32,
+      "timestamp": 1437814056506,
+      "placements": [
+        {
+          "letter": "V",
+          "value": 5,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "letter": "W",
+          "value": 4,
+          "row": 2,
+          "col": 3
+        },
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 3,
+          "col": 3
+        }
+      ]
+    },
+    {
+      "turn": 22,
+      "action": "play",
+      "player": "player-2",
+      "score": 6,
+      "timestamp": 1437822798389,
+      "placements": [
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 3,
+          "col": 1
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 4,
+          "col": 1
+        }
+      ]
+    },
+    {
+      "turn": 23,
+      "action": "play",
+      "player": "player-1",
+      "score": 22,
+      "timestamp": 1437822924967,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 2,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "turn": 24,
+      "action": "play",
+      "player": "player-2",
+      "score": 10,
+      "timestamp": 1437822954803,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 2,
+          "col": 4
+        }
+      ]
+    },
+    {
+      "turn": 25,
+      "action": "play",
+      "player": "player-1",
+      "score": 15,
+      "timestamp": 1437827467276,
+      "placements": [
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 3,
+          "col": 2
+        },
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 3,
+          "col": 0
+        }
+      ]
+    },
+    {
+      "turn": 26,
+      "action": "play",
+      "player": "player-1",
+      "score": 9,
+      "timestamp": 1437838321324,
+      "placements": [
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 4,
+          "col": 0
+        },
+        {
+          "letter": "Y",
+          "value": 3,
+          "row": 5,
+          "col": 0
+        }
+      ]
+    },
+    {
+      "turn": 27,
+      "action": "play",
+      "player": "player-2",
+      "score": 10,
+      "timestamp": 1437915273755,
+      "placements": [
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 4,
+          "col": 6
+        },
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 3,
+          "col": 6
+        },
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 5,
+          "col": 6
+        },
+        {
+          "letter": "E",
+          "value": 0,
+          "isBlank": true,
+          "row": 6,
+          "col": 6
+        }
+      ]
+    },
+    {
+      "turn": 28,
+      "action": "play",
+      "player": "player-1",
+      "score": 9,
+      "timestamp": 1437919747244,
+      "placements": [
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 3,
+          "col": 14
+        }
+      ]
+    },
+    {
+      "turn": 29,
+      "action": "play",
+      "player": "player-2",
+      "score": 14,
+      "timestamp": 1437923030504,
+      "placements": [
+        {
+          "letter": "M",
+          "value": 4,
+          "row": 5,
+          "col": 5
+        }
+      ]
+    },
+    {
+      "turn": 30,
+      "action": "play",
+      "player": "player-1",
+      "score": 7,
+      "timestamp": 1437923198074,
+      "placements": [
+        {
+          "letter": "N",
+          "value": 2,
+          "row": 10,
+          "col": 14
+        },
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 9,
+          "col": 14
+        },
+        {
+          "letter": "H",
+          "value": 3,
+          "row": 8,
+          "col": 14
+        }
+      ]
+    },
+    {
+      "turn": 31,
+      "action": "play",
+      "player": "player-2",
+      "score": 10,
+      "timestamp": 1437988832022,
+      "placements": [
+        {
+          "letter": "G",
+          "value": 3,
+          "row": 9,
+          "col": 13
+        }
+      ]
+    },
+    {
+      "turn": 32,
+      "action": "play",
+      "player": "player-1",
+      "score": 10,
+      "timestamp": 1437988873213,
+      "placements": [
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 9,
+          "col": 11
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 12,
+          "col": 11
+        }
+      ]
+    },
+    {
+      "turn": 33,
+      "action": "play",
+      "player": "player-2",
+      "score": 23,
+      "timestamp": 1438029345032,
+      "placements": [
+        {
+          "letter": "M",
+          "value": 4,
+          "row": 8,
+          "col": 6
+        },
+        {
+          "letter": "O",
+          "value": 1,
+          "row": 8,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "turn": 34,
+      "action": "play",
+      "player": "player-1",
+      "score": 7,
+      "timestamp": 1438029994912,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 9,
+          "col": 6
+        },
+        {
+          "letter": "R",
+          "value": 1,
+          "row": 10,
+          "col": 6
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 11,
+          "col": 6
+        }
+      ]
+    },
+    {
+      "turn": 35,
+      "action": "play",
+      "player": "player-2",
+      "score": 14,
+      "timestamp": 1438030078163,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 10,
+          "col": 3
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 10,
+          "col": 4
+        },
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 10,
+          "col": 5
+        },
+        {
+          "letter": "L",
+          "value": 2,
+          "row": 10,
+          "col": 2
+        },
+        {
+          "letter": "S",
+          "value": 1,
+          "row": 10,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "turn": 36,
+      "action": "play",
+      "player": "player-1",
+      "score": 28,
+      "timestamp": 1438030231870,
+      "placements": [
+        {
+          "letter": "Q",
+          "value": 10,
+          "row": 8,
+          "col": 3
+        },
+        {
+          "letter": "U",
+          "value": 2,
+          "row": 9,
+          "col": 3
+        },
+        {
+          "letter": "T",
+          "value": 1,
+          "row": 11,
+          "col": 3
+        }
+      ]
+    },
+    {
+      "turn": 37,
+      "action": "play",
+      "player": "player-2",
+      "score": 25,
+      "timestamp": 1438030294524,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 12,
+          "col": 3
+        },
+        {
+          "letter": "W",
+          "value": 4,
+          "row": 12,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "turn": 38,
+      "action": "play",
+      "player": "player-1",
+      "score": 9,
+      "timestamp": 1438030372441,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 11,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "turn": 39,
+      "action": "play",
+      "player": "player-2",
+      "score": 11,
+      "timestamp": 1438030408785,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 8,
+          "col": 4
+        }
+      ]
+    },
+    {
+      "turn": 40,
+      "action": "play",
+      "player": "player-1",
+      "score": 7,
+      "timestamp": 1438030588112,
+      "placements": [
+        {
+          "letter": "D",
+          "value": 2,
+          "row": 12,
+          "col": 4
+        }
+      ]
+    },
+    {
+      "turn": 41,
+      "action": "play",
+      "player": "player-2",
+      "score": 3,
+      "timestamp": 1438030682600,
+      "placements": [
+        {
+          "letter": "E",
+          "value": 1,
+          "row": 11,
+          "col": 1
+        }
+      ]
+    },
+    {
+      "turn": 42,
+      "action": "play",
+      "player": "player-1",
+      "score": 3,
+      "timestamp": 1438030743473,
+      "placements": [
+        {
+          "letter": "A",
+          "value": 1,
+          "row": 13,
+          "col": 4
+        }
+      ]
+    },
+    {
+      "turn": 43,
+      "action": "play",
+      "player": "player-2",
+      "score": 4,
+      "timestamp": 1438030807119,
+      "placements": [
+        {
+          "letter": "I",
+          "value": 1,
+          "row": 13,
+          "col": 5
+        }
+      ]
+    }
+  ]
+}

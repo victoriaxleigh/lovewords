@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const TOKEN_PREFIX = 'lw_analysis_v1';
 const TOKEN_VERSION = 1;
 const TOKEN_TTL_SECONDS = 60 * 60;
+// Generous for a real name, far too short to carry a payload.
+const MAX_DISPLAY_NAME_LENGTH = 40;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BOARD_METADATA = {
@@ -244,7 +246,11 @@ async function fetchAnalysisEvents(supabaseUrl, supabaseKey, gameId) {
 
 function sanitizeTile(tile, includePosition = false) {
   const result = {
-    letter: typeof tile?.letter === 'string' ? tile.letter : '',
+    // One character, always: a real tile is a single letter, or '' for an
+    // unassigned blank. `games.players` is player-writable, so without this a
+    // single rack tile carrying a huge letter string rides straight past
+    // MAX_PROMPT_BYTES (capPromptPayload only trims moves/turns).
+    letter: typeof tile?.letter === 'string' ? tile.letter.slice(0, 1) : '',
     value: Number.isFinite(tile?.value) ? tile.value : 0,
   };
   if (tile?.isBlank === true) result.isBlank = true;
@@ -371,13 +377,19 @@ function sanitizeGameExport(game, privateEvents = []) {
 
   const players = sourcePlayers.map((player, index) => ({
     alias: aliases[index],
+    // `profiles.display_name` is user-chosen text with no CHECK upstream, and it
+    // reaches the coach prompt. Clamp it so a partner cannot spend the other
+    // player's prompt budget — or fit an instruction — inside their own name.
     displayName:
       typeof player?.displayName === 'string' && player.displayName
-        ? player.displayName
+        ? player.displayName.slice(0, MAX_DISPLAY_NAME_LENGTH)
         : `Player ${index + 1}`,
     finalScore: Number.isFinite(player?.score) ? player.score : 0,
+    // Clamped to the rule-book rack size. `games.players` is player-writable, and
+    // an unbounded rack would otherwise ride into the coach prompt untrimmed —
+    // capPromptPayload only ever trims moves/turns.
     finalRack: Array.isArray(player?.rack)
-      ? player.rack.map((tile) => sanitizeTile(tile))
+      ? player.rack.slice(0, RULES_METADATA.rackSize).map((tile) => sanitizeTile(tile))
       : [],
   }));
 
@@ -458,6 +470,7 @@ function publicOrigin(event) {
 
 module.exports = {
   AnalysisTokenError,
+  BOARD_METADATA,
   TOKEN_TTL_SECONDS,
   createAnalysisToken,
   fetchAnalysisEvents,

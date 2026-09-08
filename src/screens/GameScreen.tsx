@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching } from '../supabase/gameService';
+import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching, requestGameSolve, GameSolve } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -66,6 +66,11 @@ export default function GameScreen() {
   const [analysisQuality, setAnalysisQuality] = useState<'full' | 'basic' | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // The solver table and the coach note load independently: the table lands
+  // first and a coach failure must not take it back off the screen.
+  const [solve, setSolve] = useState<GameSolve | null>(null);
+  const [solveLoading, setSolveLoading] = useState(false);
+  const [solveError, setSolveError] = useState<string | null>(null);
 
   // Drag-and-drop
   const [draggingTile, setDraggingTile] = useState<Tile | null>(null);
@@ -596,9 +601,22 @@ export default function GameScreen() {
       }
     };
     const handleAnalyze = async () => {
-      if (analysisLoading) return;
-      setAnalysisLoading(true);
+      if (analysisLoading || solveLoading) return;
+      setSolveLoading(true);
+      setSolveError(null);
       setAnalysisError(null);
+      try {
+        const result = await requestGameSolve(gameId);
+        setSolve(result);
+        setAnalysisQuality(result.recordingQuality ?? null);
+      } catch (e: any) {
+        setSolveError(e?.message ?? 'Could not analyze this game.');
+      } finally {
+        setSolveLoading(false);
+      }
+
+      // The coach is the slow half — run it after the table is already up.
+      setAnalysisLoading(true);
       try {
         const result = await requestGameCoaching(gameId);
         setAnalysisText(result.analysis);
@@ -634,30 +652,123 @@ export default function GameScreen() {
           {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
         </Text>
         <TouchableOpacity
-          style={[styles.analysisBtn, analysisLoading && styles.actionBtnDisabled]}
+          style={[
+            styles.analysisBtn,
+            (analysisLoading || solveLoading) && styles.actionBtnDisabled,
+          ]}
           onPress={handleAnalyze}
-          disabled={analysisLoading}
+          disabled={analysisLoading || solveLoading}
           accessibilityLabel="Get AI coaching for this game"
           accessibilityRole="button"
         >
-          {analysisLoading ? (
+          {analysisLoading || solveLoading ? (
             <View style={styles.analysisLoadingRow}>
               <ActivityIndicator color={Colors.primary} size="small" />
-              <Text style={styles.analysisBtnText}>Coaching…</Text>
+              <Text style={styles.analysisBtnText}>
+                {solveLoading ? 'Crunching the board…' : 'Coaching…'}
+              </Text>
             </View>
           ) : (
             <Text style={styles.analysisBtnText}>
-              {analysisText ? '🤖 Coach me again' : '🤖 Coach me on this game'}
+              {analysisText || solve ? '🤖 Coach me again' : '🤖 Coach me on this game'}
             </Text>
           )}
         </TouchableOpacity>
+        {solveError && <Text style={styles.analysisError}>⚠️ {solveError}</Text>}
+        {solve && (
+          <View style={styles.analysisCommandCard}>
+            <Text style={styles.analysisCommandLabel}>
+              {solve.preview ? '📊 Turn by turn (local preview)' : '📊 Turn by turn'}
+            </Text>
+            {solve.recordingQuality === 'basic' && (
+              <Text style={styles.analysisBasicNote}>
+                ℹ️ This game was played before full move tracking, so tile-by-tile tips
+                aren’t available for it. New games get the complete review.
+              </Text>
+            )}
+            {/* Two different things, so two different sentences. Clock
+                truncation leaves turns on screen with no verdict; the turn and
+                byte caps drop rows entirely. Both used to render the same
+                vague notice with no count. */}
+            {(solve.turnsUnanalyzed ?? 0) > 0 && (
+              <Text style={styles.analysisBasicNote}>
+                ℹ️ The board got complicated — {solve.turnsUnanalyzed}{' '}
+                {solve.turnsUnanalyzed === 1 ? 'turn is' : 'turns are'} listed below without a
+                best-play check.
+              </Text>
+            )}
+            {(solve.turnsOmitted ?? 0) > 0 && (
+              <Text style={styles.analysisBasicNote}>
+                ℹ️ This game was long — the last {solve.turnsOmitted}{' '}
+                {solve.turnsOmitted === 1 ? 'turn is' : 'turns are'} not shown.
+              </Text>
+            )}
+            {solve.truncated &&
+              (solve.turnsUnanalyzed ?? 0) === 0 &&
+              (solve.turnsOmitted ?? 0) === 0 && (
+                <Text style={styles.analysisBasicNote}>
+                  ℹ️ This game was long enough that the later turns weren’t fully analyzed.
+                </Text>
+              )}
+            {solve.turns.map((turn) => (
+              <View
+                key={turn.turn}
+                style={[styles.solveRow, turn.isAsking && styles.solveRowMine]}
+              >
+                <Text style={styles.solveTurnNum}>{turn.isAsking ? '▶' : ''}{turn.turn}</Text>
+                <View style={styles.solveRowBody}>
+                  <Text style={styles.solveRowPlayed}>
+                    {turn.action === 'play'
+                      ? `${turn.played?.word ?? '—'} · ${turn.played?.score ?? 0}`
+                      : turn.action === 'swap'
+                      ? 'swapped tiles'
+                      : 'passed'}
+                  </Text>
+                  {/* The solver's best came in under what this turn scored, so
+                      the two disagree. Say so — never render it as a ✓. */}
+                  {turn.solved && turn.unmatchedPlay ? (
+                    <Text style={styles.solveRowUnverified}>
+                      couldn’t verify this turn
+                    </Text>
+                  ) : turn.unsolvableBoard ? (
+                    // Not "no rack" — the board itself had an undesignated
+                    // blank on it, so the position could not be read.
+                    <Text style={styles.solveRowUnverified}>
+                      couldn’t read the board from here
+                    </Text>
+                  ) : turn.unanalyzed ? (
+                    <Text style={styles.solveRowUnverified}>not analyzed</Text>
+                  ) : (
+                    turn.solved &&
+                    turn.best.length > 0 &&
+                    turn.pointsLeft !== null && (
+                      <Text
+                        style={[
+                          styles.solveRowBest,
+                          turn.wasBest && styles.solveRowBestFound,
+                        ]}
+                      >
+                        {turn.wasBest
+                          ? 'best available ✓'
+                          : `best: ${turn.best[0].word} · ${turn.best[0].score} (−${turn.pointsLeft})`}
+                      </Text>
+                    )
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+        {analysisLoading && !analysisText && (
+          <Text style={styles.analysisBasicNote}>🤖 Coach thinking…</Text>
+        )}
         {analysisError && <Text style={styles.analysisError}>⚠️ {analysisError}</Text>}
         {analysisText && (
           <View style={styles.analysisCommandCard}>
             <Text style={styles.analysisCommandLabel}>
               {analysisPreview ? '🤖 Coach (local preview)' : '🤖 Your coach says'}
             </Text>
-            {analysisQuality === 'basic' && (
+            {analysisQuality === 'basic' && !solve && (
               <Text style={styles.analysisBasicNote}>
                 ℹ️ This game was played before full move tracking, so tile-by-tile tips
                 aren’t available for it. New games get the complete review.
@@ -1167,6 +1278,32 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 15,
     lineHeight: 22,
+  },
+  // Compact enough that a whole game's turns fit a phone screen.
+  solveRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 5,
+    borderTopColor: Colors.border,
+    borderTopWidth: 1,
+  },
+  solveRowMine: { backgroundColor: Colors.background },
+  solveTurnNum: {
+    color: Colors.textLight,
+    fontSize: 12,
+    minWidth: 26,
+    textAlign: 'right',
+  },
+  solveRowBody: { flex: 1 },
+  solveRowPlayed: { color: Colors.text, fontSize: 14, fontWeight: '600' },
+  solveRowBest: { color: Colors.textLight, fontSize: 12, marginTop: 1 },
+  solveRowBestFound: { color: Colors.primary },
+  solveRowUnverified: {
+    color: Colors.textLight,
+    fontSize: 12,
+    marginTop: 1,
+    fontStyle: 'italic',
   },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
