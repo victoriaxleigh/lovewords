@@ -576,25 +576,119 @@ describe('analysis limits', () => {
 
   // The brute-force oracle shares the generator's naming convention, so it could
   // never have caught the above. This checks the invariant directly instead.
-  test('every named play accounts for its full score', () => {
-    const { findBestMoves, emptyGrid, applyPlacements, scorePlay } = require('../netlify/functions/lib/solver');
+  // The name a play is displayed under has to account for the score displayed
+  // next to it. The previous version of this test summed `scorePlay`'s own word
+  // list and compared it to `scorePlay`'s own total — which is how that total is
+  // defined, so it held under any naming rule at all, including the broken one.
+  // It never read `word`. These two do.
+  //
+  // The naming rule lives in `solveGame`'s output mapping, so that is the layer
+  // asserted here: `findBestMoves.word` is the main word in the generating
+  // direction and is deliberately left alone (see the shape contract in
+  // solver.js) — it is the displayed string that must agree with the displayed
+  // score.
+  test('a single-tile play is named after both words it forms, not the across one', () => {
+    const { solveGame } = require('../netlify/functions/lib/solver');
+
+    // AT across at (7,7)-(7,8), then O under the T to make TO down. That leaves
+    // (8,7) with a letter above it and a letter to its right, so one tile there
+    // forms a word in BOTH directions:
+    //
+    //     (7,7) A  T        dropping B on (8,7) makes
+    //     (8,7) B  O          BO across  and  AB down
+    //
+    // `score` is the total of both. Naming the play after the direction that
+    // enumerates first reports one word's identity against two words' score.
+    const play = (placements: any[], words: any[], score: number, rackBefore: any[]) => ({
+      action: 'play',
+      playerIndex: 0,
+      version: 2,
+      placements,
+      words,
+      score,
+      rackBefore,
+    });
+
+    const game = {
+      id: GAME_ID,
+      status: 'finished',
+      players: [
+        { alias: 'player-1', displayName: 'Player 1', finalScore: 0, finalRack: [] },
+        { alias: 'player-2', displayName: 'Player 2', finalScore: 0, finalRack: [] },
+      ],
+      moves: [
+        play(
+          [
+            { letter: 'A', value: 1, row: 7, col: 7 },
+            { letter: 'T', value: 1, row: 7, col: 8 },
+          ],
+          [{ word: 'AT', score: 4 }],
+          4,
+          [{ letter: 'A', value: 1 }, { letter: 'T', value: 1 }]
+        ),
+        play(
+          [{ letter: 'O', value: 1, row: 8, col: 8 }],
+          [{ word: 'TO', score: 2 }],
+          2,
+          [{ letter: 'O', value: 1 }]
+        ),
+        play(
+          [{ letter: 'B', value: 4, row: 8, col: 7 }],
+          [{ word: 'BO', score: 5 }, { word: 'AB', score: 5 }],
+          10,
+          [{ letter: 'B', value: 4 }]
+        ),
+      ],
+    };
+
+    const turn = solveGame(game, { budgetMs: 10000 }).turns[2];
+    const both = turn.best.find((b: any) => b.row === 8 && b.col === 7);
+
+    expect(both).toBeDefined();
+    expect(both.word).toBe('BO / AB');
+    // The exact shape of the bug: a bare single word carrying both words' score.
+    expect(turn.best.map((b: any) => b.word)).not.toContain('BO');
+  });
+
+  test('every displayed play names exactly the words that make up its score', () => {
+    const solver = require('../netlify/functions/lib/solver');
     let checked = 0;
+
     for (const name of ['real-game-full', 'real-game-mixed']) {
       const game = require(`./fixtures/${name}.json`);
-      const grid = emptyGrid();
-      for (const move of game.moves) {
-        if (Array.isArray(move.rackBefore) && move.rackBefore.length) {
-          for (const m of findBestMoves(grid, move.rackBefore, { limit: 5 }).moves) {
-            const detail = scorePlay(grid, m.placements);
-            const bingo = m.placements.length === 7 ? 35 : 0;
-            const sum = detail.words.reduce((a: number, w: { score: number }) => a + w.score, 0);
-            expect(sum + bingo).toBe(m.score);
+      const solve = solver.solveGame(game, { budgetMs: 60000 });
+      expect(solve.truncated).toBeFalsy();
+
+      const grid = solver.emptyGrid();
+      game.moves.forEach((move: any, i: number) => {
+        const turn = solve.turns[i];
+        if (turn && Array.isArray(turn.best) && turn.best.length > 0) {
+          // Re-derive the same plays from the same board state, where the
+          // placements are still in hand, and build the name each one is owed.
+          const expected = new Set(
+            solver
+              .findBestMoves(grid, move.rackBefore, { limit: 5 })
+              .moves.map((m: any) => {
+                const detail = solver.scorePlay(grid, m.placements);
+                // Sum over the named words alone must reach the play's score,
+                // bingo aside — that is what "the name accounts for the score"
+                // means, and it is false the moment a word is dropped.
+                const bingo = m.placements.length === 7 ? 35 : 0;
+                const sum = detail.words.reduce((a: number, w: any) => a + w.score, 0);
+                expect(sum + bingo).toBe(m.score);
+                return `${detail.words.map((w: any) => w.word).join(' / ')}|${m.score}`;
+              })
+          );
+
+          for (const b of turn.best) {
+            expect(expected.has(`${b.word}|${b.score}`)).toBe(true);
             checked++;
           }
         }
-        if (move.action === 'play') applyPlacements(grid, move.placements);
-      }
+        if (move.action === 'play') solver.applyPlacements(grid, move.placements);
+      });
     }
+
     expect(checked).toBeGreaterThan(300);
   });
 

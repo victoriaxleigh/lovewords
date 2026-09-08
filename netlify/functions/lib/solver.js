@@ -345,6 +345,24 @@ function buildRack(tiles) {
  * Anchor-based generation: from each anchor square, build the part of the word
  * to its left/above out of rack tiles, then extend right/down through existing
  * tiles and rack tiles, pruning on the trie the moment a prefix is dead.
+ *
+ * Shape of each returned move, and the one trap in it:
+ *
+ *   word        the main word, in the direction this play was generated in.
+ *               NOT the whole play — a play that also forms cross-words is
+ *               named here after one of them, and for a single tile (which
+ *               forms a word both ways) which one is decided by enumeration
+ *               order, across first, not by value.
+ *   words       every word the play forms, each with its own score. This is
+ *               the authoritative list.
+ *   score       the total over `words`, plus the bingo bonus. So `score` is a
+ *               whole-play number while `word` is a part-of-play name: showing
+ *               the two side by side reports one word's identity against every
+ *               word's points, which is a bug users see (PR #24).
+ *
+ * Anything rendering a play, or handing it to a model to quote, wants a name
+ * built from `words` — `solveGame` joins them with ' / ' for exactly this
+ * reason, and that is the layer the naming tests assert.
  */
 function findBestMoves(grid, rackTiles, options = {}) {
   const limit = options.limit ?? 5;
