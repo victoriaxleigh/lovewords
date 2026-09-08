@@ -150,14 +150,27 @@ function capPromptPayload(game, solve, maxBytes = MAX_PROMPT_BYTES) {
   return build(lo);
 }
 
+const TRUNCATION_NOTE = '\u2026[payload truncated at the size limit]';
+
 /**
  * Serialize a prompt payload and neutralise any `<game-data>` fence hidden in
  * player-controlled text, so the untrusted block cannot close itself early.
  * `<` and `>` never appear in a JSON escape sequence and the replacement holds
  * no quote or backslash, so the result is still valid JSON.
+ *
+ * This is also the single place the prompt's size is actually bounded.
+ * `capPromptPayload` trims `moves` and `turns`; every other field is bounded
+ * only by its own per-field clamp, and `build(0)` can still exceed the limit —
+ * so a field added to the export later would silently reopen the hole, as
+ * billable prompt tokens. Cutting the serialized string makes the bound
+ * unconditional: whatever anyone adds upstream, what reaches the model is
+ * capped. The marker is deliberately visible so a truncated payload reads as
+ * truncated rather than as malformed JSON.
  */
-function serializePromptPayload(payload) {
-  return JSON.stringify(payload).replace(DELIMITER_PATTERN, '[game-data]');
+function serializePromptPayload(payload, maxBytes = MAX_PROMPT_BYTES) {
+  const text = JSON.stringify(payload).replace(DELIMITER_PATTERN, '[game-data]');
+  if (text.length <= maxBytes) return text;
+  return text.slice(0, Math.max(0, maxBytes - TRUNCATION_NOTE.length)) + TRUNCATION_NOTE;
 }
 
 module.exports = {

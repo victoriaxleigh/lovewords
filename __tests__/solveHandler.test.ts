@@ -598,6 +598,23 @@ describe('analysis limits', () => {
     expect(checked).toBeGreaterThan(300);
   });
 
+  // The prompt cap trims moves and turns; every other field is bounded only by
+  // its own clamp, and build(0) can still exceed the limit. Bounding the
+  // serialized string makes the cap hold no matter what is added upstream.
+  test('the serialized prompt is capped even when trimming cannot save it', () => {
+    const oversized = {
+      game: { recordingQuality: 'full', moves: [], aFieldAddedLater: 'Q'.repeat(400 * 1024) },
+      solver: { turns: [] },
+    };
+    const out = serializePromptPayload(oversized);
+    expect(out.length).toBeLessThanOrEqual(MAX_PROMPT_BYTES);
+    expect(out.endsWith('[payload truncated at the size limit]')).toBe(true);
+
+    // A normal payload is returned byte-for-byte.
+    const normal = { game: { a: 1 }, solver: { turns: [] } };
+    expect(serializePromptPayload(normal)).toBe(JSON.stringify(normal));
+  });
+
   test('a normal-sized response passes through unchanged', () => {
     const solve = {
       recordingQuality: 'full',
