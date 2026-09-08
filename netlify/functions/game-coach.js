@@ -16,10 +16,17 @@ const {
   serializePromptPayload,
 } = require('./lib/analysisLimits');
 
-// Netlify's synchronous execution limit is 60s (fixed). The Claude call needs a
-// good chunk of it, so the solver gets a tighter budget here than the standalone
-// solve endpoint — but not so tight that a normal game truncates, which is what
-// the previous 4000 did in production (hard numbers stopped at turn 26 of 39).
+// Netlify's synchronous execution limit is 60s (fixed, not configurable).
+//
+// These are one shared deadline, not two independent numbers. The solve budget
+// is the ceiling; what the solver actually gets is whatever the deadline allows
+// once the model's reserve is set aside, so a solve that legitimately runs long
+// can never eat the time the Claude call needs. When the platform kills a
+// request there is no `truncated: true` and no partial table — just a 502 with
+// the Anthropic spend already incurred — so the budget must expire before the
+// platform limit does.
+const REQUEST_BUDGET_MS = 50000;
+const MODEL_RESERVE_MS = 30000;
 const SOLVE_BUDGET_MS = 15000;
 
 // Which model writes the coaching. The solver now supplies the moves and the
@@ -107,6 +114,7 @@ function serverConfig() {
 }
 
 exports.handler = async (event) => {
+  const requestStart = Date.now();
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' }, { Allow: 'POST' });
   }
@@ -190,7 +198,19 @@ exports.handler = async (event) => {
 
     // Ground truth is computed here, server-side. The client never supplies it.
     const solve = capResponseSize(
-      solveGame(exportData, { askingAlias, budgetMs: SOLVE_BUDGET_MS })
+      solveGame(exportData, {
+        askingAlias,
+        // Auth and the Supabase round trips have already burned part of the
+        // request; charge the solver for that rather than handing it a fixed
+        // budget measured from zero.
+        budgetMs: Math.max(
+          1000,
+          Math.min(
+            SOLVE_BUDGET_MS,
+            REQUEST_BUDGET_MS - MODEL_RESERVE_MS - (Date.now() - requestStart)
+          )
+        ),
+      })
     );
 
     // Bound what is actually billed. `capResponseSize` caps the solver half

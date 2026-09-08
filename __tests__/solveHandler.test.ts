@@ -556,6 +556,48 @@ describe('analysis limits', () => {
     expect(plays[0].played.word).toBe('JET');
   });
 
+  // PR #24 review: `score` is the play total but `word` named a single word, so
+  // the pair could describe different things. For a single-tile play the winner
+  // was decided by enumeration order (across first), not by value — the coach
+  // then quoted "OR" as worth 8 when OR alone is 2 and OK carried the other 6.
+  test('a play is named after every word it forms, so word and score agree', () => {
+    const { solveGame } = require('../netlify/functions/lib/solver');
+    const full = require('./fixtures/real-game-full.json');
+    const turn39 = solveGame(full, { askingAlias: 'player-1', budgetMs: 20000 })
+      .turns.find((t: { turn: number }) => t.turn === 39);
+
+    const eight = turn39.best.find(
+      (b: { score: number; word: string }) => b.score === 8 && b.word.includes('OR')
+    );
+    expect(eight.word).toBe('OR / OK');
+    // The bare single-word label is exactly the bug.
+    expect(turn39.best.map((b: { word: string }) => b.word)).not.toContain('OR');
+  });
+
+  // The brute-force oracle shares the generator's naming convention, so it could
+  // never have caught the above. This checks the invariant directly instead.
+  test('every named play accounts for its full score', () => {
+    const { findBestMoves, emptyGrid, applyPlacements, scorePlay } = require('../netlify/functions/lib/solver');
+    let checked = 0;
+    for (const name of ['real-game-full', 'real-game-mixed']) {
+      const game = require(`./fixtures/${name}.json`);
+      const grid = emptyGrid();
+      for (const move of game.moves) {
+        if (Array.isArray(move.rackBefore) && move.rackBefore.length) {
+          for (const m of findBestMoves(grid, move.rackBefore, { limit: 5 }).moves) {
+            const detail = scorePlay(grid, m.placements);
+            const bingo = m.placements.length === 7 ? 35 : 0;
+            const sum = detail.words.reduce((a: number, w: { score: number }) => a + w.score, 0);
+            expect(sum + bingo).toBe(m.score);
+            checked++;
+          }
+        }
+        if (move.action === 'play') applyPlacements(grid, move.placements);
+      }
+    }
+    expect(checked).toBeGreaterThan(300);
+  });
+
   test('a normal-sized response passes through unchanged', () => {
     const solve = {
       recordingQuality: 'full',

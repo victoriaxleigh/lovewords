@@ -687,7 +687,14 @@ function solveGame(exportData, options = {}) {
         } else {
           entry.solved = true;
           entry.best = result.moves.map((m) => ({
-            word: m.word,
+            // Name a play after every word it forms, exactly as `played.word`
+            // does. `score` is the play total, so naming it after one word made
+            // the pair inconsistent — and for a single-tile play, which word won
+            // was decided by enumeration order (across first), not by value.
+            word:
+              Array.isArray(m.words) && m.words.length > 0
+                ? m.words.map((w) => w.word).join(' / ')
+                : m.word,
             score: m.score,
             row: m.row,
             col: m.col,

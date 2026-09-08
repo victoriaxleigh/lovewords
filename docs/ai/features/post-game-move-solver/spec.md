@@ -467,3 +467,21 @@ issues, which no earlier test covered.
   `played.word: null` and every row of the table rendered as a dash (`GameScreen.tsx:722`).
   `solveGame` now reconstructs the labels via `scorePlay` against the pre-move board. Both pinned by
   regression tests; 346 tests pass.
+- [iter 3] owner review (PR #24): 2 findings, both confirmed and fixed.
+  (1) `best[].word` named a play after a single word while `score` was the play total, so the pair
+  could describe different things; for a single-tile play the winner was decided by enumeration
+  order (across first), not value — turn 39 of `real-game-full` returned `OR (8)` where OR alone is
+  2 and OK carried the other 6. Across the two solvable fixtures, 66 of 371 returned plays named a
+  word that was not the biggest contributor. `best[].word` now lists every word the play forms,
+  matching what `played.word` already did: `OR / OK (8)`, `CAP / AG / PRIVET (38)`. The brute-force
+  oracle could never have caught this — it hard-codes the same across-first convention — so the fix
+  is pinned by a direct invariant test instead: for 300+ plays, the named words' scores plus any
+  bingo equal the play score.
+  (2) The coach's solve budget and the model call were independent constants with no shared
+  deadline, so a solve that legitimately ran long left the Claude call whatever remained, unchecked
+  — and a platform kill yields a 502 with the Anthropic spend already incurred, bypassing every
+  graceful-degradation path. The solve budget is now derived from one request deadline with the
+  model's reserve set aside first. The reviewer's 10s/26s figure is Netlify's older limit; the
+  current documented synchronous limit is 60s, confirmed verbatim from the limits table — but the
+  criticism of the original evidence was fair, since the run cited could not have distinguished the
+  two ceilings.
