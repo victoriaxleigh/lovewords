@@ -622,10 +622,27 @@ function solveGame(exportData, options = {}) {
     // across the solve however long it runs.
     if (!truncated && clock.expiredNow()) truncated = true;
 
+    // Legacy v1 history records no words[], so recover the labels from the board
+    // as it stood before the move — otherwise every row of a legacy game's table
+    // renders as a dash. `scorePlay` restores the grid it borrows.
+    let playedWords = (move.words || []).map((w) => w.word);
+    if (
+      move.action === 'play' &&
+      playedWords.length === 0 &&
+      Array.isArray(move.placements) &&
+      move.placements.length > 0
+    ) {
+      try {
+        playedWords = scorePlay(grid, move.placements).words.map((w) => w.word);
+      } catch {
+        playedWords = [];
+      }
+    }
+
     const played =
       move.action === 'play'
         ? {
-            word: (move.words || []).map((w) => w.word).join(' / ') || null,
+            word: playedWords.join(' / ') || null,
             score: Number.isFinite(move.score) ? move.score : 0,
           }
         : null;

@@ -246,7 +246,11 @@ async function fetchAnalysisEvents(supabaseUrl, supabaseKey, gameId) {
 
 function sanitizeTile(tile, includePosition = false) {
   const result = {
-    letter: typeof tile?.letter === 'string' ? tile.letter : '',
+    // One character, always: a real tile is a single letter, or '' for an
+    // unassigned blank. `games.players` is player-writable, so without this a
+    // single rack tile carrying a huge letter string rides straight past
+    // MAX_PROMPT_BYTES (capPromptPayload only trims moves/turns).
+    letter: typeof tile?.letter === 'string' ? tile.letter.slice(0, 1) : '',
     value: Number.isFinite(tile?.value) ? tile.value : 0,
   };
   if (tile?.isBlank === true) result.isBlank = true;

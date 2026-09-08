@@ -520,6 +520,42 @@ describe('analysis limits', () => {
     expect(prompt.solver.turnsUnanalyzed).toBeLessThan(4900);
   });
 
+  // Codex review of PR #24: clamping the rack LENGTH left tile CONTENTS
+  // unbounded, so one tile carrying a huge letter string still blew the cap.
+  test('a giant letter string on a rack tile cannot bypass the prompt cap', () => {
+    const { solveGame } = require('../netlify/functions/lib/solver');
+    const row = {
+      id: '11111111-1111-4111-8111-111111111111',
+      status: 'finished',
+      mode: 'partner',
+      moves: [],
+      bag: [],
+      players: [
+        { displayName: 'A', score: 0, historyVersion: 2, rack: [{ letter: 'Q'.repeat(400 * 1024), value: 10 }] },
+        { displayName: 'B', score: 0, historyVersion: 2, rack: [] },
+      ],
+    };
+    const exported = sanitizeGameExport(row, []);
+    expect(exported.players[0].finalRack[0].letter).toHaveLength(1);
+
+    const solve = solveGame(exported, { askingAlias: 'player-1', budgetMs: 4000 });
+    const bytes = serializePromptPayload(capPromptPayload(exported, solve)).length;
+    expect(bytes).toBeLessThanOrEqual(MAX_PROMPT_BYTES);
+  });
+
+  // Legacy v1 history has no words[]; without reconstruction every row of a
+  // legacy game's table renders as a dash.
+  test('legacy plays get their word labels reconstructed from the board', () => {
+    const { solveGame } = require('../netlify/functions/lib/solver');
+    const legacy = require('./fixtures/real-game-legacy.json');
+    const solve = solveGame(legacy, { askingAlias: 'player-1', budgetMs: 5000 });
+    const plays = solve.turns.filter((t: { action: string }) => t.action === 'play');
+
+    expect(plays.length).toBeGreaterThan(0);
+    expect(plays.filter((t: { played?: { word: string | null } }) => !t.played?.word)).toHaveLength(0);
+    expect(plays[0].played.word).toBe('JET');
+  });
+
   test('a normal-sized response passes through unchanged', () => {
     const solve = {
       recordingQuality: 'full',

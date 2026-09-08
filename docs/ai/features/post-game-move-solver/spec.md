@@ -458,3 +458,12 @@ issues, which no earlier test covered.
   of 39. Budgets raised to 25s (solve) / 15s (coach). The durable fix is caching the solve per
   finished game — a finished game is immutable and the per-turn best plays are player-independent, so
   one cached row per game serves both endpoints and every repeat view.
+- [iter 3] second-opinion (Codex, independent): 2 defects, both confirmed and fixed.
+  (1) The prompt cap was still bypassable: clamping `finalRack` LENGTH left tile CONTENTS unbounded,
+  so a single rack tile carrying a 400KB letter string produced a 410,936-byte prompt against the
+  262,144 cap. `sanitizeTile` now clamps `letter` to one character. This is the third variant of the
+  same finding — security caught it in `moves`, then in rack length, Codex in tile contents.
+  (2) Legacy v1 history carries no `words[]`, so all 43 plays in `real-game-legacy.json` reported
+  `played.word: null` and every row of the table rendered as a dash (`GameScreen.tsx:722`).
+  `solveGame` now reconstructs the labels via `scorePlay` against the pre-move board. Both pinned by
+  regression tests; 346 tests pass.
