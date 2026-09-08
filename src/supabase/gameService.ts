@@ -141,6 +141,212 @@ export async function createGameAnalysisToken(gameId: string): Promise<GameAnaly
   return body as GameAnalysisToken;
 }
 
+// ─── Deterministic move solver ────────────────────────────────────────────────
+// Replays the finished game server-side and, for every turn, reports the
+// highest-scoring legal plays that were available from the rack the player
+// actually held. Same auth model as the coach endpoint.
+export type SolvedPlay = {
+  word: string;
+  score: number;
+  row: number;
+  col: number;
+  direction: 'across' | 'down';
+};
+
+export type SolvedTurn = {
+  turn: number;
+  player: string | null;
+  isAsking: boolean;
+  action: 'play' | 'swap' | 'pass';
+  played: { word: string | null; score: number } | null;
+  solved: boolean;
+  best: SolvedPlay[];
+  pointsLeft: number | null;
+  wasBest: boolean | null;
+  // The solver enumerated the position but its best play scores less than what
+  // the turn actually recorded, so the two disagree. `pointsLeft`/`wasBest` are
+  // null and must not be presented as a result.
+  unmatchedPlay?: boolean;
+  // A blank already on the board carries no designated letter, so the position
+  // could not be read. Distinct from "no rack was recorded for this turn".
+  unsolvableBoard?: boolean;
+  // Listed, but the solver's clock expired before it reached this turn.
+  unanalyzed?: boolean;
+};
+
+export type GameSolve = {
+  recordingQuality: 'full' | 'basic';
+  askingAlias: string | null;
+  truncated: boolean;
+  // Turns dropped from `turns` entirely (turn cap or response byte cap).
+  turnsOmitted?: number;
+  // Turns present in `turns` that never got a verdict (clock budget).
+  turnsUnanalyzed?: number;
+  players: { alias: string; displayName: string; finalScore: number }[];
+  turns: SolvedTurn[];
+  preview?: boolean;
+};
+
+export async function requestGameSolve(gameId: string): Promise<GameSolve> {
+  // Expo's web dev server does not run Netlify Functions. Give ?dev=1 a canned
+  // solve so the finished-game table can be reviewed without a backend.
+  if (
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('dev')
+  ) {
+    // Deliberately an "everything" fixture: it carries the anomalous states
+    // (unmatched play, unreadable board, unanalyzed turn) and both truncation
+    // counts, so every branch of the table can be reviewed without a backend.
+    return {
+      recordingQuality: 'full',
+      askingAlias: 'player-1',
+      truncated: true,
+      turnsOmitted: 2,
+      turnsUnanalyzed: 1,
+      preview: true,
+      players: [
+        { alias: 'player-1', displayName: 'You', finalScore: 312 },
+        { alias: 'player-2', displayName: 'Player 2', finalScore: 287 },
+      ],
+      turns: [
+        {
+          turn: 1,
+          player: 'player-1',
+          isAsking: true,
+          action: 'play',
+          played: { word: 'FIND', score: 12 },
+          solved: true,
+          best: [{ word: 'FINDER', score: 20, row: 7, col: 4, direction: 'across' }],
+          pointsLeft: 8,
+          wasBest: false,
+        },
+        {
+          turn: 2,
+          player: 'player-2',
+          isAsking: false,
+          action: 'play',
+          played: { word: 'ROADIE', score: 22 },
+          solved: true,
+          best: [{ word: 'ROADIE', score: 22, row: 5, col: 8, direction: 'down' }],
+          pointsLeft: 0,
+          wasBest: true,
+        },
+        {
+          turn: 3,
+          player: 'player-1',
+          isAsking: true,
+          action: 'play',
+          played: { word: 'CAT', score: 5 },
+          solved: true,
+          best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
+          pointsLeft: 43,
+          wasBest: false,
+        },
+        {
+          turn: 4,
+          player: 'player-2',
+          isAsking: false,
+          action: 'swap',
+          played: null,
+          solved: true,
+          best: [{ word: 'VEIN', score: 14, row: 9, col: 3, direction: 'across' }],
+          pointsLeft: 14,
+          wasBest: false,
+        },
+        {
+          turn: 5,
+          player: 'player-1',
+          isAsking: true,
+          action: 'play',
+          played: { word: 'QUARTZ', score: 48 },
+          solved: true,
+          best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
+          pointsLeft: 0,
+          wasBest: true,
+        },
+        {
+          turn: 6,
+          player: 'player-1',
+          isAsking: true,
+          action: 'pass',
+          played: null,
+          solved: false,
+          best: [],
+          pointsLeft: null,
+          wasBest: null,
+        },
+        {
+          turn: 7,
+          player: 'player-1',
+          isAsking: true,
+          action: 'play',
+          played: { word: 'JUKEBOX', score: 120 },
+          solved: true,
+          best: [{ word: 'BOX', score: 18, row: 2, col: 6, direction: 'across' }],
+          pointsLeft: null,
+          wasBest: null,
+          unmatchedPlay: true,
+        },
+        {
+          turn: 8,
+          player: 'player-2',
+          isAsking: false,
+          action: 'play',
+          played: { word: 'HOUSE', score: 16 },
+          solved: false,
+          best: [],
+          pointsLeft: null,
+          wasBest: null,
+          unsolvableBoard: true,
+        },
+        {
+          turn: 9,
+          player: 'player-1',
+          isAsking: true,
+          action: 'play',
+          played: { word: 'PLAID', score: 21 },
+          solved: false,
+          best: [],
+          pointsLeft: null,
+          wasBest: null,
+          unanalyzed: true,
+        },
+      ],
+    };
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) throw new Error('Sign in again to analyze this game.');
+
+  const response = await fetch(
+    `${FUNCTIONS_BASE}/api/games/${encodeURIComponent(gameId)}/solve`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
+
+  let body: Partial<GameSolve> & { error?: string } = {};
+  try {
+    body = await response.json();
+  } catch {
+    // Keep the fallback below for platform/proxy errors that return plain text.
+  }
+  if (!response.ok) {
+    throw new Error(body.error || 'Could not analyze this game.');
+  }
+  if (!Array.isArray(body.turns)) {
+    throw new Error('The solver returned no turns for this game.');
+  }
+  return body as GameSolve;
+}
+
 // ─── AI game coaching ─────────────────────────────────────────────────────────
 // Sends the finished game to our serverless coach (which calls Claude) and
 // returns the written analysis to show in-app. Same auth model as the token
@@ -162,11 +368,10 @@ export async function requestGameCoaching(gameId: string): Promise<GameCoaching>
     return {
       analysis:
         "Here's your game, turn by turn:\n\n" +
-        "Turn 1 — FIND (12): Solid opener across the center star.\n" +
-        "Turn 3 — CAT (5): A bit safe. You held Q, U, A, R, T, Z, E — QUARTZ down the H-column triple was worth ~48. Big one to remember.\n" +
-        "Turn 5 — GOAT (9): Good value, and you kept a balanced rack.\n" +
-        "Turn 7 — QUARTZ (48): There it is — the turning point. Perfect use of the triple.\n" +
-        "Turn 9 — pass: Understandable with that rack, but a 1–2 tile swap would've kept you moving.\n\n" +
+        "Turn 1 — FIND (12): Solid opener across the center star. FINDER was there for 20 — the same word plus the tiles you were already holding.\n" +
+        "Turn 3 — CAT (5): 43 points left on the table. You held Q, U, A, R, T, Z — QUARTZ down the H-column triple scored 48.\n" +
+        "Turn 5 — QUARTZ (48): There it is, and it was the best play on the board. Perfect use of the triple.\n" +
+        "Turn 6 — pass: Understandable with that rack, but a 1–2 tile swap would've kept you moving.\n\n" +
         "Takeaways: (1) When you're holding a Q with a U, hunt for a premium square before settling. " +
         "(2) Swap instead of passing when you're stuck. (3) Great endgame board control.",
       recordingQuality: 'full',

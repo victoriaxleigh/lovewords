@@ -18,6 +18,9 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "nft"
+  # nft traces require() graphs, so it never sees the vendored ENABLE word list
+  # the solver gunzips at cold start. Ship netlify/functions/lib explicitly.
+  included_files = ["netlify/functions/lib/**"]
 
 # Finished-game analysis export. Keep these ahead of the SPA fallback.
 [[redirects]]
@@ -36,6 +39,14 @@
 [[redirects]]
   from = "/api/games/:gameId/coach"
   to = "/.netlify/functions/game-coach?gameId=:gameId"
+  status = 200
+  force = true
+
+# Deterministic per-turn move solver for a finished game. Keep ahead of the SPA
+# fallback.
+[[redirects]]
+  from = "/api/games/:gameId/solve"
+  to = "/.netlify/functions/game-solve?gameId=:gameId"
   status = 200
   force = true
 
