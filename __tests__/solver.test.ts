@@ -472,7 +472,7 @@ describe('solveGame', () => {
   test('turn 1 was played on an empty board, so its best play covers the star', () => {
     const result = solver.solveGame(exportData, { askingAlias: 'player-1' });
     const turn1 = result.turns[0];
-    expect(turn1.solved).toBe(true);
+    expect(turn1.status).toBe('solved');
     expect(turn1.best.length).toBeGreaterThan(0);
     expect(turn1.best[0].score).toBe(65);
     expect(turn1.pointsLeft).toBe(65 - 18);
@@ -482,7 +482,7 @@ describe('solveGame', () => {
   test('best[0].score is never below the score actually played', () => {
     const result = solver.solveGame(exportData, { askingAlias: 'player-1' });
     for (const turn of result.turns) {
-      if (!turn.solved || turn.best.length === 0 || !turn.played) continue;
+      if (turn.status !== 'solved' || turn.best.length === 0 || !turn.played) continue;
       expect(turn.best[0].score).toBeGreaterThanOrEqual(turn.played.score);
       expect(turn.pointsLeft).toBe(turn.best[0].score - turn.played.score);
     }
@@ -501,7 +501,7 @@ describe('solveGame', () => {
   test('turns without a recorded rack come back unsolved, never guessed', () => {
     const result = solver.solveGame(exportData, { askingAlias: 'player-1' });
     const turn3 = result.turns[2];
-    expect(turn3.solved).toBe(false);
+    expect(turn3.status).toBe('no_rack');
     expect(turn3.best).toEqual([]);
     expect(turn3.pointsLeft).toBeNull();
     expect(turn3.wasBest).toBeNull();
@@ -518,7 +518,7 @@ describe('solveGame', () => {
     const result = solver.solveGame(basic, { askingAlias: 'player-1' });
     expect(result.recordingQuality).toBe('basic');
     expect(result.turns).toHaveLength(4);
-    expect(result.turns.every((t: any) => t.solved === false)).toBe(true);
+    expect(result.turns.every((t: any) => t.status === 'no_rack')).toBe(true);
     expect(result.turns.every((t: any) => t.best.length === 0)).toBe(true);
   });
 
@@ -534,7 +534,9 @@ describe('solveGame', () => {
       budgetMs: -1,
     });
     expect(result.truncated).toBe(true);
-    expect(result.turns.every((t: any) => t.solved === false)).toBe(true);
+    // Turns that recorded a rack were not analyzed; the rest never had one.
+    expect(result.turns.every((t: any) => t.status !== 'solved')).toBe(true);
+    expect(result.turns.some((t: any) => t.status === 'not_analyzed')).toBe(true);
   });
 });
 
@@ -558,11 +560,11 @@ describe('real game fixtures', () => {
     expect(withRack).toBe(36);
 
     const result = solver.solveGame(mixed, { askingAlias: 'player-1', budgetMs: 60000 });
-    expect(result.turns.filter((t: any) => t.solved)).toHaveLength(36);
-    expect(result.turns.filter((t: any) => !t.solved)).toHaveLength(5);
+    expect(result.turns.filter((t: any) => t.status === 'solved')).toHaveLength(36);
+    expect(result.turns.filter((t: any) => t.status === 'no_rack')).toHaveLength(5);
     expect(result.truncated).toBe(false);
     // The unsolved ones are exactly the turns with no rack, and they invent nothing.
-    for (const turn of result.turns.filter((t: any) => !t.solved)) {
+    for (const turn of result.turns.filter((t: any) => t.status !== 'solved')) {
       expect(turn.best).toEqual([]);
       expect(turn.pointsLeft).toBeNull();
       expect(turn.wasBest).toBeNull();
@@ -573,11 +575,29 @@ describe('real game fixtures', () => {
     expect(legacy.moves).toHaveLength(43);
     const result = solver.solveGame(legacy, { askingAlias: 'player-1', budgetMs: 60000 });
     expect(result.turns).toHaveLength(43);
-    expect(result.turns.every((t: any) => t.solved === false)).toBe(true);
+    expect(result.turns.every((t: any) => t.status === 'no_rack')).toBe(true);
     expect(result.turns.every((t: any) => t.best.length === 0)).toBe(true);
     expect(result.turns.every((t: any) => t.pointsLeft === null)).toBe(true);
     // Every played move is still listed so the table has a row for each turn.
     expect(result.turns.every((t: any) => t.played !== null)).toBe(true);
+  });
+
+  // Turn state is one named status plus the orthogonal unmatchedPlay flag. Two
+  // states at once must be unrepresentable, not ruled out in coach prose.
+  test('every turn carries exactly one status and none of the old flags', () => {
+    const { TURN_STATUS } = solver;
+    const statuses = Object.values(TURN_STATUS);
+    for (const fixture of [full, mixed, legacy]) {
+      const result = solver.solveGame(fixture, { askingAlias: 'player-1', budgetMs: 60000 });
+      for (const turn of result.turns) {
+        expect(statuses).toContain(turn.status);
+        expect(typeof turn.unmatchedPlay).toBe('boolean');
+        if (turn.unmatchedPlay) expect(turn.status).toBe(TURN_STATUS.SOLVED);
+        for (const legacyKey of ['solved', 'unanalyzed', 'unsolvableBoard']) {
+          expect(turn).not.toHaveProperty(legacyKey);
+        }
+      }
+    }
   });
 
   for (const [name, fixture, solvedCount] of [
@@ -589,10 +609,10 @@ describe('real game fixtures', () => {
         askingAlias: 'player-1',
         budgetMs: 60000,
       });
-      expect(result.turns.filter((t: any) => t.solved)).toHaveLength(solvedCount);
+      expect(result.turns.filter((t: any) => t.status === 'solved')).toHaveLength(solvedCount);
 
       for (const turn of result.turns) {
-        if (!turn.solved || !turn.played || turn.best.length === 0) continue;
+        if (turn.status !== 'solved' || !turn.played || turn.best.length === 0) continue;
         // The played move was legal from the recorded rack, so the enumeration
         // must have found it — or something better.
         expect(turn.best[0].score).toBeGreaterThanOrEqual(turn.played.score);
@@ -906,12 +926,12 @@ describe('budget enforcement across the whole solve', () => {
     // has to be tested at the turn boundary as well.
     const result = solver.solveGame(cheapGame(40, 'A'), { budgetMs: 0 });
     expect(result.truncated).toBe(true);
-    expect(result.turns.filter((t: any) => t.solved)).toHaveLength(0);
+    expect(result.turns.filter((t: any) => t.status === 'solved')).toHaveLength(0);
     // Those 40 turns are LISTED but carry no verdict. Nothing was dropped from
     // the response, so the client must not say "turns are not shown".
     expect(result.turnsOmitted).toBe(0);
     expect(result.turnsUnanalyzed).toBe(40);
-    expect(result.turns.filter((t: any) => t.unanalyzed === true)).toHaveLength(40);
+    expect(result.turns.filter((t: any) => t.status === 'not_analyzed')).toHaveLength(40);
   });
 
   test('the budget holds across thousands of cheap turns', () => {
@@ -926,7 +946,7 @@ describe('budget enforcement across the whole solve', () => {
     // Without a shared clock this ran for many multiples of the budget.
     expect(elapsed).toBeLessThan(3000);
     // And it stopped solving rather than running the whole game.
-    expect(result.turns.filter((t: any) => t.solved).length).toBeLessThan(20000);
+    expect(result.turns.filter((t: any) => t.status === 'solved').length).toBeLessThan(20000);
   });
 
   test('the turn count is capped independently of the clock', () => {
@@ -971,7 +991,7 @@ describe('a play the solver cannot reproduce', () => {
     const result = solver.solveGame(impossible, { budgetMs: 5000 });
     const turn = result.turns[0];
 
-    expect(turn.solved).toBe(true);
+    expect(turn.status).toBe('solved');
     expect(turn.best[0].score).toBeLessThan(999);
     // The old code clamped this to 0 and then called it a perfect turn.
     expect(turn.unmatchedPlay).toBe(true);
@@ -983,7 +1003,7 @@ describe('a play the solver cannot reproduce', () => {
   test('an ordinary turn is not flagged and still reports its gap', () => {
     const full = require('./fixtures/real-game-full.json');
     const result = solver.solveGame(full, { budgetMs: 30000, askingAlias: 'player-1' });
-    const solved = result.turns.filter((t: any) => t.solved);
+    const solved = result.turns.filter((t: any) => t.status === 'solved');
 
     expect(solved.length).toBeGreaterThan(0);
     for (const turn of solved) {
@@ -1052,17 +1072,13 @@ describe('a blank already on the board with no designated letter', () => {
       ],
     };
     const result = solver.solveGame(game, { budgetMs: 5000 });
-    expect(result.turns[1].solved).toBe(false);
+    // Not "no_rack" — the rack is known and the BOARD is what could not be read.
+    expect(result.turns[1].status).toBe('unsolvable_board');
     expect(result.turns[1].best).toEqual([]);
     expect(result.turns[1].wasBest).toBeNull();
-    // `solved: false` on its own reads as "no rack was recorded", which is
-    // false here — the rack is known and the BOARD is what could not be read.
-    expect(result.turns[1].unsolvableBoard).toBe(true);
-    expect(result.turns[1].unanalyzed).toBeUndefined();
 
     // Turn 1 has no rack, so it is the other kind of unsolved.
-    expect(result.turns[0].solved).toBe(false);
-    expect(result.turns[0].unsolvableBoard).toBe(false);
+    expect(result.turns[0].status).toBe('no_rack');
   });
 });
 

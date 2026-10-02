@@ -115,8 +115,8 @@ every rack permutation instead of pruning on the first dead prefix.
   counter resets before it ever looks at the clock, so the budget goes silently unenforced.
 - **Unknown board letters.** A blank placed on the board with no designated letter cannot be solved
   around: the `'?'` substitute matches no trie edge and silently zeroes that cross-check column.
-  `findBestMoves` returns `degraded: true` and no moves for such a position, and `solveGame` leaves
-  the turn unsolved rather than comparing a short list against the played score.
+  `findBestMoves` returns `degraded: true` and no moves for such a position, and `solveGame` marks
+  the turn `unsolvable_board` rather than comparing a short list against the played score.
 
 Ranking is raw score only. Rack leave and defence are deliberately left to the AI layer — the
 deterministic layer's job is to be objectively correct, not opinionated.
@@ -135,13 +135,11 @@ Replays the game, solves each turn, returns:
   turns: [{
     turn, player, isAsking, action,
     played: { word, score } | null,
-    solved: bool,
+    status: 'solved' | 'no_rack' | 'not_analyzed' | 'unsolvable_board',
     best: [{ word, score, row, col, direction }],
     pointsLeft: number | null,
     wasBest: bool | null,
-    unmatchedPlay: bool,
-    unsolvableBoard: bool,
-    unanalyzed?: true
+    unmatchedPlay: bool
   }]
 }
 ```
@@ -149,12 +147,27 @@ Replays the game, solves each turn, returns:
 `turnsOmitted` and `turnsUnanalyzed` are different failures and the client says so separately.
 `turnsOmitted` counts turns dropped from `turns` entirely (`MAX_TURNS` or the byte cap);
 `turnsUnanalyzed` counts turns that ARE listed but never got a verdict because the clock expired,
-each flagged `unanalyzed: true` so the count survives a later trim. `unsolvableBoard` separates "the
-board could not be read" (an undesignated blank sits on it) from the far more common "no rack was
-recorded for this turn" — both used to emit a bare `solved: false`, and `COACH_SYSTEM` told the model
-that meant no rack data.
+each carrying `status: 'not_analyzed'` so the count survives a later trim.
 
-`unmatchedPlay` is set when the solver enumerated the position but its own best scores *less* than
+`status` is exactly one of `TURN_STATUS` (exported by `netlify/functions/lib/solver.js`, mirrored by
+`SolvedTurnStatus` in `src/supabase/gameService.ts`):
+
+| status | means |
+|---|---|
+| `solved` | every legal play from the recorded rack was enumerated; only these turns carry `best` |
+| `no_rack` | no rack was recorded for this turn |
+| `not_analyzed` | the rack was recorded, but the solver's clock ran out before this turn |
+| `unsolvable_board` | the rack is known, but a blank on the board has no designated letter, so the position cannot be read |
+
+These used to be separate booleans (`solved`, `unanalyzed`, `unsolvableBoard`, with a bare
+`solved: false` standing for "no rack"), which left `COACH_SYSTEM` to spell out combinations in prose
+("`solved` false, `unsolvableBoard` false and `unanalyzed` false means no rack data") and nothing to
+stop a future change emitting two at once. One named field makes those combinations unrepresentable
+(#27). It was done before #25 persists the solve result, while it was still a rename rather than a
+`solver_version` bump or a dual-shape reader.
+
+`unmatchedPlay` is the one genuinely orthogonal flag, and is only ever true on a `solved` turn. It is
+set when the solver enumerated the position but its own best scores *less* than
 what the turn recorded — the record and the solver disagree. `pointsLeft` and `wasBest` are left
 null there. Clamping the difference to zero and calling it `wasBest: true` turns "the solver could
 not match this play" into "the player aced it", which is the one claim a ground-truth feature must
@@ -216,8 +229,12 @@ New `__tests__/solver.test.ts`:
   and a first move) return that play ranked first.
 - **Legality**: the generator never returns a play that is disconnected, gapped, off-rack, or forms a
   word outside the dictionary.
-- **Degradation**: turns without `rackBefore` come back `solved: false` with `best: []`; a turn whose
-  board carries an undesignated blank comes back `unsolvableBoard: true`, which is a different thing.
+- **Degradation**: turns without `rackBefore` come back `status: 'no_rack'` with `best: []`; a turn
+  whose board carries an undesignated blank comes back `status: 'unsolvable_board'`, which is a
+  different thing.
+- **Turn shape**: every turn of all three real fixtures carries exactly one `TURN_STATUS` value and a
+  boolean `unmatchedPlay` that is true only on `solved` turns, and none of the retired `solved` /
+  `unanalyzed` / `unsolvableBoard` keys.
 - **Completeness**: an oracle that shares no code with the generator enumerates candidate placements
   by construction and judges them with the TypeScript engine, then the WHOLE `limit: 5` list is
   compared — three real mid-game positions, the empty-board opener, and a blank-bearing rack.
@@ -485,3 +502,10 @@ issues, which no earlier test covered.
   current documented synchronous limit is 60s, confirmed verbatim from the limits table — but the
   criticism of the original evidence was fair, since the run cited could not have distinguished the
   two ceilings.
+- [#27] refactor: complete — the four turn-state booleans collapsed into one `status` field
+  (`solved` | `no_rack` | `not_analyzed` | `unsolvable_board`) plus the orthogonal `unmatchedPlay`.
+  Touched `solveGame`'s turn construction, both `turnsUnanalyzed` recounts in `analysisLimits.js`,
+  the `COACH_SYSTEM` rules, the `SolvedTurn` type and `?dev=1` fixture, and the row rendering in
+  `GameScreen.tsx`. Pure refactor: no migration, nothing persisted yet. Earlier log entries keep the
+  old field names as written at the time. New shape test added; 350 tests pass. `COACH_SYSTEM`
+  wording changed, so like the [iter 3] prompt edits it is unverified against a live model here.

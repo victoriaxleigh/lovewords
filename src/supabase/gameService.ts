@@ -159,20 +159,27 @@ export type SolvedTurn = {
   isAsking: boolean;
   action: 'play' | 'swap' | 'pass';
   played: { word: string | null; score: number } | null;
-  solved: boolean;
+  status: SolvedTurnStatus;
   best: SolvedPlay[];
   pointsLeft: number | null;
   wasBest: boolean | null;
   // The solver enumerated the position but its best play scores less than what
   // the turn actually recorded, so the two disagree. `pointsLeft`/`wasBest` are
-  // null and must not be presented as a result.
-  unmatchedPlay?: boolean;
+  // null and must not be presented as a result. Only ever true when solved.
+  unmatchedPlay: boolean;
+};
+
+// Mirrors TURN_STATUS in netlify/functions/lib/solver.js.
+export type SolvedTurnStatus =
+  // Every legal play from the recorded rack was enumerated.
+  | 'solved'
+  // No rack was recorded for this turn.
+  | 'no_rack'
+  // Listed, but the solver's clock expired before it reached this turn.
+  | 'not_analyzed'
   // A blank already on the board carries no designated letter, so the position
   // could not be read. Distinct from "no rack was recorded for this turn".
-  unsolvableBoard?: boolean;
-  // Listed, but the solver's clock expired before it reached this turn.
-  unanalyzed?: boolean;
-};
+  | 'unsolvable_board';
 
 export type GameSolve = {
   recordingQuality: 'full' | 'basic';
@@ -216,10 +223,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'FIND', score: 12 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'FINDER', score: 20, row: 7, col: 4, direction: 'across' }],
           pointsLeft: 8,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 2,
@@ -227,10 +235,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'play',
           played: { word: 'ROADIE', score: 22 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'ROADIE', score: 22, row: 5, col: 8, direction: 'down' }],
           pointsLeft: 0,
           wasBest: true,
+          unmatchedPlay: false,
         },
         {
           turn: 3,
@@ -238,10 +247,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'CAT', score: 5 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
           pointsLeft: 43,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 4,
@@ -249,10 +259,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'swap',
           played: null,
-          solved: true,
+          status: 'solved',
           best: [{ word: 'VEIN', score: 14, row: 9, col: 3, direction: 'across' }],
           pointsLeft: 14,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 5,
@@ -260,10 +271,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'QUARTZ', score: 48 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
           pointsLeft: 0,
           wasBest: true,
+          unmatchedPlay: false,
         },
         {
           turn: 6,
@@ -271,10 +283,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'pass',
           played: null,
-          solved: false,
+          status: 'no_rack',
           best: [],
           pointsLeft: null,
           wasBest: null,
+          unmatchedPlay: false,
         },
         {
           turn: 7,
@@ -282,7 +295,7 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'JUKEBOX', score: 120 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'BOX', score: 18, row: 2, col: 6, direction: 'across' }],
           pointsLeft: null,
           wasBest: null,
@@ -294,11 +307,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'play',
           played: { word: 'HOUSE', score: 16 },
-          solved: false,
+          status: 'unsolvable_board',
           best: [],
           pointsLeft: null,
           wasBest: null,
-          unsolvableBoard: true,
+          unmatchedPlay: false,
         },
         {
           turn: 9,
@@ -306,11 +319,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'PLAID', score: 21 },
-          solved: false,
+          status: 'not_analyzed',
           best: [],
           pointsLeft: null,
           wasBest: null,
-          unanalyzed: true,
+          unmatchedPlay: false,
         },
       ],
     };

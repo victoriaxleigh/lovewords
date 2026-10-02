@@ -726,20 +726,20 @@ export default function GameScreen() {
                   </Text>
                   {/* The solver's best came in under what this turn scored, so
                       the two disagree. Say so — never render it as a ✓. */}
-                  {turn.solved && turn.unmatchedPlay ? (
+                  {turn.status === 'solved' && turn.unmatchedPlay ? (
                     <Text style={styles.solveRowUnverified}>
                       couldn’t verify this turn
                     </Text>
-                  ) : turn.unsolvableBoard ? (
+                  ) : turn.status === 'unsolvable_board' ? (
                     // Not "no rack" — the board itself had an undesignated
                     // blank on it, so the position could not be read.
                     <Text style={styles.solveRowUnverified}>
                       couldn’t read the board from here
                     </Text>
-                  ) : turn.unanalyzed ? (
+                  ) : turn.status === 'not_analyzed' ? (
                     <Text style={styles.solveRowUnverified}>not analyzed</Text>
                   ) : (
-                    turn.solved &&
+                    turn.status === 'solved' &&
                     turn.best.length > 0 &&
                     turn.pointsLeft !== null && (
                       <Text
