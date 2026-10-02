@@ -1,8 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ImageSourcePropType,
+  Platform,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getFinishedGames } from '../supabase/gameService';
-import { Achievement, ACHIEVEMENT_COUNT, computeAchievements } from '../engine/achievements';
+import {
+  Achievement,
+  AchievementId,
+  ACHIEVEMENT_COUNT,
+  computeAchievements,
+} from '../engine/achievements';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
 import { Player } from '../types';
@@ -19,13 +34,39 @@ function formatDate(timestamp: number) {
   });
 }
 
-// The single place badge art is rendered, so pixel-art icons can replace the
-// emoji later without touching the rest of the screen.
+// Pixel-art badges. require() needs static paths, so every id is listed here;
+// Metro picks the @2x/@3x variants automatically.
+const BADGE_ART: Record<AchievementId, ImageSourcePropType> = {
+  first_game: require('../../assets/achievements/first_game.png'),
+  games_5: require('../../assets/achievements/games_5.png'),
+  games_25: require('../../assets/achievements/games_25.png'),
+  first_win: require('../../assets/achievements/first_win.png'),
+  nail_biter: require('../../assets/achievements/nail_biter.png'),
+  bingo: require('../../assets/achievements/bingo.png'),
+  double_bingo: require('../../assets/achievements/double_bingo.png'),
+  wordsmith: require('../../assets/achievements/wordsmith.png'),
+  long_story: require('../../assets/achievements/long_story.png'),
+};
+
+// The single place badge art is rendered. Falls back to the emoji if the art
+// is missing or fails to load; the emoji also serves as the image's alt text.
 function BadgeIcon({ achievement }: { achievement: Achievement }) {
+  const [failed, setFailed] = useState(false);
+  const source = BADGE_ART[achievement.id];
+  if (!source || failed) {
+    return (
+      <Text style={[styles.badgeEmoji, !achievement.unlocked && styles.locked]}>
+        {achievement.emoji}
+      </Text>
+    );
+  }
   return (
-    <Text style={[styles.badgeEmoji, !achievement.unlocked && styles.lockedEmoji]}>
-      {achievement.emoji}
-    </Text>
+    <Image
+      source={source}
+      onError={() => setFailed(true)}
+      accessibilityLabel={achievement.emoji}
+      style={[styles.badgeArt, !achievement.unlocked && styles.locked]}
+    />
   );
 }
 
@@ -159,7 +200,14 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   badgeEmoji: { fontSize: 36, marginBottom: 6 },
-  lockedEmoji: { opacity: 0.35 },
+  badgeArt: {
+    width: 64,
+    height: 64,
+    marginBottom: 6,
+    // Keep pixel edges crisp when the browser scales the art.
+    ...Platform.select({ web: { imageRendering: 'pixelated' } as object, default: {} }),
+  },
+  locked: { opacity: 0.35 },
   badgeTitle: { fontSize: 15, fontWeight: '800', color: Colors.text, textAlign: 'center' },
   badgeMeta: { fontSize: 12, color: Colors.textLight, marginTop: 4 },
   badgeDescription: {
