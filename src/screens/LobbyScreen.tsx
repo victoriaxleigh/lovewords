@@ -255,14 +255,24 @@ export default function LobbyScreen({ currentUser }: Props) {
             <Text style={styles.subtitle}>Ready to play? 💕</Text>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
-          style={styles.settingsBtn}
-          accessibilityLabel="Settings"
-          accessibilityRole="button"
-        >
-          <Text style={styles.settingsIcon}>⚙️</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Achievements')}
+            style={styles.settingsBtn}
+            accessibilityLabel="Achievements"
+            accessibilityRole="button"
+          >
+            <Text style={styles.settingsIcon}>🏅</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={styles.settingsBtn}
+            accessibilityLabel="Settings"
+            accessibilityRole="button"
+          >
+            <Text style={styles.settingsIcon}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* New game hero */}
@@ -515,6 +525,7 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   greeting: { fontSize: 20, fontWeight: '800', color: Colors.text },
   subtitle: { fontSize: 13, color: Colors.textLight, marginTop: 1 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   settingsBtn: {
     width: 44,
     height: 44,

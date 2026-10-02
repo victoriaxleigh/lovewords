@@ -8,6 +8,7 @@ import AuthScreen from './src/screens/AuthScreen';
 import LobbyScreen from './src/screens/LobbyScreen';
 import GameScreen from './src/screens/GameScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AchievementsScreen from './src/screens/AchievementsScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
 import { Colors } from './src/utils/colors';
 import { Player } from './src/types';
@@ -123,6 +124,9 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="Settings">
                 {() => <SettingsScreen currentUser={currentPlayer!} />}
+              </Stack.Screen>
+              <Stack.Screen name="Achievements">
+                {() => <AchievementsScreen currentUser={currentPlayer!} />}
               </Stack.Screen>
               <Stack.Screen name="Paywall" component={PaywallScreen} />
               <Stack.Screen
