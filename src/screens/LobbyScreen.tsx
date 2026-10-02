@@ -20,6 +20,7 @@ import {
   declineGameInvite,
   sendInviteEmail,
   subscribeToUserGames,
+  subscribeToUnreadNoteCounts,
   deleteGame,
   getUserGameCount,
   type GameParticipant,
@@ -57,6 +58,7 @@ export default function LobbyScreen({ currentUser }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [unreadByGame, setUnreadByGame] = useState<Record<string, number>>({});
   const navigation = useNavigation<any>();
 
   useEffect(() => {
@@ -66,6 +68,8 @@ export default function LobbyScreen({ currentUser }: Props) {
     });
     return unsub;
   }, [currentUser.uid]);
+
+  useEffect(() => subscribeToUnreadNoteCounts(currentUser.uid, setUnreadByGame), [currentUser.uid]);
 
   // Native app only: three free games, then a $2.99 lifetime unlock. The web
   // app stays free/unlimited (Platform.OS === 'web' skips the gate entirely).
@@ -400,6 +404,9 @@ export default function LobbyScreen({ currentUser }: Props) {
             const soloG = isSoloGame(game);
             const myLabel = soloG ? 'P1' : 'You';
             const oppLabel = soloG ? 'P2' : name;
+            const unread = soloG ? 0 : unreadByGame[game.id] ?? 0;
+            const noteNoun = game.mode === 'friend' ? 'message' : 'love note';
+            const unreadLabel = unread > 0 ? `, ${unread} unread ${noteNoun}${unread === 1 ? '' : 's'}` : '';
             const myWins = myScore > oppScore;
             const oppWins = oppScore > myScore;
             return (
@@ -416,12 +423,13 @@ export default function LobbyScreen({ currentUser }: Props) {
                   accessibilityLabel={
                     isSoloGame(game)
                       ? `Solo practice game, ${statusLabel(game)}, P1 ${myScore}, P2 ${oppScore}`
-                      : `${game.mode === 'friend' ? 'Friend' : 'Partner'} game with ${name}, ${statusLabel(game)}, you ${myScore}, ${name} ${oppScore}`
+                      : `${game.mode === 'friend' ? 'Friend' : 'Partner'} game with ${name}, ${statusLabel(game)}, you ${myScore}, ${name} ${oppScore}${unreadLabel}`
                   }
                   accessibilityHint="Opens the game. Long press to delete it."
                 >
                   <View style={styles.cardAvatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <Text style={styles.cardAvatarText}>{isSoloGame(game) ? '🎯' : initials(name)}</Text>
+                    {unread > 0 && <View style={styles.unreadDot} testID={`unread-dot-${game.id}`} />}
                   </View>
                   <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <Text style={styles.opponentName} numberOfLines={1}>
@@ -587,6 +595,17 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   cardAvatarText: { color: Colors.primaryDark, fontWeight: '800', fontSize: 16 },
+  unreadDot: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.accent,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+  },
   gameCardLeft: { flex: 1 },
   opponentName: { fontSize: 16, fontWeight: '800', color: Colors.text },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
