@@ -2,13 +2,16 @@
 //
 // Pure on purpose: no Supabase or React imports, so the same rules can run in
 // unit tests today and in a server-side (service-role) persister later.
-import { Game, PlayerIndex } from '../types';
+import { Game, GameMode, PlayerIndex } from '../types';
 import { getMoveAction, getMovePlacements, getMovePlayerIndex } from './gameHistory';
 
 export type AchievementId =
   | 'first_game'
   | 'games_5'
   | 'games_25'
+  | 'friend_first_game'
+  | 'friend_games_5'
+  | 'friend_games_25'
   | 'first_win'
   | 'nail_biter'
   | 'bingo'
@@ -33,6 +36,7 @@ export const LONG_STORY_LENGTH = 7;
 
 // Facts about one finished game, from my seat's point of view.
 type GameFacts = {
+  mode: GameMode;
   won: boolean;
   margin: number;
   bingos: number;
@@ -51,29 +55,55 @@ type Rule = {
   qualifies: (facts: GameFacts) => boolean;
 };
 
+// Game-count badges come in a partner track and a friend track, each counting
+// only its own mode's games. They're listed in pairs so the 2-column board shows
+// each partner badge next to its friend counterpart.
 const RULES: Rule[] = [
   {
     id: 'first_game',
     title: 'First Date',
-    description: 'Finish your first game.',
+    description: 'Finish your first game with your partner.',
     emoji: '💕',
-    qualifies: () => true,
+    qualifies: (facts) => facts.mode === 'partner',
+  },
+  {
+    id: 'friend_first_game',
+    title: 'Game On',
+    description: 'Finish your first game with a friend.',
+    emoji: '🤝',
+    qualifies: (facts) => facts.mode === 'friend',
   },
   {
     id: 'games_5',
     title: 'Going Steady',
-    description: 'Finish 5 games.',
+    description: 'Finish 5 games with your partner.',
     emoji: '💞',
     target: 5,
-    qualifies: () => true,
+    qualifies: (facts) => facts.mode === 'partner',
+  },
+  {
+    id: 'friend_games_5',
+    title: 'Regular Rivals',
+    description: 'Finish 5 games with friends.',
+    emoji: '🎯',
+    target: 5,
+    qualifies: (facts) => facts.mode === 'friend',
   },
   {
     id: 'games_25',
     title: 'Committed',
-    description: 'Finish 25 games.',
+    description: 'Finish 25 games with your partner.',
     emoji: '💍',
     target: 25,
-    qualifies: () => true,
+    qualifies: (facts) => facts.mode === 'partner',
+  },
+  {
+    id: 'friend_games_25',
+    title: 'Ride or Die',
+    description: 'Finish 25 games with friends.',
+    emoji: '👯',
+    target: 25,
+    qualifies: (facts) => facts.mode === 'friend',
   },
   {
     id: 'first_win',
@@ -134,6 +164,7 @@ function gameFacts(game: Game, mySeat: PlayerIndex): GameFacts {
   const myScore = game.players[mySeat].score;
   const theirScore = game.players[mySeat === 0 ? 1 : 0].score;
   const facts: GameFacts = {
+    mode: game.mode,
     won: myScore > theirScore,
     margin: myScore - theirScore,
     bingos: 0,

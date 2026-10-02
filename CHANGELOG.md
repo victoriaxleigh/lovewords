@@ -10,6 +10,10 @@
   computed on the fly from your finished two-player games. Solo games don't
   count. Nothing is stored yet; the rules live in one pure module
   (`src/engine/achievements.ts`) so a later server-side version can reuse them.
+- **Friend-track achievements.** The game-count badges now come in two tracks:
+  First Date, Going Steady and Committed count partner games only, and the new
+  Game On, Regular Rivals and Ride or Die count friend games only, each with
+  its own pixel-art badge. The board now has twelve badges.
 
 ### Fixed
 
