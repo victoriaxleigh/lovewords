@@ -1112,7 +1112,9 @@ export function subscribeToLoveNotes(gameId: string, onUpdate: (notes: LoveNote[
     )
     .subscribe();
 
-  return () => supabase.removeChannel(channel);
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 export async function markNoteRead(noteId: string) {

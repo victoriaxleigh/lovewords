@@ -49,7 +49,7 @@ type Props = {
   onCellPress: (row: number, col: number) => void;
   onTilePress?: (tile: PlacedTile) => void;
   isMyTurn: boolean;
-  boardRef?: React.RefObject<View>;
+  boardRef?: React.RefObject<View | null>;
   boardTileDragCallbacks?: BoardTileDragCallbacks;
   lastMoveTiles?: Set<string>;
   boardDraggingTileId?: string | null;
