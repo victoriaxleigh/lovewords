@@ -207,6 +207,11 @@ const channelListeners: Array<{ table: string; cb: (payload?: any) => void }> = 
 
 let currentSession: any = { user: FAKE_USER };
 
+// Passwords set through the ?dev=1 reset flow, by email. Sign-in accepts any
+// password until one is set, then requires it — so the reset can be verified
+// end-to-end without a real inbox.
+const mockPasswords: Record<string, string> = {};
+
 function uuid(): string {
   return (globalThis as any).crypto.randomUUID();
 }
@@ -392,7 +397,11 @@ export const mockSupabase = {
       authListeners.forEach((l) => l('SIGNED_IN', currentSession));
       return { data: { user: currentSession.user }, error: null };
     },
-    signInWithPassword: async ({ email }: any) => {
+    signInWithPassword: async ({ email, password }: any) => {
+      const expected = mockPasswords[email];
+      if (expected !== undefined && expected !== password) {
+        return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
+      }
       currentSession = { user: { ...FAKE_USER, email } };
       authListeners.forEach((l) => l('SIGNED_IN', currentSession));
       return { data: { user: currentSession.user }, error: null };
@@ -402,6 +411,30 @@ export const mockSupabase = {
       authListeners.forEach((l) => l('SIGNED_OUT', null));
     },
     getSession: async () => ({ data: { session: currentSession } }),
+    // No email goes out in dev — log the link a real inbox would receive.
+    // Open it in this tab to land on the recovery screen.
+    resetPasswordForEmail: async (email: string, options?: { redirectTo?: string }) => {
+      const link = `${options?.redirectTo ?? ''}#type=recovery`;
+      // eslint-disable-next-line no-console
+      console.info(`[lovewords] ?dev=1 — password reset link for ${email}: ${link}`);
+      return { data: {}, error: null };
+    },
+    updateUser: async ({ password }: { password?: string }) => {
+      if (!currentSession?.user) {
+        return { data: { user: null }, error: { message: 'Auth session missing!' } };
+      }
+      if (password !== undefined) {
+        if (password.length < 6) {
+          return {
+            data: { user: null },
+            error: { message: 'Password should be at least 6 characters.' },
+          };
+        }
+        mockPasswords[currentSession.user.email] = password;
+      }
+      authListeners.forEach((l) => l('USER_UPDATED', currentSession));
+      return { data: { user: currentSession.user }, error: null };
+    },
     onAuthStateChange: (cb: (event: string, session: any) => void) => {
       authListeners.push(cb);
       return {

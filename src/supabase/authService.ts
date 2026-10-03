@@ -31,6 +31,41 @@ export async function logout() {
   await supabase.auth.signOut();
 }
 
+// Emails a password-reset link. Supabase answers the same way whether or not
+// the address has an account, so callers should word success neutrally.
+export async function requestPasswordReset(email: string, redirectTo: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
+    redirectTo,
+  });
+  if (error) throw error;
+}
+
+// Sets a new password using the session established by the recovery link.
+export async function updatePassword(password: string) {
+  const { data, error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  return data.user;
+}
+
+// Ends the recovery-link session. A global sign-out also revokes other devices'
+// sessions after a reset; if that request fails, supabase-js keeps the local
+// session, so fall back to a local sign-out — leaving the user signed in here
+// is exactly what the recovery flow must not do.
+export async function endRecoverySession() {
+  const { error } = await supabase.auth.signOut();
+  if (error) await supabase.auth.signOut({ scope: 'local' });
+}
+
+// Fires when the Supabase client reports a recovery-link sign-in. The URL
+// snapshot in utils/passwordRecovery is the primary signal; this also covers
+// flows where the event is the only trace (e.g. PKCE code exchange).
+export function onPasswordRecovery(callback: () => void) {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') callback();
+  });
+  return () => subscription.unsubscribe();
+}
+
 export function onAuthChange(callback: (user: any | null) => void) {
   // Get current session immediately
   supabase.auth.getSession().then(({ data: { session } }) => {

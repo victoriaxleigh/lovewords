@@ -10,22 +10,37 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { login, register } from '../supabase/authService';
+import { login, register, requestPasswordReset } from '../supabase/authService';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
 import { formatInviteCode, isValidInviteCode, normalizeInviteCode } from '../utils/invites';
 import { readPendingInvite, stashPendingInvite } from '../utils/pendingInvite';
+import { buildRecoveryRedirect } from '../utils/passwordRecovery';
 
-export default function AuthScreen() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
+type Mode = 'login' | 'register' | 'forgot';
+
+type Notice = { message: string; kind: 'info' | 'error'; email?: string };
+
+export default function AuthScreen({
+  notice,
+  onDismissNotice,
+}: {
+  // A message handed over by App — e.g. "password updated" after a reset, or an
+  // expired-link error from the URL.
+  notice?: Notice | null;
+  onDismissNotice?: () => void;
+} = {}) {
+  const [mode, setMode] = useState<Mode>('login');
+  const [email, setEmail] = useState(notice?.email ?? '');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const isRegister = mode === 'register';
+  const isForgot = mode === 'forgot';
   const hasInvite = isValidInviteCode(inviteCode);
 
   // The invite code from a ?invite= link is captured and stashed at the app root
@@ -47,6 +62,12 @@ export default function AuthScreen() {
 
   async function handleSubmit() {
     setError(null);
+    setInfo(null);
+    onDismissNotice?.();
+    if (isForgot) {
+      await handleResetRequest();
+      return;
+    }
     if (!email || !password) { setError('Fill in all fields to continue'); return; }
     if (isRegister && !displayName) { setError('Add your name so friends can find you'); return; }
 
@@ -67,10 +88,33 @@ export default function AuthScreen() {
     }
   }
 
-  function switchMode(next: 'login' | 'register') {
+  async function handleResetRequest() {
+    const trimmed = email.trim();
+    if (!trimmed) { setError('Enter the email you signed up with'); return; }
+    setLoading(true);
+    try {
+      const href = typeof window !== 'undefined' ? window.location?.href : null;
+      await requestPasswordReset(trimmed, buildRecoveryRedirect(href));
+      // Supabase doesn't reveal whether the address has an account.
+      setInfo(
+        `If ${trimmed} has a LoveWords account, a reset link is on its way. ` +
+          'Open it on this device to choose a new password — and check your spam folder.'
+      );
+    } catch (err: any) {
+      setError(err.message ?? 'Could not send a reset link. Try again shortly.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function switchMode(next: Mode) {
     setMode(next);
     setError(null);
+    setInfo(null);
   }
+
+  const banner = info ?? (notice?.kind === 'info' ? notice.message : null);
+  const shownError = error ?? (notice?.kind === 'error' ? notice.message : null);
 
   return (
     <KeyboardAvoidingView
@@ -104,7 +148,15 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {/* Segmented toggle */}
+          {isForgot ? (
+            <View style={styles.forgotHeader}>
+              <Text style={styles.forgotTitle}>Reset your password</Text>
+              <Text style={styles.forgotBody}>
+                Enter your account email and we'll send you a link to choose a new password.
+              </Text>
+            </View>
+          ) : (
+          /* Segmented toggle */
           <View style={styles.segment}>
             <TouchableOpacity
               style={[styles.segmentBtn, !isRegister && styles.segmentBtnActive]}
@@ -123,6 +175,7 @@ export default function AuthScreen() {
               <Text style={[styles.segmentText, isRegister && styles.segmentTextActive]}>Sign up</Text>
             </TouchableOpacity>
           </View>
+          )}
 
           {isRegister && (
             <TextInput
@@ -146,30 +199,55 @@ export default function AuthScreen() {
             autoCorrect={false}
             accessibilityLabel="Email address"
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={Colors.textLight}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            accessibilityLabel="Password"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Invite code (optional)"
-            placeholderTextColor={Colors.textLight}
-            value={inviteCode}
-            onChangeText={setInviteCode}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            accessibilityLabel="Invite code"
-          />
+          {!isForgot && (
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={Colors.textLight}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              accessibilityLabel="Password"
+            />
+          )}
+          {mode === 'login' && (
+            <TouchableOpacity
+              style={styles.forgotLink}
+              onPress={() => switchMode('forgot')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.forgotLinkText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+          {!isForgot && (
+            <TextInput
+              style={styles.input}
+              placeholder="Invite code (optional)"
+              placeholderTextColor={Colors.textLight}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Invite code"
+            />
+          )}
 
-          {error && (
+          {banner && (
+            <View style={styles.infoBanner}>
+              <Text style={styles.infoText}>{banner}</Text>
+            </View>
+          )}
+
+          {shownError && (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity onPress={() => setError(null)} accessibilityLabel="Dismiss error">
+              <Text style={styles.errorText}>{shownError}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setError(null);
+                  if (notice?.kind === 'error') onDismissNotice?.();
+                }}
+                accessibilityLabel="Dismiss error"
+              >
                 <Text style={styles.errorDismiss}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -179,9 +257,20 @@ export default function AuthScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>{isRegister ? 'Create account' : 'Sign in'}</Text>
+              <Text style={styles.buttonText}>
+                {isForgot ? 'Send reset link' : isRegister ? 'Create account' : 'Sign in'}
+              </Text>
             )}
           </TouchableOpacity>
+          {isForgot && (
+            <TouchableOpacity
+              style={styles.backLink}
+              onPress={() => switchMode('login')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.forgotLinkText}>Back to sign in</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.footer}>
@@ -282,6 +371,21 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     marginBottom: 12,
   },
+  forgotHeader: { marginBottom: 16 },
+  forgotTitle: { fontSize: 18, fontWeight: '800', color: Colors.primaryDark, marginBottom: 6 },
+  forgotBody: { fontSize: 13, color: Colors.text, lineHeight: 18 },
+  forgotLink: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 12, paddingVertical: 2 },
+  forgotLinkText: { fontSize: 13, color: Colors.primaryDark, fontWeight: '700' },
+  backLink: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+  infoBanner: {
+    width: '100%',
+    backgroundColor: Colors.tilePlaced,
+    borderRadius: RADII.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  infoText: { fontSize: 13, color: Colors.primaryDark, fontWeight: '600', lineHeight: 18 },
   errorBanner: {
     width: '100%',
     flexDirection: 'row',

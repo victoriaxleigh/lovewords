@@ -1,4 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+// Must be evaluated before createClient(): it snapshots a `type=recovery`
+// callback URL that the client would otherwise consume and wipe. See
+// ../utils/passwordRecovery.ts.
+import '../utils/passwordRecovery';
 
 // Paste your two values from Supabase → Settings → API
 const SUPABASE_URL = 'https://rkgasiixoyhtxlxfchbb.supabase.co';
