@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,7 +8,9 @@ import AuthScreen from './src/screens/AuthScreen';
 import LobbyScreen from './src/screens/LobbyScreen';
 import GameScreen from './src/screens/GameScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AchievementsScreen from './src/screens/AchievementsScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
+import RecoveryScreen from './src/screens/RecoveryScreen';
 import { Colors } from './src/utils/colors';
 import { Player } from './src/types';
 import { registerPushSubscription } from './src/utils/pushSubscription';
@@ -18,11 +20,73 @@ import { configurePurchases } from './src/utils/purchases';
 import { redeemEmailInvite } from './src/supabase/gameService';
 import { readPendingInvite, clearPendingInvite, stashPendingInvite } from './src/utils/pendingInvite';
 import { getInviteCodeFromLocation } from './src/utils/invites';
+import { onPasswordRecovery } from './src/supabase/authService';
+import { clearAuthRedirectFromUrl, getLaunchAuthRedirect } from './src/utils/passwordRecovery';
+import { clearRecoveryPending, isRecoveryPending, markRecoveryPending } from './src/utils/pendingRecovery';
 
 const Stack = createNativeStackNavigator();
 
+type RecoveryState = 'checking' | 'active' | 'inactive';
+type AuthNotice = { message: string; kind: 'info' | 'error'; email?: string };
+
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user: sessionUser, loading } = useAuth();
+
+  // Password recovery. A recovery link signs the user in without giving them a
+  // password, so while it's active the session is withheld from the rest of the
+  // app and only RecoveryScreen renders. 'checking' covers the async read of the
+  // persisted flag (a reset abandoned mid-way on an earlier launch).
+  const launchRedirect = getLaunchAuthRedirect();
+  const [recovery, setRecovery] = useState<RecoveryState>(
+    launchRedirect.recovery ? 'active' : 'checking'
+  );
+  const [authNotice, setAuthNotice] = useState<AuthNotice | null>(
+    launchRedirect.error ? { message: launchRedirect.error, kind: 'error' } : null
+  );
+
+  useEffect(() => {
+    if (launchRedirect.recovery) {
+      void markRecoveryPending();
+      return;
+    }
+    // An expired/used link redirects back with error params Supabase leaves in
+    // the URL — they're shown on AuthScreen via authNotice, so strip them.
+    if (launchRedirect.error) clearAuthRedirectFromUrl();
+    let cancelled = false;
+    isRecoveryPending().then((pending) => {
+      if (!cancelled) setRecovery((prev) => (prev === 'active' || pending ? 'active' : 'inactive'));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(
+    () =>
+      onPasswordRecovery(() => {
+        void markRecoveryPending();
+        setRecovery('active');
+      }),
+    []
+  );
+
+  async function finishRecovery(result: { updated: boolean; email: string | null }) {
+    await clearRecoveryPending();
+    clearAuthRedirectFromUrl();
+    setAuthNotice(
+      result.updated
+        ? {
+            message: 'Password updated. Sign in with your new password.',
+            kind: 'info',
+            email: result.email ?? undefined,
+          }
+        : null
+    );
+    setRecovery('inactive');
+  }
+
+  // Everything below treats the user as signed out until recovery is resolved.
+  const user = recovery === 'inactive' ? sessionUser : null;
 
   // Clear the Home Screen app-icon badge whenever the app is open/foregrounded.
   useEffect(() => setupBadgeClearing(), []);
@@ -86,7 +150,11 @@ export default function App() {
     };
   }, [user?.id]);
 
-  if (loading) {
+  if (recovery === 'active') {
+    return <RecoveryScreen onFinished={finishRecovery} />;
+  }
+
+  if (loading || recovery === 'checking') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background }}>
         <ActivityIndicator color={Colors.primary} size="large" />
@@ -115,7 +183,9 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!user ? (
-            <Stack.Screen name="Auth" component={AuthScreen} />
+            <Stack.Screen name="Auth">
+              {() => <AuthScreen notice={authNotice} onDismissNotice={() => setAuthNotice(null)} />}
+            </Stack.Screen>
           ) : (
             <>
               <Stack.Screen name="Lobby">
@@ -123,6 +193,9 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="Settings">
                 {() => <SettingsScreen currentUser={currentPlayer!} />}
+              </Stack.Screen>
+              <Stack.Screen name="Achievements">
+                {() => <AchievementsScreen currentUser={currentPlayer!} />}
               </Stack.Screen>
               <Stack.Screen name="Paywall" component={PaywallScreen} />
               <Stack.Screen

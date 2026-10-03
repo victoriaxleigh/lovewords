@@ -159,20 +159,27 @@ export type SolvedTurn = {
   isAsking: boolean;
   action: 'play' | 'swap' | 'pass';
   played: { word: string | null; score: number } | null;
-  solved: boolean;
+  status: SolvedTurnStatus;
   best: SolvedPlay[];
   pointsLeft: number | null;
   wasBest: boolean | null;
   // The solver enumerated the position but its best play scores less than what
   // the turn actually recorded, so the two disagree. `pointsLeft`/`wasBest` are
-  // null and must not be presented as a result.
-  unmatchedPlay?: boolean;
+  // null and must not be presented as a result. Only ever true when solved.
+  unmatchedPlay: boolean;
+};
+
+// Mirrors TURN_STATUS in netlify/functions/lib/solver.js.
+export type SolvedTurnStatus =
+  // Every legal play from the recorded rack was enumerated.
+  | 'solved'
+  // No rack was recorded for this turn.
+  | 'no_rack'
+  // Listed, but the solver's clock expired before it reached this turn.
+  | 'not_analyzed'
   // A blank already on the board carries no designated letter, so the position
   // could not be read. Distinct from "no rack was recorded for this turn".
-  unsolvableBoard?: boolean;
-  // Listed, but the solver's clock expired before it reached this turn.
-  unanalyzed?: boolean;
-};
+  | 'unsolvable_board';
 
 export type GameSolve = {
   recordingQuality: 'full' | 'basic';
@@ -216,10 +223,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'FIND', score: 12 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'FINDER', score: 20, row: 7, col: 4, direction: 'across' }],
           pointsLeft: 8,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 2,
@@ -227,10 +235,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'play',
           played: { word: 'ROADIE', score: 22 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'ROADIE', score: 22, row: 5, col: 8, direction: 'down' }],
           pointsLeft: 0,
           wasBest: true,
+          unmatchedPlay: false,
         },
         {
           turn: 3,
@@ -238,10 +247,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'CAT', score: 5 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
           pointsLeft: 43,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 4,
@@ -249,10 +259,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'swap',
           played: null,
-          solved: true,
+          status: 'solved',
           best: [{ word: 'VEIN', score: 14, row: 9, col: 3, direction: 'across' }],
           pointsLeft: 14,
           wasBest: false,
+          unmatchedPlay: false,
         },
         {
           turn: 5,
@@ -260,10 +271,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'QUARTZ', score: 48 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'QUARTZ', score: 48, row: 4, col: 7, direction: 'down' }],
           pointsLeft: 0,
           wasBest: true,
+          unmatchedPlay: false,
         },
         {
           turn: 6,
@@ -271,10 +283,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'pass',
           played: null,
-          solved: false,
+          status: 'no_rack',
           best: [],
           pointsLeft: null,
           wasBest: null,
+          unmatchedPlay: false,
         },
         {
           turn: 7,
@@ -282,7 +295,7 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'JUKEBOX', score: 120 },
-          solved: true,
+          status: 'solved',
           best: [{ word: 'BOX', score: 18, row: 2, col: 6, direction: 'across' }],
           pointsLeft: null,
           wasBest: null,
@@ -294,11 +307,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: false,
           action: 'play',
           played: { word: 'HOUSE', score: 16 },
-          solved: false,
+          status: 'unsolvable_board',
           best: [],
           pointsLeft: null,
           wasBest: null,
-          unsolvableBoard: true,
+          unmatchedPlay: false,
         },
         {
           turn: 9,
@@ -306,11 +319,11 @@ export async function requestGameSolve(gameId: string): Promise<GameSolve> {
           isAsking: true,
           action: 'play',
           played: { word: 'PLAID', score: 21 },
-          solved: false,
+          status: 'not_analyzed',
           best: [],
           pointsLeft: null,
           wasBest: null,
-          unanalyzed: true,
+          unmatchedPlay: false,
         },
       ],
     };
@@ -928,6 +941,18 @@ export function subscribeToUserGames(uid: string, onUpdate: (games: Game[]) => v
   };
 }
 
+// ─── Finished games (Achievements) ────────────────────────────────────────────
+export async function getFinishedGames(uid: string): Promise<Game[]> {
+  const { data, error } = await supabase
+    .from('games')
+    .select('*')
+    .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`)
+    .eq('status', 'finished')
+    .order('updated_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToGame);
+}
+
 // ─── Submit a move ────────────────────────────────────────────────────────────
 export async function submitMove(
   gameId: string,
@@ -1119,6 +1144,63 @@ export function subscribeToLoveNotes(gameId: string, onUpdate: (notes: LoveNote[
 
 export async function markNoteRead(noteId: string) {
   await supabase.from('love_notes').update({ read: true }).eq('id', noteId);
+}
+
+// Groups unread note rows into { [gameId]: count }.
+export function countUnreadNotesByGame(rows: Array<{ game_id: string }>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) counts[row.game_id] = (counts[row.game_id] ?? 0) + 1;
+  return counts;
+}
+
+// The lobby and the game screen can both be mounted, so each subscription
+// gets its own channel topic.
+let unreadNotesChannelSeq = 0;
+
+// Live unread-note counts per game for notes sent TO uid. Listens for every
+// change (INSERT for new notes, UPDATE when they're marked read) so dots
+// appear and clear without a reload.
+export function subscribeToUnreadNoteCounts(
+  uid: string,
+  onUpdate: (counts: Record<string, number>) => void
+) {
+  const fetch = async () => {
+    const { data, error } = await supabase
+      .from('love_notes')
+      .select('game_id')
+      .eq('to_uid', uid)
+      .eq('read', false);
+    if (error) console.error('Failed to fetch unread notes:', error);
+    if (data) onUpdate(countUnreadNotesByGame(data));
+  };
+
+  fetch();
+
+  const channel = supabase
+    .channel(`unread-notes-${uid}-${++unreadNotesChannelSeq}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'love_notes', filter: `to_uid=eq.${uid}` },
+      fetch
+    )
+    .subscribe();
+
+  const stopResumeRefetch = refetchOnResume(fetch);
+  return () => {
+    stopResumeRefetch();
+    supabase.removeChannel(channel);
+  };
+}
+
+// Marks every unread note sent to uid in this game as read, in one update.
+export async function markGameNotesRead(gameId: string, uid: string) {
+  const { error } = await supabase
+    .from('love_notes')
+    .update({ read: true })
+    .eq('game_id', gameId)
+    .eq('to_uid', uid)
+    .eq('read', false);
+  if (error) console.error('Failed to mark notes read:', error);
 }
 
 // ─── Delete a game ────────────────────────────────────────────────────────────
