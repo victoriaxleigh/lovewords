@@ -261,6 +261,14 @@ export default function LobbyScreen({ currentUser }: Props) {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
+            onPress={() => navigation.navigate('Stats')}
+            style={styles.settingsBtn}
+            accessibilityLabel="Stats"
+            accessibilityRole="button"
+          >
+            <Text style={styles.settingsIcon}>📊</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => navigation.navigate('Achievements')}
             style={styles.settingsBtn}
             accessibilityLabel="Achievements"

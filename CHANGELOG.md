@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Stats pages.** A new 📊 button in the Lobby header opens a Stats screen:
+  your win–loss–tie record and win rate, partner and friend splits, average
+  score, best game, best and longest word, bingos, points per play and streaks,
+  plus a head-to-head list of everyone you've played. Tapping a player (or the
+  new "Head-to-head" link on a finished game) opens a page for the two of you:
+  wins side by side, a comparison table, biggest win and loss, and every game
+  you've played together. Like achievements, everything is computed on the fly
+  from finished two-player games in one pure module (`src/engine/stats.ts`);
+  solo games don't count.
 - **Achievements board.** A new 🏅 button in the Lobby header opens an
   Achievements screen with nine badges (First Date, Going Steady, Committed,
   Sweet Victory, Nail-biter, Bingo!, Double Bingo, Wordsmith, Long Story),
