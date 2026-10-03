@@ -2,6 +2,9 @@
 // Activated by `src/supabase/config.ts` when `?dev=1` is present in the URL.
 // Auto-signs you in as a fake user; all writes/reads are local to this tab.
 
+import { createEmptyBoard } from '../engine/board';
+import { createTileBag, drawTiles } from '../engine/tiles';
+
 type Row = Record<string, any>;
 
 const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -68,6 +71,54 @@ stores.games.push({
   updated_at: new Date().toISOString(),
 });
 
+// An active partner game with Casey holding one unread note to Dev, so the
+// unread dot shows in the lobby and on the game screen. Dev's own unread note
+// to Casey must never produce a dot for Dev.
+const CASEY_ACTIVE_GAME_ID = '00000000-0000-0000-0000-000000000011';
+{
+  const { drawn: devRack, remaining: bagAfterDev } = drawTiles(createTileBag(), 7);
+  const { drawn: caseyRack, remaining: bag } = drawTiles(bagAfterDev, 7);
+  stores.games.push({
+    id: CASEY_ACTIVE_GAME_ID,
+    player1_uid: FAKE_USER_ID,
+    player2_uid: CASEY_ID,
+    players: [
+      { uid: FAKE_USER_ID, displayName: 'Dev', email: '', score: 0, rack: devRack, historyVersion: 2 },
+      { uid: CASEY_ID, displayName: 'Casey Private', email: '', score: 0, rack: caseyRack, historyVersion: 2 },
+    ],
+    board: createEmptyBoard(),
+    bag,
+    current_turn: FAKE_USER_ID,
+    status: 'active',
+    mode: 'partner',
+    moves: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  stores.love_notes.push(
+    {
+      id: '00000000-0000-0000-0000-000000000020',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: CASEY_ID,
+      to_uid: FAKE_USER_ID,
+      message: 'Thinking of you ✨',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000021',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: FAKE_USER_ID,
+      to_uid: CASEY_ID,
+      message: 'You complete my rack 😍',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 120_000).toISOString(),
+    }
+  );
+}
+
 // Two finished two-player games so the Achievements screen shows a mix of
 // unlocked and locked badges: Dev wins a close one with a bingo, then loses one
 // in which only the opponent scores big.
@@ -124,7 +175,7 @@ function mockFinishedGame(
 
 stores.games.push(
   mockFinishedGame(
-    '00000000-0000-0000-0000-000000000011',
+    '00000000-0000-0000-0000-000000000013',
     ALEX_ONE_ID,
     'Alex Morgan',
     [312, 309],
@@ -135,7 +186,7 @@ stores.games.push(
     9
   ),
   mockFinishedGame(
-    '00000000-0000-0000-0000-000000000012',
+    '00000000-0000-0000-0000-000000000014',
     CASEY_ID,
     'Casey Private',
     [241, 288],

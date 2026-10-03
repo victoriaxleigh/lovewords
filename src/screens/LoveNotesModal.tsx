@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { LoveNote } from '../types';
-import { sendLoveNote, subscribeToLoveNotes } from '../supabase/gameService';
+import { markGameNotesRead, sendLoveNote, subscribeToLoveNotes } from '../supabase/gameService';
 import { Colors } from '../utils/colors';
 import { sendLoveNoteNotification } from '../utils/webNotifications';
 
@@ -87,6 +87,11 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
       }
       prevNoteCountRef.current = newNotes.length;
       setNotes(newNotes);
+      // Open modal = seen: clear unread dots for this game, including notes
+      // that arrive while it's open.
+      if (newNotes.some((n) => n.toUid === myUid && !n.read)) {
+        void markGameNotesRead(gameId, myUid);
+      }
     });
     return unsub;
   }, [gameId, visible, myUid, isFriend]);

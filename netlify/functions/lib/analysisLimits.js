@@ -20,7 +20,7 @@
  * turn cap, both per-request.
  */
 
-const { MAX_TURNS } = require('./solver');
+const { MAX_TURNS, TURN_STATUS } = require('./solver');
 
 // One analysis at a time per user per endpoint, with a short gap between them.
 const COOLDOWN_MS = 10_000;
@@ -98,7 +98,7 @@ function capResponseSize(solve, maxBytes = MAX_RESPONSE_BYTES) {
     turnsOmitted: (solve.turnsOmitted || 0) + (solve.turns.length - lo),
     // Recount rather than carry the old total: a turn dropped from the list is
     // omitted, not unanalyzed, and the two get different wording on screen.
-    turnsUnanalyzed: kept.filter((t) => t.unanalyzed === true).length,
+    turnsUnanalyzed: kept.filter((t) => t.status === TURN_STATUS.NOT_ANALYZED).length,
     truncated: true,
   };
 }
@@ -130,7 +130,8 @@ function capPromptPayload(game, solve, maxBytes = MAX_PROMPT_BYTES) {
         ...solve,
         turns: keptTurns,
         turnsOmitted: omitted,
-        turnsUnanalyzed: keptTurns.filter((t) => t && t.unanalyzed === true).length,
+        turnsUnanalyzed: keptTurns.filter((t) => t && t.status === TURN_STATUS.NOT_ANALYZED)
+          .length,
         truncated: Boolean(solve && solve.truncated) || omitted > 0,
       },
     };

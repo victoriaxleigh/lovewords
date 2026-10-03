@@ -21,6 +21,20 @@ const ALL_LETTERS_MASK = (1 << 26) - 1;
 // that it is an array), so bound the work and the response body here.
 const MAX_TURNS = 300;
 
+// What `solveGame` could say about a turn. Each needs different wording to the
+// player and different handling by the coach, so they are one field, not flags.
+const TURN_STATUS = Object.freeze({
+  // Every legal play from the recorded rack was enumerated.
+  SOLVED: 'solved',
+  // No rack was recorded for this turn.
+  NO_RACK: 'no_rack',
+  // The rack was recorded, but the clock ran out before this turn.
+  NOT_ANALYZED: 'not_analyzed',
+  // The rack is known but a boarded blank has no letter, so the position
+  // cannot be read.
+  UNSOLVABLE_BOARD: 'unsolvable_board',
+});
+
 // One definition of the board on the server: reuse the layout the sanitized
 // export already publishes rather than hand-copying it a third time.
 const { BOARD_METADATA } = require('../game-analysis-common');
@@ -653,17 +667,17 @@ function solveGame(exportData, options = {}) {
       isAsking: askingAlias ? move.player === askingAlias : false,
       action: move.action,
       played,
-      solved: false,
+      // Exactly one of TURN_STATUS. One field rather than a set of booleans so
+      // that "no rack", "clock ran out" and "board unreadable" cannot be
+      // emitted together, and none of them reads as another.
+      status: TURN_STATUS.NO_RACK,
       best: [],
       pointsLeft: null,
       wasBest: null,
       // The solver enumerated the position but could not reproduce a play that
       // outscored everything it found. That is an anomaly, not an achievement.
+      // Orthogonal to `status`: only ever true on a solved turn.
       unmatchedPlay: false,
-      // The board itself could not be read — a blank on it has no designated
-      // letter. `solved: false` alone would be read as "no rack data", which is
-      // a different and much more common thing.
-      unsolvableBoard: false,
     };
 
     const rackBefore = Array.isArray(move.rackBefore) ? move.rackBefore : null;
@@ -672,20 +686,20 @@ function solveGame(exportData, options = {}) {
         // The budget is already spent: this turn is in the table but carries no
         // verdict. Flag it per turn so the count survives a later trim, and so
         // the client can say how many rather than gesturing at "later turns".
-        entry.unanalyzed = true;
+        entry.status = TURN_STATUS.NOT_ANALYZED;
         turnsUnanalyzed++;
       } else {
         const result = findBestMoves(grid, rackBefore, { limit, clock });
         if (result.truncated) {
           truncated = true;
-          entry.unanalyzed = true;
+          entry.status = TURN_STATUS.NOT_ANALYZED;
           turnsUnanalyzed++;
         } else if (result.degraded) {
           // A blank on the board with no designated letter: the position cannot
           // be read at all, which is not the same as having no rack.
-          entry.unsolvableBoard = true;
+          entry.status = TURN_STATUS.UNSOLVABLE_BOARD;
         } else {
-          entry.solved = true;
+          entry.status = TURN_STATUS.SOLVED;
           entry.best = result.moves.map((m) => ({
             // Name a play after every word it forms, exactly as `played.word`
             // does. `score` is the play total, so naming it after one word made
@@ -745,6 +759,7 @@ module.exports = {
   BONUS,
   MAX_TURNS,
   SIZE,
+  TURN_STATUS,
   applyPlacements,
   emptyGrid,
   findBestMoves,
