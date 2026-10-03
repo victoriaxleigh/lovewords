@@ -4,7 +4,7 @@ import {
   ACHIEVEMENT_COUNT,
   computeAchievements,
 } from '../src/engine/achievements';
-import { Game, GameStatus, Move, PlacedTile, Player, PlayerIndex } from '../src/types';
+import { Game, GameMode, GameStatus, Move, PlacedTile, Player, PlayerIndex } from '../src/types';
 
 const ME = 'me';
 const THEM = 'them';
@@ -58,6 +58,7 @@ function game(options: {
   status?: GameStatus;
   mySeat?: PlayerIndex;
   solo?: boolean;
+  mode?: GameMode;
 }): Game {
   const me = player(ME, options.myScore ?? 100);
   const them = options.solo
@@ -71,7 +72,7 @@ function game(options: {
     bag: [],
     currentTurn: ME,
     status: options.status ?? 'finished',
-    mode: 'partner',
+    mode: options.mode ?? 'partner',
     moves: options.moves ?? [],
     createdAt: 0,
     updatedAt: options.updatedAt ?? 1000,
@@ -94,7 +95,7 @@ describe('computeAchievements', () => {
   it('returns the full starter set, all locked, with no games', () => {
     const achievements = computeAchievements([], ME);
     expect(achievements).toHaveLength(ACHIEVEMENT_COUNT);
-    expect(ACHIEVEMENT_COUNT).toBe(9);
+    expect(ACHIEVEMENT_COUNT).toBe(12);
     expect(achievements.every((achievement) => !achievement.unlocked)).toBe(true);
     expect(achievements.every((achievement) => achievement.unlockedAt === undefined)).toBe(true);
     expect(byId(achievements, 'games_5').progress).toEqual({ current: 0, target: 5 });
@@ -164,6 +165,55 @@ describe('computeAchievements', () => {
         unlockedAt: 25,
         progress: { current: 25, target: 25 },
       });
+    });
+  });
+
+  describe('partner and friend tracks', () => {
+    it('counts friend games only toward the friend badges', () => {
+      const games = Array.from({ length: 25 }, (_, n) => game({ mode: 'friend', updatedAt: n + 1 }));
+      const achievements = computeAchievements(games, ME);
+      expect(byId(achievements, 'friend_first_game')).toMatchObject({ unlocked: true, unlockedAt: 1 });
+      expect(byId(achievements, 'friend_games_5')).toMatchObject({ unlocked: true, unlockedAt: 5 });
+      expect(byId(achievements, 'friend_games_25')).toMatchObject({ unlocked: true, unlockedAt: 25 });
+      expect(byId(achievements, 'first_game').unlocked).toBe(false);
+      expect(byId(achievements, 'games_5').progress).toEqual({ current: 0, target: 5 });
+      expect(byId(achievements, 'games_25').progress).toEqual({ current: 0, target: 25 });
+    });
+
+    it('counts partner games only toward the partner badges', () => {
+      const games = Array.from({ length: 5 }, (_, n) => game({ updatedAt: n + 1 }));
+      const achievements = computeAchievements(games, ME);
+      expect(byId(achievements, 'games_5').unlocked).toBe(true);
+      expect(byId(achievements, 'friend_first_game').unlocked).toBe(false);
+      expect(byId(achievements, 'friend_games_5').progress).toEqual({ current: 0, target: 5 });
+    });
+
+    it('keeps the tracks separate when games are mixed', () => {
+      const games = [1, 2, 3, 4, 5, 6].map((n) =>
+        game({ mode: n % 2 ? 'friend' : 'partner', updatedAt: n * 100 })
+      );
+      const achievements = computeAchievements(games, ME);
+      expect(byId(achievements, 'first_game').unlockedAt).toBe(200);
+      expect(byId(achievements, 'friend_first_game').unlockedAt).toBe(100);
+      expect(byId(achievements, 'games_5').progress).toEqual({ current: 3, target: 5 });
+      expect(byId(achievements, 'friend_games_5').progress).toEqual({ current: 3, target: 5 });
+    });
+
+    it('lets friend games earn the shared play badges', () => {
+      const win = game({ mode: 'friend', myScore: 300, theirScore: 298 });
+      expect(unlockedIds([win])).toEqual(['friend_first_game', 'first_win', 'nail_biter']);
+    });
+
+    it('lists each partner badge next to its friend counterpart', () => {
+      const ids = computeAchievements([], ME).map((achievement) => achievement.id);
+      expect(ids.slice(0, 6)).toEqual([
+        'first_game',
+        'friend_first_game',
+        'games_5',
+        'friend_games_5',
+        'games_25',
+        'friend_games_25',
+      ]);
     });
   });
 

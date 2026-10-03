@@ -119,9 +119,9 @@ const CASEY_ACTIVE_GAME_ID = '00000000-0000-0000-0000-000000000011';
   );
 }
 
-// Two finished two-player games so the Achievements screen shows a mix of
+// Three finished two-player games so the Achievements screen shows a mix of
 // unlocked and locked badges: Dev wins a close one with a bingo, then loses one
-// in which only the opponent scores big.
+// in which only the opponent scores big, then finishes one friend game.
 function mockPlay(
   uid: string,
   playerIndex: 0 | 1,
@@ -151,7 +151,8 @@ function mockFinishedGame(
   opponentName: string,
   scores: [number, number],
   moves: Row[],
-  daysAgo: number
+  daysAgo: number,
+  mode: 'partner' | 'friend' = 'partner'
 ): Row {
   const finishedAt = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
   return {
@@ -166,7 +167,7 @@ function mockFinishedGame(
     bag: [],
     current_turn: FAKE_USER_ID,
     status: 'finished',
-    mode: 'partner',
+    mode,
     moves,
     created_at: finishedAt,
     updated_at: finishedAt,
@@ -195,6 +196,18 @@ stores.games.push(
       mockPlay(CASEY_ID, 1, 'QUIXOTIC', 64, 8, 4),
     ],
     2
+  ),
+  mockFinishedGame(
+    '00000000-0000-0000-0000-000000000015',
+    ALEX_TWO_ID,
+    'Alex Morgan',
+    [198, 226],
+    [
+      mockPlay(FAKE_USER_ID, 0, 'GAME', 10, 7, 5),
+      mockPlay(ALEX_TWO_ID, 1, 'RIVAL', 16, 8, 6),
+    ],
+    1,
+    'friend'
   )
 );
 
