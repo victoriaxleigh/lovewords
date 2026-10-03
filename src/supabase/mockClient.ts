@@ -2,6 +2,9 @@
 // Activated by `src/supabase/config.ts` when `?dev=1` is present in the URL.
 // Auto-signs you in as a fake user; all writes/reads are local to this tab.
 
+import { createEmptyBoard } from '../engine/board';
+import { createTileBag, drawTiles } from '../engine/tiles';
+
 type Row = Record<string, any>;
 
 const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -67,6 +70,54 @@ stores.games.push({
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 });
+
+// An active partner game with Casey holding one unread note to Dev, so the
+// unread dot shows in the lobby and on the game screen. Dev's own unread note
+// to Casey must never produce a dot for Dev.
+const CASEY_ACTIVE_GAME_ID = '00000000-0000-0000-0000-000000000011';
+{
+  const { drawn: devRack, remaining: bagAfterDev } = drawTiles(createTileBag(), 7);
+  const { drawn: caseyRack, remaining: bag } = drawTiles(bagAfterDev, 7);
+  stores.games.push({
+    id: CASEY_ACTIVE_GAME_ID,
+    player1_uid: FAKE_USER_ID,
+    player2_uid: CASEY_ID,
+    players: [
+      { uid: FAKE_USER_ID, displayName: 'Dev', email: '', score: 0, rack: devRack, historyVersion: 2 },
+      { uid: CASEY_ID, displayName: 'Casey Private', email: '', score: 0, rack: caseyRack, historyVersion: 2 },
+    ],
+    board: createEmptyBoard(),
+    bag,
+    current_turn: FAKE_USER_ID,
+    status: 'active',
+    mode: 'partner',
+    moves: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  stores.love_notes.push(
+    {
+      id: '00000000-0000-0000-0000-000000000020',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: CASEY_ID,
+      to_uid: FAKE_USER_ID,
+      message: 'Thinking of you ✨',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000021',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: FAKE_USER_ID,
+      to_uid: CASEY_ID,
+      message: 'You complete my rack 😍',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 120_000).toISOString(),
+    }
+  );
+}
 
 // Browser-console handle for driving hard-to-reach states in dev
 // (e.g. flip a game to 'finished' to test the game-over screen).

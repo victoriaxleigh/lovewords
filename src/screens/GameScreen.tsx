@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Game, PlacedTile, Tile } from '../types';
-import { subscribeToGame, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching, requestGameSolve, GameSolve } from '../supabase/gameService';
+import { subscribeToGame, subscribeToUnreadNoteCounts, submitMove, passTurn, swapTiles, submitSoloMove, passSoloTurn, swapSoloTiles, createRematch, sendNudge, requestGameCoaching, requestGameSolve, GameSolve } from '../supabase/gameService';
 import { getFormedWords } from '../engine/scoring';
 import { scoreMove } from '../engine/scoring';
 import { validateWords } from '../engine/dictionary';
@@ -61,6 +61,7 @@ export default function GameScreen() {
   const [nudgeSent, setNudgeSent] = useState(false);
   const [nudgeCooldown, setNudgeCooldown] = useState(false);
   const [nudgeError, setNudgeError] = useState<string | null>(null);
+  const [unreadNotes, setUnreadNotes] = useState(0);
   const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analysisPreview, setAnalysisPreview] = useState(false);
   const [analysisQuality, setAnalysisQuality] = useState<'full' | 'basic' | null>(null);
@@ -86,6 +87,11 @@ export default function GameScreen() {
   const prevMovesLengthRef = useRef<number>(-1); // -1 = uninitialized; avoids spurious clear on first load
   const soloWaitingRealtimeRef = useRef(false);  // keeps submitting=true until RT update arrives
 
+
+  // Unread notes sent to me in this game — drives the dot on the notes button.
+  useEffect(() => {
+    return subscribeToUnreadNoteCounts(myUid, (counts) => setUnreadNotes(counts[gameId] ?? 0));
+  }, [myUid, gameId]);
 
   // Poll until dictionary finishes loading
   useEffect(() => {
@@ -815,8 +821,17 @@ export default function GameScreen() {
           <Text style={styles.back}>← Games</Text>
         </TouchableOpacity>
         {!isSolo && (
-          <TouchableOpacity onPress={() => setShowLoveNotes(true)} style={styles.loveBtn} accessibilityLabel={isFriend ? 'Open messages' : 'Open love notes'} accessibilityRole="button">
+          <TouchableOpacity
+            onPress={() => setShowLoveNotes(true)}
+            style={styles.loveBtn}
+            accessibilityLabel={
+              (isFriend ? 'Open messages' : 'Open love notes') +
+              (unreadNotes > 0 ? `, ${unreadNotes} unread` : '')
+            }
+            accessibilityRole="button"
+          >
             <Text style={styles.loveBtnText}>{isFriend ? '💬 Chat' : '💌 Note'}</Text>
+            {unreadNotes > 0 && <View style={styles.unreadDot} testID="notes-unread-dot" />}
           </TouchableOpacity>
         )}
       </View>
@@ -1138,6 +1153,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   loveBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  unreadDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.accent,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   turnBanner: {
     marginHorizontal: 8,
     marginBottom: 6,

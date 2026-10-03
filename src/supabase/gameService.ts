@@ -1132,6 +1132,63 @@ export async function markNoteRead(noteId: string) {
   await supabase.from('love_notes').update({ read: true }).eq('id', noteId);
 }
 
+// Groups unread note rows into { [gameId]: count }.
+export function countUnreadNotesByGame(rows: Array<{ game_id: string }>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) counts[row.game_id] = (counts[row.game_id] ?? 0) + 1;
+  return counts;
+}
+
+// The lobby and the game screen can both be mounted, so each subscription
+// gets its own channel topic.
+let unreadNotesChannelSeq = 0;
+
+// Live unread-note counts per game for notes sent TO uid. Listens for every
+// change (INSERT for new notes, UPDATE when they're marked read) so dots
+// appear and clear without a reload.
+export function subscribeToUnreadNoteCounts(
+  uid: string,
+  onUpdate: (counts: Record<string, number>) => void
+) {
+  const fetch = async () => {
+    const { data, error } = await supabase
+      .from('love_notes')
+      .select('game_id')
+      .eq('to_uid', uid)
+      .eq('read', false);
+    if (error) console.error('Failed to fetch unread notes:', error);
+    if (data) onUpdate(countUnreadNotesByGame(data));
+  };
+
+  fetch();
+
+  const channel = supabase
+    .channel(`unread-notes-${uid}-${++unreadNotesChannelSeq}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'love_notes', filter: `to_uid=eq.${uid}` },
+      fetch
+    )
+    .subscribe();
+
+  const stopResumeRefetch = refetchOnResume(fetch);
+  return () => {
+    stopResumeRefetch();
+    supabase.removeChannel(channel);
+  };
+}
+
+// Marks every unread note sent to uid in this game as read, in one update.
+export async function markGameNotesRead(gameId: string, uid: string) {
+  const { error } = await supabase
+    .from('love_notes')
+    .update({ read: true })
+    .eq('game_id', gameId)
+    .eq('to_uid', uid)
+    .eq('read', false);
+  if (error) console.error('Failed to mark notes read:', error);
+}
+
 // ─── Delete a game ────────────────────────────────────────────────────────────
 export async function deleteGame(gameId: string): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase.from('games').delete().eq('id', gameId);
