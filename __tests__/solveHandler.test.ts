@@ -257,7 +257,7 @@ describe('game-solve handler', () => {
     expect(turn.turn).toBe(1);
     expect(turn.player).toBe('player-1');
     expect(turn.isAsking).toBe(true);
-    expect(turn.solved).toBe(true);
+    expect(turn.status).toBe('solved');
     expect(turn.played).toEqual({ word: 'CAT', score: 18 });
     // CARTELS across from (7,3) is the best play from CATERSL on an empty board.
     expect(turn.best[0]).toEqual({
@@ -382,7 +382,7 @@ describe('game-solve handler', () => {
 
     expect(result.statusCode).toBe(200);
     expect(body.recordingQuality).toBe('basic');
-    expect(body.turns[0].solved).toBe(false);
+    expect(body.turns[0].status).toBe('no_rack');
     expect(body.turns[0].best).toEqual([]);
     expect(body.turns[0].pointsLeft).toBeNull();
   });
@@ -458,7 +458,7 @@ describe('analysis limits', () => {
       isAsking: true,
       action: 'play',
       played: { word: 'CAT', score: 12 },
-      solved: true,
+      status: 'solved',
       best: [{ word: 'CATERS', score: 30, row: 7, col: 7, direction: 'across' }],
       pointsLeft: 18,
       wasBest: false,
@@ -477,7 +477,7 @@ describe('analysis limits', () => {
 
   // Both cappers RECOUNT turnsUnanalyzed over the turns they keep rather than
   // carrying the pre-trim total. Without this test, reverting to the stale total
-  // still passes every other case, because no other fixture sets `unanalyzed`.
+  // still passes every other case, because no other fixture is `not_analyzed`.
   test('trimming recounts turnsUnanalyzed over the kept turns', () => {
     const turns = Array.from({ length: 5000 }, (_, i) => ({
       turn: i + 1,
@@ -485,13 +485,11 @@ describe('analysis limits', () => {
       isAsking: true,
       action: 'play',
       played: { word: 'CAT', score: 12 },
-      solved: i < 100,
+      status: i < 100 ? 'solved' : 'not_analyzed',
       best: i < 100 ? [{ word: 'CATERS', score: 30, row: 7, col: 7, direction: 'across' }] : [],
       pointsLeft: null,
       wasBest: null,
       unmatchedPlay: false,
-      unsolvableBoard: false,
-      unanalyzed: i >= 100,
     }));
     const solve = {
       recordingQuality: 'full',
@@ -505,7 +503,7 @@ describe('analysis limits', () => {
     expect(capped.turns.length).toBeLessThan(turns.length);
     // The stale total (4900) must not survive the trim.
     expect(capped.turnsUnanalyzed).toBe(
-      capped.turns.filter((t: { unanalyzed?: boolean }) => t.unanalyzed === true).length
+      capped.turns.filter((t: { status: string }) => t.status === 'not_analyzed').length
     );
     expect(capped.turnsUnanalyzed).toBeLessThan(4900);
     expect(capped.turnsOmitted).toBe(turns.length - capped.turns.length);
@@ -515,7 +513,7 @@ describe('analysis limits', () => {
     const prompt = capPromptPayload(game, solve);
     expect(prompt.solver.turns.length).toBeLessThan(turns.length);
     expect(prompt.solver.turnsUnanalyzed).toBe(
-      prompt.solver.turns.filter((t: { unanalyzed?: boolean }) => t.unanalyzed === true).length
+      prompt.solver.turns.filter((t: { status: string }) => t.status === 'not_analyzed').length
     );
     expect(prompt.solver.turnsUnanalyzed).toBeLessThan(4900);
   });
@@ -620,7 +618,7 @@ describe('analysis limits', () => {
       recordingQuality: 'full',
       truncated: false,
       turnsOmitted: 0,
-      turns: [{ turn: 1, action: 'play', solved: true, best: [] }],
+      turns: [{ turn: 1, action: 'play', status: 'solved', best: [] }],
     };
     expect(capResponseSize(solve)).toBe(solve);
   });

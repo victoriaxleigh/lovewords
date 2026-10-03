@@ -2,6 +2,9 @@
 // Activated by `src/supabase/config.ts` when `?dev=1` is present in the URL.
 // Auto-signs you in as a fake user; all writes/reads are local to this tab.
 
+import { createEmptyBoard } from '../engine/board';
+import { createTileBag, drawTiles } from '../engine/tiles';
+
 type Row = Record<string, any>;
 
 const FAKE_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -67,6 +70,54 @@ stores.games.push({
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 });
+
+// An active partner game with Casey holding one unread note to Dev, so the
+// unread dot shows in the lobby and on the game screen. Dev's own unread note
+// to Casey must never produce a dot for Dev.
+const CASEY_ACTIVE_GAME_ID = '00000000-0000-0000-0000-000000000011';
+{
+  const { drawn: devRack, remaining: bagAfterDev } = drawTiles(createTileBag(), 7);
+  const { drawn: caseyRack, remaining: bag } = drawTiles(bagAfterDev, 7);
+  stores.games.push({
+    id: CASEY_ACTIVE_GAME_ID,
+    player1_uid: FAKE_USER_ID,
+    player2_uid: CASEY_ID,
+    players: [
+      { uid: FAKE_USER_ID, displayName: 'Dev', email: '', score: 0, rack: devRack, historyVersion: 2 },
+      { uid: CASEY_ID, displayName: 'Casey Private', email: '', score: 0, rack: caseyRack, historyVersion: 2 },
+    ],
+    board: createEmptyBoard(),
+    bag,
+    current_turn: FAKE_USER_ID,
+    status: 'active',
+    mode: 'partner',
+    moves: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  stores.love_notes.push(
+    {
+      id: '00000000-0000-0000-0000-000000000020',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: CASEY_ID,
+      to_uid: FAKE_USER_ID,
+      message: 'Thinking of you ✨',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000021',
+      game_id: CASEY_ACTIVE_GAME_ID,
+      from_uid: FAKE_USER_ID,
+      to_uid: CASEY_ID,
+      message: 'You complete my rack 😍',
+      emoji: '💕',
+      read: false,
+      created_at: new Date(Date.now() - 120_000).toISOString(),
+    }
+  );
+}
 
 // Three finished two-player games so the Achievements screen shows a mix of
 // unlocked and locked badges: Dev wins a close one with a bingo, then loses one
@@ -168,6 +219,11 @@ const authListeners: Array<(event: string, session: any) => void> = [];
 const channelListeners: Array<{ table: string; cb: (payload?: any) => void }> = [];
 
 let currentSession: any = { user: FAKE_USER };
+
+// Passwords set through the ?dev=1 reset flow, by email. Sign-in accepts any
+// password until one is set, then requires it — so the reset can be verified
+// end-to-end without a real inbox.
+const mockPasswords: Record<string, string> = {};
 
 function uuid(): string {
   return (globalThis as any).crypto.randomUUID();
@@ -354,7 +410,11 @@ export const mockSupabase = {
       authListeners.forEach((l) => l('SIGNED_IN', currentSession));
       return { data: { user: currentSession.user }, error: null };
     },
-    signInWithPassword: async ({ email }: any) => {
+    signInWithPassword: async ({ email, password }: any) => {
+      const expected = mockPasswords[email];
+      if (expected !== undefined && expected !== password) {
+        return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
+      }
       currentSession = { user: { ...FAKE_USER, email } };
       authListeners.forEach((l) => l('SIGNED_IN', currentSession));
       return { data: { user: currentSession.user }, error: null };
@@ -364,6 +424,30 @@ export const mockSupabase = {
       authListeners.forEach((l) => l('SIGNED_OUT', null));
     },
     getSession: async () => ({ data: { session: currentSession } }),
+    // No email goes out in dev — log the link a real inbox would receive.
+    // Open it in this tab to land on the recovery screen.
+    resetPasswordForEmail: async (email: string, options?: { redirectTo?: string }) => {
+      const link = `${options?.redirectTo ?? ''}#type=recovery`;
+      // eslint-disable-next-line no-console
+      console.info(`[lovewords] ?dev=1 — password reset link for ${email}: ${link}`);
+      return { data: {}, error: null };
+    },
+    updateUser: async ({ password }: { password?: string }) => {
+      if (!currentSession?.user) {
+        return { data: { user: null }, error: { message: 'Auth session missing!' } };
+      }
+      if (password !== undefined) {
+        if (password.length < 6) {
+          return {
+            data: { user: null },
+            error: { message: 'Password should be at least 6 characters.' },
+          };
+        }
+        mockPasswords[currentSession.user.email] = password;
+      }
+      authListeners.forEach((l) => l('USER_UPDATED', currentSession));
+      return { data: { user: currentSession.user }, error: null };
+    },
     onAuthStateChange: (cb: (event: string, session: any) => void) => {
       authListeners.push(cb);
       return {

@@ -1,5 +1,10 @@
 # LoveWords Agent Instructions
 
+## UI style
+
+Before changing any UI, read [`docs/ai/style.md`](docs/ai/style.md): colour and
+spacing tokens, contrast rules, component patterns, and the tone of UI copy.
+
 ## Production database safety
 
 - Treat every migration recorded in production as immutable. Never edit an

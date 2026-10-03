@@ -33,6 +33,13 @@
 
 ### Added
 
+- **Forgot password.** The sign-in screen now has a "Forgot password?" link
+  that emails a reset link. Opening it lands on a "Choose a new password"
+  screen instead of silently signing you in without a password; after saving,
+  you're signed out and asked to sign in with the new password. An abandoned
+  reset re-opens that screen on the next launch rather than leaving you signed
+  in, and an expired link says so on the sign-in screen. Works under `?dev=1`
+  too (the reset link is logged to the console).
 - **Streamlined "New game" flow.** Starting a game now leads with a single
   "invite by email or phone" field that always works — it starts the game if
   they're already a member, or sends an invite if not. Finding a player by
