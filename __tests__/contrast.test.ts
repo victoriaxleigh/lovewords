@@ -56,6 +56,8 @@ const NON_TEXT_AA: [string, string, string][] = [
   ['swap border on page bg', Colors.swapBorder, Colors.background],
   ['pass border on pass fill', Colors.passBorder, Colors.passBg],
   ['pass border on page bg', Colors.passBorder, Colors.background],
+  // Stats win-rate meter: primary fill on the tilePlaced track.
+  ['stats meter fill on track', Colors.primary, Colors.tilePlaced],
 ];
 
 describe('WCAG AAA contrast (normal text, 7:1)', () => {

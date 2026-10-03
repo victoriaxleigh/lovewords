@@ -585,6 +585,7 @@ export default function GameScreen() {
 
   if (game.status === 'finished') {
     const isSoloFinished = game.players.some((p) => p.email === 'solo');
+    const opponent = game.players.find((p) => p.uid !== myUid);
     const endedByPasses =
       game.moves.length >= 4 &&
       game.moves.slice(-4).every((move) => getMoveAction(move) === 'pass');
@@ -804,6 +805,21 @@ export default function GameScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>Back to games</Text>
         </TouchableOpacity>
+        {opponent && !isSoloFinished && (
+          <TouchableOpacity
+            style={styles.statsLink}
+            onPress={() =>
+              (navigation as any).navigate('HeadToHead', {
+                opponentUid: opponent.uid,
+                opponentName: opponent.displayName,
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Head-to-head stats with ${opponent.displayName}`}
+          >
+            <Text style={styles.statsLinkText}>📊 Head-to-head with {opponent.displayName}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     );
   }
@@ -1333,6 +1349,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  statsLink: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 12 },
+  statsLinkText: { color: Colors.primaryDark, fontWeight: '700', fontSize: 14 },
   rematchBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 12,

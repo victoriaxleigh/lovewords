@@ -9,6 +9,8 @@ import LobbyScreen from './src/screens/LobbyScreen';
 import GameScreen from './src/screens/GameScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AchievementsScreen from './src/screens/AchievementsScreen';
+import StatsScreen from './src/screens/StatsScreen';
+import HeadToHeadScreen from './src/screens/HeadToHeadScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
 import RecoveryScreen from './src/screens/RecoveryScreen';
 import { Colors } from './src/utils/colors';
@@ -196,6 +198,12 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="Achievements">
                 {() => <AchievementsScreen currentUser={currentPlayer!} />}
+              </Stack.Screen>
+              <Stack.Screen name="Stats">
+                {() => <StatsScreen currentUser={currentPlayer!} />}
+              </Stack.Screen>
+              <Stack.Screen name="HeadToHead">
+                {() => <HeadToHeadScreen currentUser={currentPlayer!} />}
               </Stack.Screen>
               <Stack.Screen name="Paywall" component={PaywallScreen} />
               <Stack.Screen
