@@ -941,6 +941,18 @@ export function subscribeToUserGames(uid: string, onUpdate: (games: Game[]) => v
   };
 }
 
+// ─── Finished games (Achievements) ────────────────────────────────────────────
+export async function getFinishedGames(uid: string): Promise<Game[]> {
+  const { data, error } = await supabase
+    .from('games')
+    .select('*')
+    .or(`player1_uid.eq.${uid},player2_uid.eq.${uid}`)
+    .eq('status', 'finished')
+    .order('updated_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToGame);
+}
+
 // ─── Submit a move ────────────────────────────────────────────────────────────
 export async function submitMove(
   gameId: string,

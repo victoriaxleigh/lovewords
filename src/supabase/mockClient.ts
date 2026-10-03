@@ -119,6 +119,85 @@ const CASEY_ACTIVE_GAME_ID = '00000000-0000-0000-0000-000000000011';
   );
 }
 
+// Two finished two-player games so the Achievements screen shows a mix of
+// unlocked and locked badges: Dev wins a close one with a bingo, then loses one
+// in which only the opponent scores big.
+function mockPlay(
+  uid: string,
+  playerIndex: 0 | 1,
+  word: string,
+  wordScore: number,
+  row: number,
+  timestamp: number
+): Row {
+  const placements = word.split('').map((letter, index) => ({ letter, value: 1, row, col: index }));
+  const score = wordScore + (placements.length === 7 ? 35 : 0);
+  return {
+    uid,
+    tiles: placements.map((tile, index) => ({ ...tile, id: `mock-${timestamp}-${index}` })),
+    score,
+    timestamp,
+    version: 2,
+    action: 'play',
+    playerIndex,
+    placements,
+    words: [{ word, score: wordScore }],
+  };
+}
+
+function mockFinishedGame(
+  id: string,
+  opponentId: string,
+  opponentName: string,
+  scores: [number, number],
+  moves: Row[],
+  daysAgo: number
+): Row {
+  const finishedAt = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+  return {
+    id,
+    player1_uid: FAKE_USER_ID,
+    player2_uid: opponentId,
+    players: [
+      { uid: FAKE_USER_ID, displayName: 'Dev', email: '', score: scores[0], rack: [], historyVersion: 2 },
+      { uid: opponentId, displayName: opponentName, email: '', score: scores[1], rack: [], historyVersion: 2 },
+    ],
+    board: [],
+    bag: [],
+    current_turn: FAKE_USER_ID,
+    status: 'finished',
+    mode: 'partner',
+    moves,
+    created_at: finishedAt,
+    updated_at: finishedAt,
+  };
+}
+
+stores.games.push(
+  mockFinishedGame(
+    '00000000-0000-0000-0000-000000000013',
+    ALEX_ONE_ID,
+    'Alex Morgan',
+    [312, 309],
+    [
+      mockPlay(FAKE_USER_ID, 0, 'RETAINS', 14, 7, 1),
+      mockPlay(ALEX_ONE_ID, 1, 'HEART', 18, 8, 2),
+    ],
+    9
+  ),
+  mockFinishedGame(
+    '00000000-0000-0000-0000-000000000014',
+    CASEY_ID,
+    'Casey Private',
+    [241, 288],
+    [
+      mockPlay(FAKE_USER_ID, 0, 'LOVE', 12, 7, 3),
+      mockPlay(CASEY_ID, 1, 'QUIXOTIC', 64, 8, 4),
+    ],
+    2
+  )
+);
+
 // Browser-console handle for driving hard-to-reach states in dev
 // (e.g. flip a game to 'finished' to test the game-over screen).
 (globalThis as any).__lwMockStores = stores;

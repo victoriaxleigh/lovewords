@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **Achievements board.** A new 🏅 button in the Lobby header opens an
+  Achievements screen with nine badges (First Date, Going Steady, Committed,
+  Sweet Victory, Nail-biter, Bingo!, Double Bingo, Wordsmith, Long Story),
+  computed on the fly from your finished two-player games. Solo games don't
+  count. Nothing is stored yet; the rules live in one pure module
+  (`src/engine/achievements.ts`) so a later server-side version can reuse them.
+
 ### Fixed
 
 - **Nudges failed with a database timestamp type error.** The notification claim
