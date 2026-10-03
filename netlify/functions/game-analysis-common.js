@@ -483,5 +483,6 @@ module.exports = {
   parseBearer,
   publicOrigin,
   sanitizeGameExport,
+  supabaseHeaders,
   verifyAnalysisToken,
 };
