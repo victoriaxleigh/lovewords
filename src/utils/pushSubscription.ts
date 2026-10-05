@@ -4,7 +4,7 @@ import { supabase } from '../supabase/config';
 const VAPID_PUBLIC_KEY =
   'BAonmTB4A44-9UCHM-GrM3itorKGP3OarN47r3K0vR2mI6qARnjSrXZeUQdFnR5A8BBdTLPPPcTQs_xBlQJ-3BM';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
