@@ -20,6 +20,7 @@ import {
   WinRecord,
 } from '../engine/stats';
 import { Colors } from '../utils/colors';
+import { shortNamesFor } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { Player } from '../types';
 
@@ -78,7 +79,15 @@ export function StatTile({ label, value, meta }: { label: string; value: string;
   );
 }
 
-function OpponentRow({ opponent, onPress }: { opponent: OpponentSummary; onPress: () => void }) {
+function OpponentRow({
+  opponent,
+  label,
+  onPress,
+}: {
+  opponent: OpponentSummary;
+  label: string;
+  onPress: () => void;
+}) {
   const { record } = opponent;
   return (
     <TouchableOpacity
@@ -93,7 +102,7 @@ function OpponentRow({ opponent, onPress }: { opponent: OpponentSummary; onPress
       </View>
       <View style={styles.rowBody} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Text style={styles.rowName} numberOfLines={1}>
-          {opponent.displayName}
+          {label}
         </Text>
         <Text style={styles.rowMeta}>
           {plural(record.played, 'game')} · {formatWinRate(record)} win rate
@@ -151,6 +160,7 @@ export default function StatsScreen({ currentUser }: Props) {
     }
 
     const { record, me, byMode } = stats;
+    const displayOpponentName = shortNamesFor(stats.opponents.map((opponent) => opponent.displayName));
     const bestWord = me.bestWord;
     const longestWord = me.longestWord;
     return (
@@ -210,6 +220,7 @@ export default function StatsScreen({ currentUser }: Props) {
           <OpponentRow
             key={opponent.uid}
             opponent={opponent}
+            label={displayOpponentName(opponent.displayName)}
             onPress={() =>
               navigation.navigate('HeadToHead', {
                 opponentUid: opponent.uid,

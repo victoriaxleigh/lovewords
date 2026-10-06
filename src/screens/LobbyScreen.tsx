@@ -29,6 +29,7 @@ import { getUserByEmail, PublicProfile } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, GameMode, Player } from '../types';
 import { Colors } from '../utils/colors';
+import { shortName, shortNamesFor } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
@@ -240,6 +241,10 @@ export default function LobbyScreen({ currentUser }: Props) {
   const activeGames = games.filter((g) => g.status === 'active');
   const pastGames = games.filter((g) => g.status === 'finished');
   const tabGames = activeTab === 'active' ? activeGames : pastGames;
+  // Built from every game, not just this tab, so a name reads the same on both tabs.
+  const displayOpponentName = shortNamesFor(
+    games.filter((g) => !isSoloGame(g)).map((g) => getOpponent(g)?.displayName)
+  );
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'active', label: 'Active', count: activeGames.length },
@@ -254,9 +259,9 @@ export default function LobbyScreen({ currentUser }: Props) {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials(currentUser.displayName)}</Text>
           </View>
-          <View>
-            <Text style={styles.greeting}>Hi, {currentUser.displayName}</Text>
-            <Text style={styles.subtitle}>Ready to play? 💕</Text>
+          <View style={styles.greetingWrap}>
+            <Text style={styles.greeting} numberOfLines={2}>Hi, {shortName(currentUser.displayName)}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Ready to play? 💕</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -326,7 +331,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const rowBusy = busyId === game.id;
             return (
               <View key={game.id} style={styles.inviteCard}>
-                <Text style={styles.inviteTitle}>{sender.displayName} invited you</Text>
+                <Text style={styles.inviteTitle}>{shortName(sender.displayName)} invited you</Text>
                 <Text style={styles.inviteMeta}>
                   {game.mode === 'friend' ? '🎲 Friend game' : '💕 Partner game'}
                 </Text>
@@ -354,7 +359,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const rowBusy = busyId === game.id;
             return (
               <View key={game.id} style={styles.inviteCard}>
-                <Text style={styles.inviteTitle}>Waiting for {recipient.displayName}</Text>
+                <Text style={styles.inviteTitle}>Waiting for {shortName(recipient.displayName)}</Text>
                 <Text style={styles.inviteMeta}>Invitation sent — no tiles dealt yet.</Text>
                 <TouchableOpacity
                   style={[styles.inviteButton, styles.cancelInvite]}
@@ -421,7 +426,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const name = opponent?.displayName ?? 'Player';
             const soloG = isSoloGame(game);
             const myLabel = soloG ? 'P1' : 'You';
-            const oppLabel = soloG ? 'P2' : name;
+            const oppLabel = soloG ? 'P2' : displayOpponentName(name);
             const unread = soloG ? 0 : unreadByGame[game.id] ?? 0;
             const noteNoun = game.mode === 'friend' ? 'message' : 'love note';
             const unreadLabel = unread > 0 ? `, ${unread} unread ${noteNoun}${unread === 1 ? '' : 's'}` : '';
@@ -450,8 +455,8 @@ export default function LobbyScreen({ currentUser }: Props) {
                     {unread > 0 && <View style={styles.unreadDot} testID={`unread-dot-${game.id}`} />}
                   </View>
                   <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    <Text style={styles.opponentName} numberOfLines={1}>
-                      {isSoloGame(game) ? 'Solo practice' : name}
+                    <Text style={styles.opponentName} numberOfLines={2}>
+                      {isSoloGame(game) ? 'Solo practice' : displayOpponentName(name)}
                     </Text>
                     <View style={styles.metaRow}>
                       <Text style={styles.modeBadge}>{modeBadge(game)}</Text>
@@ -465,11 +470,11 @@ export default function LobbyScreen({ currentUser }: Props) {
                   <View style={styles.gameCardRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, myWins && styles.scoreNameWin]} numberOfLines={1}>{myLabel}</Text>
-                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]}>{myScore}</Text>
+                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]} numberOfLines={1}>{myScore}</Text>
                     </View>
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, oppWins && styles.scoreNameWin]} numberOfLines={1}>{oppLabel}</Text>
-                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]}>{oppScore}</Text>
+                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]} numberOfLines={1}>{oppScore}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -528,7 +533,9 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 8,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  // minWidth: 0 lets the greeting shrink/wrap instead of sliding under the header buttons.
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, marginRight: 8 },
+  greetingWrap: { flex: 1, minWidth: 0 },
   avatar: {
     width: 46,
     height: 46,
@@ -541,7 +548,7 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   greeting: { fontSize: 20, fontWeight: '800', color: Colors.text },
   subtitle: { fontSize: 13, color: Colors.textLight, marginTop: 1 },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
   settingsBtn: {
     width: 44,
     height: 44,
@@ -625,7 +632,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.surface,
   },
-  gameCardLeft: { flex: 1 },
+  gameCardLeft: { flex: 1, minWidth: 0 },
   opponentName: { fontSize: 16, fontWeight: '800', color: Colors.text },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
   modeBadge: { fontSize: 14 },
@@ -638,11 +645,11 @@ const styles = StyleSheet.create({
   statusChipActive: { backgroundColor: Colors.primary },
   statusChipText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
   statusChipTextActive: { color: '#fff' },
-  gameCardRight: { minWidth: 84, maxWidth: 132, gap: 3, marginLeft: 8 },
+  gameCardRight: { minWidth: 84, maxWidth: 124, gap: 3, marginLeft: 8, flexShrink: 0 },
   scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6 },
   scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, textAlign: 'right' },
   scoreNameWin: { color: Colors.text, fontWeight: '800' },
-  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 24, textAlign: 'right' },
+  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 40, flexShrink: 0, textAlign: 'right' },
   scoreValueWin: { fontSize: 20, fontWeight: '900', color: Colors.primary },
   errorBanner: {
     flexDirection: 'row',

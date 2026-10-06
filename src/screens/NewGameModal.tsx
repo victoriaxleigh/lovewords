@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { GameMode } from '../types';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { PublicProfile, searchProfiles } from '../supabase/authService';
 import { formatInviteCode } from '../utils/invites';
@@ -547,7 +548,7 @@ export default function NewGameModal({
                   accessibilityLabel={`Invite ${profile.displayName}, player code ${profile.playerCode}`}
                 >
                   <View>
-                    <Text style={styles.resultName}>{profile.displayName}</Text>
+                    <Text style={styles.resultName}>{shortName(profile.displayName)}</Text>
                     <Text style={styles.resultCode}>Player #{profile.playerCode}</Text>
                   </View>
                   <Text style={styles.resultAction}>Invite</Text>
