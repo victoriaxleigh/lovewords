@@ -262,7 +262,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             <Text style={styles.avatarText}>{initials(currentUser.displayName)}</Text>
           </View>
           <View style={styles.greetingWrap}>
-            <Text style={styles.greeting} numberOfLines={2}>Hi, {currentUser.displayName}</Text>
+            <Text style={styles.greeting} numberOfLines={2}>Hi, {shortName(currentUser.displayName)}</Text>
             <Text style={styles.subtitle} numberOfLines={1}>Ready to play? 💕</Text>
           </View>
         </View>
