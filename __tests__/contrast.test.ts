@@ -38,22 +38,22 @@ const NORMAL_TEXT_AAA: [string, string, string][] = [
   ['white on error/delete fill', WHITE, Colors.errorDark],
   // Board bonus-square labels (solid white / solid dark text)
   ['white on TW square', WHITE, Colors.tw],
-  ['white on DW square', WHITE, Colors.dw],
+  ['dark text on DW square', Colors.text, Colors.dw],
   ['white on TL square', WHITE, Colors.tl],
   ['dark text on DL square', Colors.text, Colors.dl],
   ['white on START square', WHITE, Colors.start],
   // Action buttons — Swap (blue) / Pass (amber) label text on their tinted fills
   ['swap label on swap fill', Colors.swapText, Colors.swapBg],
   ['pass label on pass fill', Colors.passText, Colors.passBg],
-  // Mode accents: partner (berry) and friend (coral)
+  // Mode accents: partner (berry) and friend (greige)
   ['partner label on partner fill', modeAccent('partner').onFill, modeAccent('partner').fill],
   ['partner chip text on partner chip', modeAccent('partner').onChip, modeAccent('partner').chip],
   ['partner text on page bg', Colors.partner, Colors.background],
   ['partner text on white', Colors.partner, Colors.surface],
   ['friend label on friend fill', modeAccent('friend').onFill, modeAccent('friend').fill],
   ['friend chip text on friend chip', modeAccent('friend').onChip, modeAccent('friend').chip],
-  ['white on partner double-word square', WHITE, doubleWordColor('partner')],
-  ['white on friend double-word square', WHITE, doubleWordColor('friend')],
+  ['dark text on partner double-word square', Colors.text, doubleWordColor('partner')],
+  ['dark text on friend double-word square', Colors.text, doubleWordColor('friend')],
 ];
 
 // Non-text UI components must clear 3:1 (WCAG 2.1 AA 1.4.11). The Swap/Pass
@@ -65,6 +65,8 @@ const NON_TEXT_AA: [string, string, string][] = [
   ['swap border on page bg', Colors.swapBorder, Colors.background],
   ['pass border on pass fill', Colors.passBorder, Colors.passBg],
   ['pass border on page bg', Colors.passBorder, Colors.background],
+  ['border on white (cards, inputs)', Colors.border, Colors.surface],
+  ['border on page bg', Colors.border, Colors.background],
   // Stats win-rate meter: primary fill on the tilePlaced track.
   ['stats meter fill on track', Colors.primary, Colors.tilePlaced],
 ];

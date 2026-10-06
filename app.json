@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F1F7F6"
+      "backgroundColor": "#F3E9E7"
     },
     "ios": {
       "supportsTablet": false,
@@ -23,7 +23,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F1F7F6"
+        "backgroundColor": "#6B1840"
       },
       "package": "com.lovewords.app"
     },
@@ -34,7 +34,7 @@
       [
         "expo-notifications",
         {
-          "color": "#0B5F5A"
+          "color": "#7A1F4A"
         }
       ]
     ],

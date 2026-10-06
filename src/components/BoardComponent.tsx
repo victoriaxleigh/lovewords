@@ -163,7 +163,7 @@ export default function BoardComponent({
                     width: cellSize,
                     height: cellSize,
                     backgroundColor: hasTile ? 'transparent' : bonusBg,
-                    borderColor: hasTile ? '#333' : '#24423E',
+                    borderColor: hasTile ? '#333' : '#3F2E35',
                     borderWidth: 0.5,
                   },
                 ]}
@@ -182,7 +182,7 @@ export default function BoardComponent({
                   <Text style={[
                     styles.bonusText,
                     { fontSize: cellSize * 0.22 },
-                    cell.bonus === 'DL' && styles.bonusTextDark,
+                    (cell.bonus === 'DL' || cell.bonus === 'DW') && styles.bonusTextDark,
                   ]}>
                     {BONUS_LABELS[cell.bonus]}
                   </Text>

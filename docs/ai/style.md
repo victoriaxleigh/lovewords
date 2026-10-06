@@ -20,19 +20,23 @@ already built. When this doc and the code disagree, the token files win:
 
 | Token | Hex | Use |
 |---|---|---|
-| `background` | #F1F7F6 | page background |
+| `background` | #F3E9E7 | page background (beige-berry) |
 | `surface` | #FFFFFF | cards, sheets, inputs |
-| `primary` | #0B5F5A | fills behind white text; primary-coloured text on white |
-| `primaryDark` | #07423F | primary-coloured **text** on the page bg or `tilePlaced` (titles, links, initials) |
-| `text` | #0F2422 | body text |
-| `textLight` | #365A56 | secondary text on white or the page bg. **Not** on `tilePlaced` (fails AAA) |
-| `border` | #A9CFCA | borders, disabled button fill |
-| `tilePlaced` | #CFE9E5 | avatar/icon chips, selected pills |
+| `primary` | #7A1F4A | berry: the one CTA fill behind white text, unread dots; berry text on white |
+| `primaryDark` | #5C1438 | deep berry **text** on the page bg or `tilePlaced` (titles, links, initials) |
+| `text` | #1E1A1D | body text, outlined-button labels |
+| `textLight` | #55454B | secondary text on white or the page bg. **Not** on `tilePlaced` (fails AAA) |
+| `border` | #908078 | borders, disabled button fill (3:1) |
+| `tilePlaced` | #E8D5D6 | avatar/icon chips, selected pills |
 | `errorDark` | #9B1C1C | error text, destructive buttons (white text on it) |
-| `swap*` / `pass*` | blue / amber | Swap and Pass buttons only |
-| `partner` `partnerDark` `partnerChip` | #8C1D4E / #6E123C / #F6DCE6 | **Partner games only**: love notes, the Partner pill, double-word squares. Use `modeAccent('partner')`. Berry never sits directly on a teal fill |
-| `friend` | #F2937F | **Friend games only**: messages and highlights, with dark `text` on it. Use `modeAccent('friend')` |
-| `boardBg`, `emptyCell`, `tw` `dw` `tl` `dl` `start` | | board only |
+| `swap*` / `pass*` | white / ink | Swap and Pass: plain outlined buttons, no hue |
+| `partner` `partnerDark` `partnerChip` | #7A1F4A / #5C1438 / #F0D9E0 | **Partner games**: love notes and the Partner pill. Use `modeAccent('partner')` |
+| `friend` `friendChip` | #5F5750 / #E4DDD6 | **Friend games**: messages and highlights (greige, white label). Use `modeAccent('friend')` |
+| `boardBg`, `emptyCell`, `tw` `dw` `tl` `dl` `start` | | board only. Warm = word, cool = letter; darker = triple, lighter = double |
+
+**Palette rule.** Neutrals do the work (beige-berry, greige, near-black, white). Berry
+is a pop: one primary button per screen, dots, the heart, triple-word squares. Don't add
+a third hue.
 
 White text on `primary` or `errorDark` is written as a literal `#fff` throughout. That's
 fine, but prefer `Colors.surface` in new code.
@@ -75,14 +79,14 @@ labels.
   pills and chips. 44px circles (radius 22) for avatars and round icon buttons.
 - **Borders:** 1px `Colors.border`. Use 1.5px for outlined secondary buttons and for the
   highlighted "your turn" card.
-- **Shadows:** `SHADOWS.card` on cards; `SHADOWS.btn` (teal glow) on primary CTAs only.
+- **Shadows:** `SHADOWS.card` on cards; `SHADOWS.btn` (berry glow) on primary CTAs only.
 
 ## Components
 
-- **Primary button:** `primary` fill, `RADII.md`, 14–16 vertical padding, white
+- **Primary button:** `primary` (berry) fill, `RADII.md`, 14–16 vertical padding, white
   700/800 label, `SHADOWS.btn`. When disabled, the fill becomes `border`.
 - **Secondary button:** `surface` fill, 1px `border`, `text` label at 600/700. The outlined
-  variant uses a 1.5px `primary` border with a `primaryDark` label.
+  variant uses a 1.5px `text` border with a `text` label.
 - **Destructive button:** `errorDark` fill, white label.
 - **Card or list row:** white, radius 14–18, padding 14, `SHADOWS.card`, with a 44px
   `tilePlaced` avatar circle on the left and a "›" chevron on the right where it navigates.
