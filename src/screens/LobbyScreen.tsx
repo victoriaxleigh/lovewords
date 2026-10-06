@@ -47,6 +47,13 @@ function initials(name: string) {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
+// "Tom Dugan" -> "Tom D." so long names don't crowd the score column. Single names pass through.
+function shortName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] ?? name;
+  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+}
+
 export default function LobbyScreen({ currentUser }: Props) {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -421,7 +428,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const name = opponent?.displayName ?? 'Player';
             const soloG = isSoloGame(game);
             const myLabel = soloG ? 'P1' : 'You';
-            const oppLabel = soloG ? 'P2' : name;
+            const oppLabel = soloG ? 'P2' : shortName(name);
             const unread = soloG ? 0 : unreadByGame[game.id] ?? 0;
             const noteNoun = game.mode === 'friend' ? 'message' : 'love note';
             const unreadLabel = unread > 0 ? `, ${unread} unread ${noteNoun}${unread === 1 ? '' : 's'}` : '';
@@ -465,11 +472,11 @@ export default function LobbyScreen({ currentUser }: Props) {
                   <View style={styles.gameCardRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, myWins && styles.scoreNameWin]} numberOfLines={1}>{myLabel}</Text>
-                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]}>{myScore}</Text>
+                      <Text style={[styles.scoreValue, myWins && styles.scoreValueWin]} numberOfLines={1}>{myScore}</Text>
                     </View>
                     <View style={styles.scoreRow}>
                       <Text style={[styles.scoreName, oppWins && styles.scoreNameWin]} numberOfLines={1}>{oppLabel}</Text>
-                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]}>{oppScore}</Text>
+                      <Text style={[styles.scoreValue, oppWins && styles.scoreValueWin]} numberOfLines={1}>{oppScore}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -640,11 +647,11 @@ const styles = StyleSheet.create({
   statusChipActive: { backgroundColor: Colors.primary },
   statusChipText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
   statusChipTextActive: { color: '#fff' },
-  gameCardRight: { minWidth: 72, maxWidth: 104, gap: 3, marginLeft: 8, flexShrink: 0 },
+  gameCardRight: { minWidth: 84, maxWidth: 124, gap: 3, marginLeft: 8, flexShrink: 0 },
   scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6 },
   scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, textAlign: 'right' },
   scoreNameWin: { color: Colors.text, fontWeight: '800' },
-  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 24, textAlign: 'right' },
+  scoreValue: { fontSize: 18, fontWeight: '700', color: Colors.textLight, minWidth: 40, flexShrink: 0, textAlign: 'right' },
   scoreValueWin: { fontSize: 20, fontWeight: '900', color: Colors.primary },
   errorBanner: {
     flexDirection: 'row',
