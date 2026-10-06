@@ -19,3 +19,22 @@ export function shortName(name: string | undefined | null): string {
   // Spread rather than charAt(0) so an initial outside the BMP isn't split in half.
   return `${parts[0]} ${[...surname][0].toUpperCase()}.`;
 }
+
+// shortName for a list of people shown together, such as the Stats opponent rows or the lobby
+// game cards. When two different names would shorten to the same thing ("Tom Dugan" and
+// "Tom Davis" are both "Tom D."), those names are shown in full so the rows can be told apart.
+export function shortNamesFor(names: (string | undefined | null)[]): (name: string | undefined | null) => string {
+  const tidy = (name: string | undefined | null) => (name ?? '').trim().replace(/\s+/g, ' ');
+  const fullNamesByShort = new Map<string, Set<string>>();
+  for (const name of names) {
+    const full = tidy(name);
+    const short = shortName(full);
+    if (!short) continue;
+    if (!fullNamesByShort.has(short)) fullNamesByShort.set(short, new Set());
+    fullNamesByShort.get(short)!.add(full);
+  }
+  return (name) => {
+    const short = shortName(name);
+    return (fullNamesByShort.get(short)?.size ?? 0) > 1 ? tidy(name) : short;
+  };
+}

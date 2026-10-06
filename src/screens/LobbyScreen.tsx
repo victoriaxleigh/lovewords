@@ -29,7 +29,7 @@ import { getUserByEmail, PublicProfile } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, GameMode, Player } from '../types';
 import { Colors } from '../utils/colors';
-import { shortName } from '../utils/displayName';
+import { shortName, shortNamesFor } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
@@ -241,6 +241,10 @@ export default function LobbyScreen({ currentUser }: Props) {
   const activeGames = games.filter((g) => g.status === 'active');
   const pastGames = games.filter((g) => g.status === 'finished');
   const tabGames = activeTab === 'active' ? activeGames : pastGames;
+  // Built from every game, not just this tab, so a name reads the same on both tabs.
+  const displayOpponentName = shortNamesFor(
+    games.filter((g) => !isSoloGame(g)).map((g) => getOpponent(g)?.displayName)
+  );
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'active', label: 'Active', count: activeGames.length },
@@ -422,7 +426,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const name = opponent?.displayName ?? 'Player';
             const soloG = isSoloGame(game);
             const myLabel = soloG ? 'P1' : 'You';
-            const oppLabel = soloG ? 'P2' : shortName(name);
+            const oppLabel = soloG ? 'P2' : displayOpponentName(name);
             const unread = soloG ? 0 : unreadByGame[game.id] ?? 0;
             const noteNoun = game.mode === 'friend' ? 'message' : 'love note';
             const unreadLabel = unread > 0 ? `, ${unread} unread ${noteNoun}${unread === 1 ? '' : 's'}` : '';
@@ -452,7 +456,7 @@ export default function LobbyScreen({ currentUser }: Props) {
                   </View>
                   <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <Text style={styles.opponentName} numberOfLines={2}>
-                      {isSoloGame(game) ? 'Solo practice' : shortName(name)}
+                      {isSoloGame(game) ? 'Solo practice' : displayOpponentName(name)}
                     </Text>
                     <View style={styles.metaRow}>
                       <Text style={styles.modeBadge}>{modeBadge(game)}</Text>
