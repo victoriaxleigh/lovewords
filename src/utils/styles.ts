@@ -1,4 +1,6 @@
 // Shared design tokens — import instead of hardcoding values in each screen.
+import { Colors } from './colors';
+
 export const RADII = {
   sm: 8,    // small inline buttons (delete confirm, etc.)
   md: 12,   // primary buttons, text inputs
@@ -15,7 +17,7 @@ export const SHADOWS = {
     elevation: 2,
   },
   btn: {
-    shadowColor: '#E91E8C' as const,
+    shadowColor: Colors.primary,
     shadowOpacity: 0.4,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,

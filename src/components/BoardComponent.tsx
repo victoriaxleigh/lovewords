@@ -8,9 +8,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Board, PlacedTile, Tile } from '../types';
+import { Board, GameMode, PlacedTile, Tile } from '../types';
 import { BOARD_SIZE } from '../engine/board';
-import { Colors } from '../utils/colors';
+import { Colors, doubleWordColor } from '../utils/colors';
 import TileComponent from './TileComponent';
 
 const DRAG_THRESHOLD = 5;
@@ -53,6 +53,8 @@ type Props = {
   boardTileDragCallbacks?: BoardTileDragCallbacks;
   lastMoveTiles?: Set<string>;
   boardDraggingTileId?: string | null;
+  /** Game mode; partner games draw double-word squares in berry. */
+  mode?: GameMode;
 };
 
 function DraggablePendingTile({
@@ -131,8 +133,9 @@ const BONUS_BG: Record<string, string> = {
 
 export default function BoardComponent({
   board, pendingTiles, selectedTile, onCellPress, onTilePress, isMyTurn, boardRef,
-  boardTileDragCallbacks, lastMoveTiles, boardDraggingTileId,
+  boardTileDragCallbacks, lastMoveTiles, boardDraggingTileId, mode,
 }: Props) {
+  const bonusBgFor: Record<string, string> = { ...BONUS_BG, DW: doubleWordColor(mode) };
   const { width, height } = useWindowDimensions();
   const cellSize = computeCellSize(width, height);
   const pendingMap = new Map(pendingTiles.map((t) => [`${t.row},${t.col}`, t]));
@@ -144,7 +147,7 @@ export default function BoardComponent({
           {rowCells.map((cell, col) => {
             const pending = pendingMap.get(`${row},${col}`);
             const hasTile = cell.tile !== null || pending !== undefined;
-            const bonusBg = cell.bonus ? BONUS_BG[cell.bonus] : Colors.emptyCell;
+            const bonusBg = cell.bonus ? bonusBgFor[cell.bonus] : Colors.emptyCell;
             const canPlace = isMyTurn && selectedTile && !hasTile;
             const isLastMove = !!cell.tile && (lastMoveTiles?.has(`${row},${col}`) ?? false);
 
@@ -160,7 +163,7 @@ export default function BoardComponent({
                     width: cellSize,
                     height: cellSize,
                     backgroundColor: hasTile ? 'transparent' : bonusBg,
-                    borderColor: hasTile ? '#333' : '#3D1A28',
+                    borderColor: hasTile ? '#333' : '#24423E',
                     borderWidth: 0.5,
                   },
                 ]}

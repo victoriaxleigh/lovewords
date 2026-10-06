@@ -1,7 +1,7 @@
 import { createTileBag, drawTiles, shuffle } from '../src/engine/tiles';
 
 describe('Tile Bag', () => {
-  test('creates exactly 104 tiles (WWF distribution)', () => {
+  test('creates exactly 104 tiles (LoveWords distribution)', () => {
     const bag = createTileBag();
     expect(bag).toHaveLength(104);
   });

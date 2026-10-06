@@ -21,7 +21,7 @@ type Placement = {
   isBlank?: boolean;
 };
 
-// WWF tile values.
+// LoveWords tile values.
 const VALUES: Record<string, number> = {
   A: 1, B: 4, C: 4, D: 2, E: 1, F: 4, G: 3, H: 3, I: 1, J: 10, K: 5, L: 2, M: 4,
   N: 2, O: 1, P: 4, Q: 10, R: 1, S: 1, T: 1, U: 2, V: 5, W: 4, X: 8, Y: 3, Z: 10,
@@ -222,13 +222,13 @@ describe('move generation', () => {
 
     expect(moves.length).toBeGreaterThan(0);
     const best = moves[0];
-    // CARTELS across from (7,3): C on the (7,3) DL is 8, then A/R/T/E/L/S are
-    // 1+1+1+1+2+1 -> 15; the E on the START square doubles the word to 30; the
-    // seven-tile bingo adds 35. 65.
-    expect(best.score).toBe(65);
+    // CARTELS across from (7,2): C on the (7,2) TL is 12, then A/R/T/E/L/S are
+    // 1+1+1+1+2+1 -> 19; the E on the START square doubles the word to 38; the
+    // seven-tile bingo adds 35. 73.
+    expect(best.score).toBe(73);
     expect(best.placements).toHaveLength(7);
     expect(best.word).toBe('CARTELS');
-    expect(best.col).toBe(3);
+    expect(best.col).toBe(2);
     expect(
       best.placements.some((p: Placement) => p.row === 7 && p.col === 7)
     ).toBe(true);
@@ -246,24 +246,24 @@ describe('move generation', () => {
     const { moves } = solver.findBestMoves(grid, rack('RETINAS'));
     const best = moves[0];
 
-    // ANESTRI down column 10, rows 4-10. Letters A/N/E/S/T/R/I are
-    // 1+2+1+1+1+1+1 = 8; (4,10) and (10,10) are both DW, so 8 x 4 = 32.
-    // The S at (7,10) also extends CAT into CATS: 4+1+1 (old tiles, bare) + 1 = 7.
-    // 32 + 7 = 39 for the words, + 35 for the bingo = 74.
-    expect(best.word).toBe('ANESTRI');
+    // Several anagrams of RETINAS tie for the top score, so the test does not
+    // pin which one the solver lists first. Down column 10, rows 2-8: the letters
+    // are 1+2+1+1+1+1+1 = 8 and (2,10) is a DW, so 8 x 2 = 16. The tile on
+    // (7,10) also extends CAT into CATE/CATS: 4+1+1 (old tiles, bare) + 1 = 7.
+    // 16 + 7 = 23 for the words, + 35 for the bingo = 58.
     expect(best.placements).toHaveLength(7);
-    expect(best.words).toEqual([
-      { word: 'ANESTRI', score: 32 },
-      { word: 'CATS', score: 7 },
-    ]);
-    expect(best.score).toBe(74);
+    expect(best.word).toHaveLength(7);
+    expect([...best.word].sort().join('')).toBe('AEINRST');
+    expect(best.words.map((w: any) => w.score)).toEqual([16, 7]);
+    expect(best.words[0].word).toBe(best.word);
+    expect(best.score).toBe(58);
 
     const wordSum = best.words.reduce((sum: number, w: any) => sum + w.score, 0);
-    expect(wordSum).toBe(39);
+    expect(wordSum).toBe(23);
     expect(best.score - wordSum).toBe(35);
     // And the TypeScript engine agrees.
     const { board } = position([spell('CAT', 7, 7, 'across')]);
-    expect(scoreMove(board, toPlacedTiles(best.placements)).total).toBe(74);
+    expect(scoreMove(board, toPlacedTiles(best.placements)).total).toBe(58);
   });
 
   test('a blank is played as whatever letter scores best, always for zero', () => {
@@ -474,8 +474,8 @@ describe('solveGame', () => {
     const turn1 = result.turns[0];
     expect(turn1.status).toBe('solved');
     expect(turn1.best.length).toBeGreaterThan(0);
-    expect(turn1.best[0].score).toBe(65);
-    expect(turn1.pointsLeft).toBe(65 - 18);
+    expect(turn1.best[0].score).toBe(73);
+    expect(turn1.pointsLeft).toBe(73 - 18);
     expect(turn1.wasBest).toBe(false);
   });
 
@@ -489,7 +489,7 @@ describe('solveGame', () => {
   });
 
   test('finding the top play reports wasBest and zero points left', () => {
-    const best = { ...exportData.moves[0], score: 65, words: [{ word: 'CARTELS', score: 30 }] };
+    const best = { ...exportData.moves[0], score: 73, words: [{ word: 'CARTELS', score: 38 }] };
     const result = solver.solveGame(
       { ...exportData, moves: [best] },
       { askingAlias: 'player-1' }

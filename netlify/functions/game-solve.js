@@ -98,6 +98,7 @@ exports.handler = async (event) => {
       'status',
       'mode',
       'moves',
+      'board',
       'created_at',
       'updated_at',
     ]);

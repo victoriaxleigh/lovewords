@@ -11,7 +11,7 @@
 > **Deploying?** See `DEPLOY.md` for the full runbook (env vars + scopes, migrations, verify, rollback).
 
 ## What This App Is
-**LoveWords** is a Words with Friends clone built as a web app (targeting App Store next).
+**LoveWords** is an async two-player word game built as a web app (targeting App Store next).
 - **Partner mode** (the original): a couple plays async against each other — love notes, 💕 copy
 - **Friend mode** (built Session 9): any two friends, same game/engine, neutral copy ("Messages" instead of "Love Notes", non-romantic quick-notes). Smack talk stays in both. Chosen per-game via the New Game modal's Partner/Friend toggle; stored in `games.mode`
 - Built with **Expo ~54 / React Native 0.81 / React 19** (web-only today; native iOS/Android is the next milestone)
@@ -85,7 +85,7 @@ C:\Users\victo\lovewords\
     │   └── ScoreBoard.tsx           ← Score + bag count header
     ├── engine/
     │   ├── board.ts                 ← createEmptyBoard, isValidPlacement, applyMoveToBoard, BOARD_SIZE=15
-    │   ├── scoring.ts               ← scoreMove, getFormedWords (WWF bonus rules)
+    │   ├── scoring.ts               ← scoreMove, getFormedWords (bonus rules)
     │   ├── tiles.ts                 ← createTileBag, drawTiles, shuffle, exchangeTiles
     │   └── dictionary.ts            ← validateWords (async, ENABLE list, localStorage cache)
     ├── supabase/
@@ -657,7 +657,7 @@ Added Session 7 (2026-07-06). Makes LoveWords installable to the iPhone Home
 Screen with a custom icon and a notification count badge on the tile.
 
 ### Logo
-- **Source of truth:** `assets/logo/icon.svg` — a white WWF-style tile with a pink
+- **Source of truth:** `assets/logo/icon.svg` — a white letter tile with a pink
   heart and an "8" point value, on a pink gradient (full-bleed so iOS can mask the
   corners). Edit this SVG, then re-run `npm run icons` to regenerate all PNGs.
 - `scripts/generate-icons.js` (sharp) renders it into:
@@ -711,7 +711,7 @@ Registration (`authService.ts`):
 
 ### `board.ts`
 - `BOARD_SIZE = 15`
-- `createEmptyBoard()` — builds 15×15 with WWF bonus square layout
+- `createEmptyBoard()` — builds 15×15 with the LoveWords premium-square layout (stored per game, so older games keep the layout they started on)
 - `isValidPlacement(board, tiles, isFirstMove)` — checks: same row OR col, no occupied cells, first move covers (7,7), subsequent moves adjacent to existing tile
 - `applyMoveToBoard(board, tiles)` — returns new board with tiles committed
 - `getCell(board, row, col)` — returns null if out of bounds
@@ -721,7 +721,7 @@ Registration (`authService.ts`):
 - `getFormedWords(board, placedTiles)` → `string[]` — convenience wrapper
 
 ### `tiles.ts`
-- `createTileBag()` — WWF-style distribution (104 tiles: 9×A, 11×E, 8×I, 8×O, 7×R, 5×S, 8×T, 2 blanks, etc.), shuffled with Fisher-Yates. E was trimmed 13→11 (→ R, T) to cut vowel-heavy racks — see the comment in `tiles.ts` for the full rationale. Changing counts only affects **new** games.
+- `createTileBag()` — LoveWords distribution (104 tiles: 9×A, 11×E, 8×I, 8×O, 7×R, 5×S, 8×T, 2 blanks, etc.), shuffled with Fisher-Yates. E was trimmed 13→11 (→ R, T) to cut vowel-heavy racks — see the comment in `tiles.ts` for the full rationale. Changing counts only affects **new** games.
 - Tile IDs use `crypto.randomUUID()` — collision-proof across reloads and sessions. Native browser API, no polyfill needed.
 - `drawTiles(bag, count)` → `{ drawn, remaining }` — takes from front of array
 - `shuffle(arr)` — Fisher-Yates
@@ -868,7 +868,7 @@ Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`,
 - **⚠️ Deploy step**: run the single `alter table … add column mode` statement in Supabase before deploying (existing games default to partner).
 - **WCAG AAA (contrast) — palette hardened**: the brand was deepened for 7:1 text contrast (AAA normal; 4.5:1 large). Tokens in `colors.ts`: `primary #A8005F` (white-on-fill 7.42, primary-text-on-white 7.42), `primaryDark #7A0046` (primary text on light bgs / tilePlaced ≥8.4, on white 10.96), `textLight #7A3453` (secondary text: 8.6 on white, 7.8 on pink bg — **not** to be placed on the `tilePlaced` fill, only 6.6 there), and new `errorDark #9B1C1C` (error text + delete buttons; white-on-it 8.15, text-on-banner 7.36). All hardcoded `#C0392B`/`'red'` error colors across every screen were swapped to `Colors.errorDark`. A Node contrast script verified **every text pair ≥7:1** on the redesigned screens + ScoreBoard + game chrome (the 28px score is large so its 6.75 on pink passes AAA-large). The board's brighter `dw`/`tw` bonus pinks are unchanged (see caveat).
 - **Emoji accessibility (WCAG 1.1.1 / 1.4.1, Level A)**: game cards got a single descriptive `accessibilityLabel` (e.g. "Friend game with Sam, Your turn, score 12 to 8") and their inner decorative content (avatar, badges, score) is hidden from screen readers via `accessibilityElementsHidden` + `importantForAccessibility="no-hide-descendants"` — so the mode (💕/🎲) is announced in words, not as "two hearts / game die", and emoji aren't read individually.
-- **⚠️ NOT yet AAA — the game board bonus-square labels** (`BoardComponent.tsx`): the "TW/DW/TL/DL" labels are 85%-opacity white/dark on the colorful bonus squares. Several are <7:1 and the **DW pink square fails even AA**. Making them AAA means recoloring the iconic WWF bonus squares (a deliberate design change) — deferred pending that decision.
+- **⚠️ NOT yet AAA — the game board bonus-square labels** (`BoardComponent.tsx`): the "TW/DW/TL/DL" labels are 85%-opacity white/dark on the colorful bonus squares. Several are <7:1 and the **DW pink square fails even AA**. Making them AAA means recoloring the classic-looking bonus-square colours (a deliberate design change) — deferred pending that decision.
 - **Phase 2 (not built)**: random matchmaking — deferred; needs an RLS rewrite (current policies assume both uids known at insert) + stranger-safety design.
 - **Verified (Session 9)**: `tsc` introduces no new errors (4 pre-existing remain); 63/63 jest tests pass. Driven end-to-end in the live Expo dev server via the `?dev=1` mock: redesigned home + New Game modal + Partner/Friend toggle, a Friend game created and entered, and the in-game relabel confirmed ("💬 Chat", 🎲 banner, "Messages 💬" chat with neutral quick-notes). Active/Past tabs only.
 

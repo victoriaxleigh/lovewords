@@ -12,7 +12,7 @@ already built. When this doc and the code disagree, the token files win:
 - **Contrast is tested.** Text meets WCAG AAA (7:1), and borders and other non-text UI
   meet 3:1. Every new text/background pair goes into `__tests__/contrast.test.ts`.
 - **Light mode only.** `app.json` sets `userInterfaceStyle: "light"`. The board and rack
-  are deliberately dark inside the light pink page; don't "fix" that.
+  are deliberately dark inside the light page; don't "fix" that.
 - **System font only.** No custom fonts and no `fontFamily`.
 - **Check at phone width** (about 375px) in `?dev=1` before calling UI work done.
 
@@ -20,16 +20,18 @@ already built. When this doc and the code disagree, the token files win:
 
 | Token | Hex | Use |
 |---|---|---|
-| `background` | #FFF0F5 | page background |
+| `background` | #F1F7F6 | page background |
 | `surface` | #FFFFFF | cards, sheets, inputs |
-| `primary` | #A8005F | fills behind white text; primary-coloured text on white |
-| `primaryDark` | #7A0046 | primary-coloured **text** on pink or `tilePlaced` (titles, links, initials) |
-| `text` | #2D0A1E | body text |
-| `textLight` | #7A3453 | secondary text on white or pink. **Not** on `tilePlaced` (fails AAA) |
-| `border` | #F0A8C8 | borders, disabled button fill |
-| `tilePlaced` | #FFD6EC | avatar/icon chips, selected pills |
+| `primary` | #0B5F5A | fills behind white text; primary-coloured text on white |
+| `primaryDark` | #07423F | primary-coloured **text** on the page bg or `tilePlaced` (titles, links, initials) |
+| `text` | #0F2422 | body text |
+| `textLight` | #365A56 | secondary text on white or the page bg. **Not** on `tilePlaced` (fails AAA) |
+| `border` | #A9CFCA | borders, disabled button fill |
+| `tilePlaced` | #CFE9E5 | avatar/icon chips, selected pills |
 | `errorDark` | #9B1C1C | error text, destructive buttons (white text on it) |
 | `swap*` / `pass*` | blue / amber | Swap and Pass buttons only |
+| `partner` `partnerDark` `partnerChip` | #8C1D4E / #6E123C / #F6DCE6 | **Partner games only**: love notes, the Partner pill, double-word squares. Use `modeAccent('partner')`. Berry never sits directly on a teal fill |
+| `friend` | #F2937F | **Friend games only**: messages and highlights, with dark `text` on it. Use `modeAccent('friend')` |
 | `boardBg`, `emptyCell`, `tw` `dw` `tl` `dl` `start` | | board only |
 
 White text on `primary` or `errorDark` is written as a literal `#fff` throughout. That's
@@ -45,7 +47,7 @@ new ones; promoting them to tokens is welcome:
 **Don't copy these.** They're known drift:
 
 - `Colors.error` (#F44336) used as text. Use `errorDark`.
-- A hardcoded `#FFF0F5`. Use `Colors.background`.
+- A hardcoded page colour. Use `Colors.background`.
 - `Colors.success` and `Colors.warning` are unused and not contrast-checked.
 
 ## Type
@@ -73,7 +75,7 @@ labels.
   pills and chips. 44px circles (radius 22) for avatars and round icon buttons.
 - **Borders:** 1px `Colors.border`. Use 1.5px for outlined secondary buttons and for the
   highlighted "your turn" card.
-- **Shadows:** `SHADOWS.card` on cards; `SHADOWS.btn` (pink glow) on primary CTAs only.
+- **Shadows:** `SHADOWS.card` on cards; `SHADOWS.btn` (teal glow) on primary CTAs only.
 
 ## Components
 
@@ -101,7 +103,7 @@ labels.
 - There's no icon library; don't add one for a single icon.
 - **Pixel-art badges** live in `assets/achievements/<id>.png`: 64px, with `@2x`/`@3x`
   nearest-neighbour versions. On web, render them with `imageRendering: 'pixelated'` so the
-  browser doesn't blur them. New pixel art should match their pink-and-gold palette.
+  browser doesn't blur them. New pixel art should match their pink-and-gold palette (these badges have not been recoloured yet).
 
 ## Copy
 

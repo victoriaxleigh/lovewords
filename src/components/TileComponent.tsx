@@ -58,7 +58,7 @@ export default function TileComponent({
           shadowOffset: { width: 0, height: highlight ? 0 : 2 },
           elevation: selected ? 6 : highlight ? 6 : 4,
           transform: [{ scale: selected ? 1.08 : 1 }],
-          borderColor: selected ? Colors.primary : highlight ? '#FFB300' : '#E0C8D0',
+          borderColor: selected ? Colors.primary : highlight ? '#FFB300' : '#C9D8D5',
           borderWidth: selected ? 2.5 : highlight ? 2 : 1,
           zIndex: selected ? 10 : 1,
         },
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#E0C8D0',
+    borderColor: '#C9D8D5',
     margin: 2,
   },
   letter: {

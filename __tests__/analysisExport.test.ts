@@ -158,11 +158,11 @@ describe('finished-game analysis sanitization', () => {
         },
       ],
       boardMetadata: {
-        version: 1,
+        version: 2,
         size: 15,
         coordinates: { base: 0, origin: 'top-left' },
         bonusSquares: {
-          TW: expect.arrayContaining([[0, 0], [7, 14], [14, 14]]),
+          TW: expect.arrayContaining([[1, 1], [3, 11], [13, 13]]),
           START: [[7, 7]],
         },
       },

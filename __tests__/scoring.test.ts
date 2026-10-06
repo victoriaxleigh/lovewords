@@ -50,23 +50,22 @@ describe('scoreMove — basic scoring', () => {
 describe('scoreMove — bonus squares', () => {
   test('double letter bonus doubles that tile value', () => {
     const board = createEmptyBoard();
-    // (0,3) is DL — place a Q(10) there
-    // Q alone isn't a word but we test the math
+    // (0,1) is DL, its neighbour (0,0) is a plain square
     const tiles = [
-      makeTile('t1', 'Q', 10, 0, 3),
-      makeTile('t2', 'I', 1, 0, 4),
+      makeTile('t1', 'I', 1, 0, 0),
+      makeTile('t2', 'Q', 10, 0, 1),
     ];
     const { total } = scoreMove(board, tiles);
-    // Q(10)*2(DL) + I(1) = 21, no word multiplier
+    // I(1) + Q(10)*2(DL) = 21, no word multiplier
     expect(total).toBe(21);
   });
 
   test('triple word bonus triples the word score', () => {
     const board = createEmptyBoard();
-    // (0,0) is TW
+    // (1,1) is TW, (1,2) is plain
     const tiles = [
-      makeTile('t1', 'A', 1, 0, 0),
-      makeTile('t2', 'T', 1, 0, 1),
+      makeTile('t1', 'A', 1, 1, 1),
+      makeTile('t2', 'T', 1, 1, 2),
     ];
     const { total } = scoreMove(board, tiles);
     // A(1) + T(1) = 2 * 3(TW) = 6
@@ -75,10 +74,10 @@ describe('scoreMove — bonus squares', () => {
 
   test('triple letter bonus triples that tile value', () => {
     const board = createEmptyBoard();
-    // (1,5) is TL
+    // (5,6) is TL, (5,7) is plain
     const tiles = [
-      makeTile('t1', 'Z', 10, 1, 5),
-      makeTile('t2', 'A', 1, 1, 6),
+      makeTile('t1', 'Z', 10, 5, 6),
+      makeTile('t2', 'A', 1, 5, 7),
     ];
     const { total } = scoreMove(board, tiles);
     // Z(10)*3(TL) + A(1) = 31
@@ -87,10 +86,10 @@ describe('scoreMove — bonus squares', () => {
 
   test('double word bonus doubles entire word', () => {
     const board = createEmptyBoard();
-    // (1,1) is DW
+    // (0,2) is DW, (0,3) is plain
     const tiles = [
-      makeTile('t1', 'A', 1, 1, 1),
-      makeTile('t2', 'T', 1, 1, 2),
+      makeTile('t1', 'A', 1, 0, 2),
+      makeTile('t2', 'T', 1, 0, 3),
     ];
     const { total } = scoreMove(board, tiles);
     // A(1) + T(1) = 2 * 2(DW) = 4

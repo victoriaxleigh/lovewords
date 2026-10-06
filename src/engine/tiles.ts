@@ -1,13 +1,12 @@
 import { Tile } from '../types';
 
-// Words With Friends-style tile distribution + values (104 tiles total).
-// WWF values (V=5, J/Z=10, B/C/F/M=4) reward landing the rare tiles, and the
+// LoveWords tile distribution + values (104 tiles total).
+// The values (V=5, J/Z=10, B/C/F/M=4) reward landing the rare tiles, and the
 // bag is consonant-topped so racks build words easily. E was trimmed from 13→11
 // (it's the most common tile and was showing up in ~62% of opening racks, which
 // read as "always the same vowels"); those 2 tiles went to R and T. That drops
 // the average vowels-per-rack from ~2.82 to ~2.69 without making racks
-// consonant-heavy. Difference from Scrabble: D 4→5, E 12→11, H 2→4, I 9→8,
-// N 6→5, R 6→7, S 4→5, T 6→8.
+// consonant-heavy.
 const TILE_DISTRIBUTION: { letter: string; value: number; count: number }[] = [
   { letter: 'A', value: 1, count: 9 },
   { letter: 'B', value: 4, count: 2 },

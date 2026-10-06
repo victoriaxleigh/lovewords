@@ -15,13 +15,13 @@ so it retreats to encouragement. The result reads as a cheerleader.
 
 This feature adds a deterministic move generator that runs server-side over the move history. For
 every turn it computes the highest-scoring legal plays available from the rack the player actually
-held, using the real WWF board and scoring rules. Those facts drive a structured per-turn table in
+held, using the LoveWords board and scoring rules. Those facts drive a structured per-turn table in
 the finished-game screen, and are injected into the coach prompt so the AI stops guessing words and
 starts explaining strategy (blocking, premium-square control, rack management).
 
 ## Requirements
 
-- [x] A deterministic solver, given a board position and a rack, enumerates every legal WWF play and
+- [x] A deterministic solver, given a board position and a rack, enumerates every legal play and
   returns the top plays ranked by score, with word, score, start row/col, direction, and which tiles
   came from the rack.
 - [x] The solver's scoring matches `src/engine/scoring.ts` exactly — cross-words, letter/word
@@ -30,7 +30,7 @@ starts explaining strategy (blocking, premium-square control, rack management).
 - [x] The solver reproduces both scoring layers separately: a per-word score that includes that
   word's letter and word multipliers, and a play total that adds the bingo bonus on top. A play
   total is never derived by summing word scores alone.
-- [x] The solver enforces WWF legality: first move covers the centre star, later moves touch an
+- [x] The solver enforces legality: first move covers the centre star, later moves touch an
   existing tile, all tiles share one row or column with no gap, target cells are empty, and every
   formed word (main and cross) is in the dictionary.
 - [x] Blank tiles in a rack are tried as all 26 letters and score 0.

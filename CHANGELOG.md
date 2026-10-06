@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Changed
+
+- **New palette: teal with a berry partner accent.** The brand moves from
+  candy pink to a deep teal (`primary` #0B5F5A) on a cool white page. Partner
+  games keep berry (#8C1D4E) for love notes, the Partner pill and double-word
+  squares; friend games use coral (#F2937F). Bonus squares are brick, teal,
+  indigo and gold. The helper functions `modeAccent` and `doubleWordColor` in
+  `src/utils/colors.ts` pick the accent from the game mode. All text pairs are
+  checked at 7:1 in `__tests__/contrast.test.ts`. The app icon, web manifest,
+  splash background and privacy page are recoloured too. Not yet recoloured:
+  the pixel-art achievement badges.
+- **Original board layout.** The premium squares now use LoveWords' own
+  balanced layout (8 triple-word, 16 double-word, 12 triple-letter, 24
+  double-letter, symmetric on all eight axes, no word premium on the centre
+  row/column, triple-word squares at least 8 apart in a lane). New games use it;
+  games already in progress keep the layout stored on their board. The server
+  solver and analysis export read each game's own layout (export
+  `boardMetadata.version` 2 for the new layout, 1 for older games).
+  Known gap: the client history replay still draws the new layout under old
+  games' tiles (cosmetic only).
+- **Coach.** Renamed away from third-party game names, model string set to
+  `claude-sonnet-5-5`, and each finished game's review is saved per user in
+  `game_coach_notes`, so "Coach me again" re-reads it for free. Optional
+  `COACH_REVIEW_LIMIT` caps saved reviews per user (hook for sold packs).
+
 ### Added
 
 - **Stats pages.** A new 📊 button in the Lobby header opens a Stats screen:
@@ -88,6 +113,15 @@
 
 ### Changed
 
+- **New palette: teal with a berry partner accent.** The brand moves from
+  candy pink to a deep teal (`primary` #0B5F5A) on a cool white page. Partner
+  games keep berry (#8C1D4E) for love notes, the Partner pill and double-word
+  squares; friend games use coral (#F2937F). Bonus squares are brick, teal,
+  indigo and gold. The helper functions `modeAccent` and `doubleWordColor` in
+  `src/utils/colors.ts` pick the accent from the game mode. All text pairs are
+  checked at 7:1 in `__tests__/contrast.test.ts`. The app icon, web manifest,
+  splash background and privacy page are recoloured too. Not yet recoloured:
+  the pixel-art achievement badges.
 - Declined invitations are filtered by PostgREST and removed after 30 days; private discovery,
   notification, lookup-limit, and creation-grant bookkeeping now has scheduled retention.
 - Rack dragging now previews insertion slots and smoothly transitions between reordering and board

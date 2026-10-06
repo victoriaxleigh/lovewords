@@ -259,15 +259,15 @@ describe('game-solve handler', () => {
     expect(turn.isAsking).toBe(true);
     expect(turn.status).toBe('solved');
     expect(turn.played).toEqual({ word: 'CAT', score: 18 });
-    // CARTELS across from (7,3) is the best play from CATERSL on an empty board.
+    // CARTELS across from (7,2) is the best play from CATERSL on an empty board.
     expect(turn.best[0]).toEqual({
       word: 'CARTELS',
-      score: 65,
+      score: 73,
       row: 7,
-      col: 3,
+      col: 2,
       direction: 'across',
     });
-    expect(turn.pointsLeft).toBe(47);
+    expect(turn.pointsLeft).toBe(55);
     expect(turn.wasBest).toBe(false);
   });
 

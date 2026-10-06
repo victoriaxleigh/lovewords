@@ -7,8 +7,12 @@ const TOKEN_TTL_SECONDS = 60 * 60;
 const MAX_DISPLAY_NAME_LENGTH = 40;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Version 2: LoveWords' own premium-square layout. Kept in step with
+// src/engine/board.ts by __tests__/board.test.ts. The solver replays a game on
+// the layout its own export names, so older recorded games still score as
+// they were played.
 const BOARD_METADATA = {
-  version: 1,
+  version: 2,
   size: 15,
   coordinates: {
     base: 0,
@@ -17,20 +21,27 @@ const BOARD_METADATA = {
     columnDirection: 'right',
   },
   bonusSquares: {
-    TW: [[0, 0], [0, 7], [0, 14], [7, 0], [7, 14], [14, 0], [14, 7], [14, 14]],
+    TW: [
+      [1, 1], [1, 13], [3, 3], [3, 11],
+      [11, 3], [11, 11], [13, 1], [13, 13],
+    ],
     DW: [
-      [1, 1], [1, 13], [2, 2], [2, 12], [3, 3], [3, 11], [4, 4], [4, 10],
-      [10, 4], [10, 10], [11, 3], [11, 11], [12, 2], [12, 12], [13, 1], [13, 13],
+      [0, 2], [0, 12], [2, 0], [2, 4],
+      [2, 10], [2, 14], [4, 2], [4, 12],
+      [10, 2], [10, 12], [12, 0], [12, 4],
+      [12, 10], [12, 14], [14, 2], [14, 12],
     ],
     TL: [
-      [1, 5], [1, 9], [5, 1], [5, 5], [5, 9], [5, 13],
-      [9, 1], [9, 5], [9, 9], [9, 13], [13, 5], [13, 9],
+      [2, 7], [5, 6], [5, 8], [6, 5],
+      [6, 9], [7, 2], [7, 12], [8, 5],
+      [8, 9], [9, 6], [9, 8], [12, 7],
     ],
     DL: [
-      [0, 3], [0, 11], [2, 6], [2, 8], [3, 0], [3, 7], [3, 14],
-      [6, 2], [6, 6], [6, 8], [6, 12], [7, 3], [7, 11],
-      [8, 2], [8, 6], [8, 8], [8, 12], [11, 0], [11, 7], [11, 14],
-      [12, 6], [12, 8], [14, 3], [14, 11],
+      [0, 1], [0, 4], [0, 10], [0, 13], [1, 0],
+      [1, 6], [1, 8], [1, 14], [4, 0], [4, 14],
+      [6, 1], [6, 13], [8, 1], [8, 13], [10, 0],
+      [10, 14], [13, 0], [13, 6], [13, 8], [13, 14],
+      [14, 1], [14, 4], [14, 10], [14, 13],
     ],
     START: [[7, 7]],
   },
@@ -356,6 +367,54 @@ function mergeAnalysisEvents(publicMoves, privateRows) {
   return { moves: mergedMoves, allMatched };
 }
 
+const BONUS_NAMES = ['TW', 'DW', 'TL', 'DL', 'START'];
+
+/**
+ * The premium-square layout a game was actually created with, read from its
+ * stored board. Only the bonus labels are read: no tile, letter or tile
+ * position from the stored board is ever copied out. Returns null unless the
+ * board is a well-formed 15x15 grid of known labels, so an odd row falls back
+ * to the current layout instead of exporting a guess.
+ */
+function layoutFromStoredBoard(board) {
+  const size = BOARD_METADATA.size;
+  if (!Array.isArray(board) || board.length !== size) return null;
+  const squares = Object.fromEntries(BONUS_NAMES.map((name) => [name, []]));
+  for (let row = 0; row < size; row++) {
+    const cells = board[row];
+    if (!Array.isArray(cells) || cells.length !== size) return null;
+    for (let col = 0; col < size; col++) {
+      const bonus = cells[col] && typeof cells[col] === 'object' ? cells[col].bonus : null;
+      if (bonus === null || bonus === undefined) continue;
+      if (!BONUS_NAMES.includes(bonus)) return null;
+      squares[bonus].push([row, col]);
+    }
+  }
+  return squares;
+}
+
+function sameSquares(a, b) {
+  const key = ([row, col]) => `${row},${col}`;
+  const left = new Set((a || []).map(key));
+  const right = new Set((b || []).map(key));
+  return left.size === right.size && [...left].every((square) => right.has(square));
+}
+
+/**
+ * Board metadata for one game's export. A game is analysed on the layout it was
+ * played on: games created before the layout changed keep their own premium
+ * squares (reported as version 1), everything else reports the current layout.
+ */
+function boardMetadataForGame(game) {
+  const recorded = layoutFromStoredBoard(game?.board);
+  if (!recorded) return BOARD_METADATA;
+  const current = BOARD_METADATA.bonusSquares;
+  if (BONUS_NAMES.every((name) => sameSquares(recorded[name], current[name]))) {
+    return BOARD_METADATA;
+  }
+  return { ...BOARD_METADATA, version: 1, bonusSquares: recorded };
+}
+
 function sanitizeGameExport(game, privateEvents = []) {
   const sourcePlayers = Array.isArray(game?.players) ? game.players.slice(0, 2) : [];
   const aliases = ['player-1', 'player-2'];
@@ -453,7 +512,7 @@ function sanitizeGameExport(game, privateEvents = []) {
     createdAt: game.created_at || null,
     finishedAt: game.updated_at || null,
     bagCount: Array.isArray(game.bag) ? game.bag.length : 0,
-    boardMetadata: BOARD_METADATA,
+    boardMetadata: boardMetadataForGame(game),
     rules: RULES_METADATA,
     players,
     moves,
@@ -472,6 +531,7 @@ module.exports = {
   AnalysisTokenError,
   BOARD_METADATA,
   TOKEN_TTL_SECONDS,
+  boardMetadataForGame,
   createAnalysisToken,
   fetchAnalysisEvents,
   fetchGame,
@@ -483,5 +543,6 @@ module.exports = {
   parseBearer,
   publicOrigin,
   sanitizeGameExport,
+  supabaseHeaders,
   verifyAnalysisToken,
 };

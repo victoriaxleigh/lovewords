@@ -37,8 +37,10 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Intentionally omit board, current_turn, and player uid columns. The export
-    // is built from a strict whitelist in sanitizeGameExport.
+    // Intentionally omit current_turn and player uid columns. The export is built
+    // from a strict whitelist in sanitizeGameExport. `board` is fetched only so
+    // the export can name the premium-square layout the game was played on;
+    // sanitizeGameExport reads the bonus labels and never copies out a tile.
     const game = await fetchGame(config.supabaseUrl, config.supabaseKey, claims.gid, [
       'id',
       'players',
@@ -46,6 +48,7 @@ exports.handler = async (event) => {
       'status',
       'mode',
       'moves',
+      'board',
       'created_at',
       'updated_at',
     ]);
