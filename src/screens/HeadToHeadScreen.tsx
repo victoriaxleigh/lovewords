@@ -169,7 +169,8 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
     };
   }, [currentUser.uid, opponentUid]);
 
-  const name = shortName(stats?.opponent.displayName ?? opponentName) || 'Player';
+  const fullName = stats?.opponent.displayName ?? opponentName ?? 'Player';
+  const name = shortName(fullName) || 'Player';
 
   function renderBody() {
     if (error) {
@@ -202,7 +203,7 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
           <View
             style={styles.versus}
             accessible
-            accessibilityLabel={`You ${record.wins} wins, ${name} ${record.losses} wins, ${record.ties} ties`}
+            accessibilityLabel={`You ${record.wins} wins, ${fullName} ${record.losses} wins, ${record.ties} ties`}
           >
             <View style={styles.versusSide}>
               <Text style={styles.versusName} numberOfLines={1}>
@@ -248,7 +249,7 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
               key={row.label}
               style={styles.tableRow}
               accessible
-              accessibilityLabel={`${row.label}: you ${row.me}${row.meMeta ? ` (${row.meMeta})` : ''}, ${name} ${row.them}${row.themMeta ? ` (${row.themMeta})` : ''}`}
+              accessibilityLabel={`${row.label}: you ${row.me}${row.meMeta ? ` (${row.meMeta})` : ''}, ${fullName} ${row.them}${row.themMeta ? ` (${row.themMeta})` : ''}`}
             >
               <Text style={[styles.tableCell, styles.tableLabel]}>{row.label}</Text>
               <View style={styles.tableCell}>
