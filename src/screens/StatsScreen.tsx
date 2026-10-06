@@ -20,6 +20,7 @@ import {
   WinRecord,
 } from '../engine/stats';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { Player } from '../types';
 
@@ -93,7 +94,7 @@ function OpponentRow({ opponent, onPress }: { opponent: OpponentSummary; onPress
       </View>
       <View style={styles.rowBody} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Text style={styles.rowName} numberOfLines={1}>
-          {opponent.displayName}
+          {shortName(opponent.displayName)}
         </Text>
         <Text style={styles.rowMeta}>
           {plural(record.played, 'game')} · {formatWinRate(record)} win rate

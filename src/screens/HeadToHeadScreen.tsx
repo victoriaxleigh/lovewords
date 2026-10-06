@@ -17,6 +17,7 @@ import {
   SeatStats,
 } from '../engine/stats';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { GameMode, Player } from '../types';
 
@@ -38,7 +39,7 @@ function formatDate(timestamp: number) {
 }
 
 export function headToHeadStreakCopy(stats: HeadToHeadStats): string {
-  const name = stats.opponent.displayName;
+  const name = shortName(stats.opponent.displayName);
   const { kind, length } = stats.streak;
   const tease = stats.mode === 'friend';
   if (kind === 'win') {
@@ -168,7 +169,7 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
     };
   }, [currentUser.uid, opponentUid]);
 
-  const name = stats?.opponent.displayName ?? opponentName ?? 'Player';
+  const name = shortName(stats?.opponent.displayName ?? opponentName) || 'Player';
 
   function renderBody() {
     if (error) {

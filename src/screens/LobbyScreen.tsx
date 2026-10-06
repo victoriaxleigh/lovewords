@@ -29,6 +29,7 @@ import { getUserByEmail, PublicProfile } from '../supabase/authService';
 import { getHasLifetimeAccess } from '../utils/purchases';
 import { Game, GameMode, Player } from '../types';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { hasReachedFreeGameLimit } from '../utils/freeGameLimit';
 import { useNavigation } from '@react-navigation/native';
@@ -45,13 +46,6 @@ function initials(name: string) {
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-// "Tom Dugan" -> "Tom D." so long names don't crowd the score column. Single names pass through.
-function shortName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return parts[0] ?? name;
-  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
 }
 
 export default function LobbyScreen({ currentUser }: Props) {
@@ -333,7 +327,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const rowBusy = busyId === game.id;
             return (
               <View key={game.id} style={styles.inviteCard}>
-                <Text style={styles.inviteTitle}>{sender.displayName} invited you</Text>
+                <Text style={styles.inviteTitle}>{shortName(sender.displayName)} invited you</Text>
                 <Text style={styles.inviteMeta}>
                   {game.mode === 'friend' ? '🎲 Friend game' : '💕 Partner game'}
                 </Text>
@@ -361,7 +355,7 @@ export default function LobbyScreen({ currentUser }: Props) {
             const rowBusy = busyId === game.id;
             return (
               <View key={game.id} style={styles.inviteCard}>
-                <Text style={styles.inviteTitle}>Waiting for {recipient.displayName}</Text>
+                <Text style={styles.inviteTitle}>Waiting for {shortName(recipient.displayName)}</Text>
                 <Text style={styles.inviteMeta}>Invitation sent — no tiles dealt yet.</Text>
                 <TouchableOpacity
                   style={[styles.inviteButton, styles.cancelInvite]}
@@ -458,7 +452,7 @@ export default function LobbyScreen({ currentUser }: Props) {
                   </View>
                   <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     <Text style={styles.opponentName} numberOfLines={2}>
-                      {isSoloGame(game) ? 'Solo practice' : name}
+                      {isSoloGame(game) ? 'Solo practice' : shortName(name)}
                     </Text>
                     <View style={styles.metaRow}>
                       <Text style={styles.modeBadge}>{modeBadge(game)}</Text>
