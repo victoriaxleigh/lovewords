@@ -11,6 +11,10 @@ const path = require('path');
 
 const INDEX = path.resolve(__dirname, '..', 'dist', 'index.html');
 
+// maximum-scale=1 stops iOS leaving the page zoomed after an input is focused (the chat box).
+const VIEWPORT =
+  '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover" />';
+
 const TAGS = `
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
@@ -27,7 +31,11 @@ function main() {
   }
   let html = fs.readFileSync(INDEX, 'utf8');
 
+  // Runs every build, independent of the idempotent tag injection below.
+  html = html.replace(/<meta name="viewport"[^>]*>/, VIEWPORT);
+
   if (html.includes('rel="manifest"')) {
+    fs.writeFileSync(INDEX, html);
     console.log('inject-web-meta: tags already present, skipping.');
     return;
   }

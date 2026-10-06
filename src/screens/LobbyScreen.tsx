@@ -254,9 +254,9 @@ export default function LobbyScreen({ currentUser }: Props) {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials(currentUser.displayName)}</Text>
           </View>
-          <View>
-            <Text style={styles.greeting}>Hi, {currentUser.displayName}</Text>
-            <Text style={styles.subtitle}>Ready to play? 💕</Text>
+          <View style={styles.greetingWrap}>
+            <Text style={styles.greeting} numberOfLines={2}>Hi, {currentUser.displayName}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Ready to play? 💕</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -450,7 +450,7 @@ export default function LobbyScreen({ currentUser }: Props) {
                     {unread > 0 && <View style={styles.unreadDot} testID={`unread-dot-${game.id}`} />}
                   </View>
                   <View style={styles.gameCardLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    <Text style={styles.opponentName} numberOfLines={1}>
+                    <Text style={styles.opponentName} numberOfLines={2}>
                       {isSoloGame(game) ? 'Solo practice' : name}
                     </Text>
                     <View style={styles.metaRow}>
@@ -528,7 +528,9 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 8,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  // minWidth: 0 lets the greeting shrink/wrap instead of sliding under the header buttons.
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, marginRight: 8 },
+  greetingWrap: { flex: 1, minWidth: 0 },
   avatar: {
     width: 46,
     height: 46,
@@ -541,7 +543,7 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   greeting: { fontSize: 20, fontWeight: '800', color: Colors.text },
   subtitle: { fontSize: 13, color: Colors.textLight, marginTop: 1 },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
   settingsBtn: {
     width: 44,
     height: 44,
@@ -625,7 +627,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.surface,
   },
-  gameCardLeft: { flex: 1 },
+  gameCardLeft: { flex: 1, minWidth: 0 },
   opponentName: { fontSize: 16, fontWeight: '800', color: Colors.text },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
   modeBadge: { fontSize: 14 },
@@ -638,7 +640,7 @@ const styles = StyleSheet.create({
   statusChipActive: { backgroundColor: Colors.primary },
   statusChipText: { fontSize: 12, fontWeight: '700', color: Colors.textLight },
   statusChipTextActive: { color: '#fff' },
-  gameCardRight: { minWidth: 84, maxWidth: 132, gap: 3, marginLeft: 8 },
+  gameCardRight: { minWidth: 72, maxWidth: 104, gap: 3, marginLeft: 8, flexShrink: 0 },
   scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6 },
   scoreName: { fontSize: 12, fontWeight: '600', color: Colors.textLight, flexShrink: 1, textAlign: 'right' },
   scoreNameWin: { color: Colors.text, fontWeight: '800' },
