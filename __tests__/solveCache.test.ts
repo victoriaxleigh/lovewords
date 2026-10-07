@@ -149,7 +149,7 @@ describe('solve cache helpers', () => {
 describe('game_solutions schema', () => {
   const schema = fs.readFileSync(path.join(__dirname, '..', 'supabase_schema.sql'), 'utf8');
   const migration = fs.readFileSync(
-    path.join(__dirname, '..', 'supabase', 'migrations', '20261003000100_game_solutions.sql'),
+    path.join(__dirname, '..', 'supabase', 'migrations', '20261007000100_game_solutions.sql'),
     'utf8'
   );
 

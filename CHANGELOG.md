@@ -23,7 +23,7 @@
   reuse one stored result instead of re-running the solver (up to ~25 s in
   production). Solves cut short by the time budget are never cached, a
   `SOLVER_VERSION` bump invalidates old rows, and any cache failure falls back
-  to a live solve. Needs migration `20261003000100_game_solutions.sql`. (#25)
+  to a live solve. Needs migration `20261007000100_game_solutions.sql`. (#25)
 
 ### Fixed
 
