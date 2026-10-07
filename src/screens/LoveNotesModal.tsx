@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LoveNote } from '../types';
 import { markGameNotesRead, sendLoveNote, subscribeToLoveNotes } from '../supabase/gameService';
-import { Colors, modeAccent } from '../utils/colors';
+import { Colors } from '../utils/colors';
 import { sendLoveNoteNotification } from '../utils/webNotifications';
 
 // Romantic quick-notes for Partner mode.
@@ -70,7 +70,6 @@ type Props = {
 
 export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisplayName, partnerUid, isFriend = false }: Props) {
   const quickNotes = isFriend ? FRIEND_QUICK_NOTES : QUICK_NOTES;
-  const accent = modeAccent(isFriend ? 'friend' : 'partner');
   const [notes, setNotes] = useState<LoveNote[]>([]);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -145,15 +144,9 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
           renderItem={({ item }) => {
             const isMine = item.fromUid === myUid;
             return (
-              <View
-                style={[
-                  styles.noteCard,
-                  isMine ? styles.noteCardMine : styles.noteCardTheirs,
-                  isMine && { backgroundColor: accent.fill, borderColor: accent.fill },
-                ]}
-              >
-                <Text style={[styles.noteText, isMine && { color: accent.onFill }]}>{item.message}</Text>
-                <Text style={[styles.noteTime, isMine && { color: accent.onFill }]}>
+              <View style={[styles.noteCard, isMine ? styles.noteCardMine : styles.noteCardTheirs]}>
+                <Text style={[styles.noteText, isMine && styles.noteTextMine]}>{item.message}</Text>
+                <Text style={[styles.noteTime, isMine && styles.noteTimeMine]}>
                   {new Date(item.timestamp).toLocaleDateString()}
                 </Text>
               </View>
@@ -194,15 +187,11 @@ export default function LoveNotesModal({ visible, onClose, gameId, myUid, myDisp
             accessibilityLabel={isFriend ? 'Message' : 'Love note message'}
           />
           <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              { backgroundColor: accent.fill },
-              (!message.trim() || sending) && styles.sendBtnDisabled,
-            ]}
+            style={[styles.sendBtn, (!message.trim() || sending) && styles.sendBtnDisabled]}
             onPress={() => handleSend()}
             disabled={sending || !message.trim()}
           >
-            <Text style={[styles.sendBtnText, { color: accent.onFill }]}>Send</Text>
+            <Text style={styles.sendBtnText}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -261,7 +250,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   noteText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
+  noteTextMine: { color: '#fff' },
   noteTime: { fontSize: 10, color: Colors.textLight, marginTop: 4, alignSelf: 'flex-end' },
+  noteTimeMine: { color: '#FFFFFF' },
   quickScroll: {
     flexGrow: 0,
     borderTopWidth: 1,

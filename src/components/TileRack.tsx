@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   },
   rack: {
     flexDirection: 'row',
-    backgroundColor: '#4A3640',
+    backgroundColor: '#5C2A3E',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 6,

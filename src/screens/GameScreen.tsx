@@ -895,7 +895,6 @@ export default function GameScreen() {
         onTilePress={handlePendingTilePress}
         isMyTurn={isMyTurn}
         boardRef={boardRef}
-        mode={game.mode}
         lastMoveTiles={lastMoveTiles}
         boardDraggingTileId={boardDraggingTileId}
         boardTileDragCallbacks={isMyTurn && game.status === 'active' ? {
@@ -1188,7 +1187,7 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
   },
-  turnBannerMine: { backgroundColor: Colors.background },
+  turnBannerMine: { backgroundColor: '#FFF0F5' },
   turnBannerTheirs: { backgroundColor: '#F5F5F5' },
   turnText: { fontSize: 13, fontWeight: '600', color: Colors.text },
   nudgeBtn: {

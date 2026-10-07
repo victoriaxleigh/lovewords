@@ -1,4 +1,4 @@
-import { Colors, modeAccent, doubleWordColor } from '../src/utils/colors';
+import { Colors } from '../src/utils/colors';
 
 // WCAG contrast regression guard. The app targets AAA: 7:1 for normal text,
 // 4.5:1 for large text (>=18.66px bold or >=24px). If someone lightens a brand
@@ -29,44 +29,33 @@ const NORMAL_TEXT_AAA: [string, string, string][] = [
   ['white on primary fill (buttons/tabs/chips)', WHITE, Colors.primary],
   ['primary text on white (scores, active tab)', Colors.primary, Colors.surface],
   ['primaryDark text on white (titles, close)', Colors.primaryDark, Colors.surface],
-  ['primaryDark text on page bg (back link)', Colors.primaryDark, Colors.background],
+  ['primaryDark text on pink bg (back link)', Colors.primaryDark, Colors.background],
   ['primaryDark on tilePlaced (avatar/pill)', Colors.primaryDark, Colors.tilePlaced],
   ['secondary text on white', Colors.textLight, Colors.surface],
-  ['secondary text on page bg', Colors.textLight, Colors.background],
+  ['secondary text on pink bg', Colors.textLight, Colors.background],
   ['main text on white', Colors.text, Colors.surface],
   ['error text on banner tint', Colors.errorDark, ERROR_BANNER_BG],
   ['white on error/delete fill', WHITE, Colors.errorDark],
   // Board bonus-square labels (solid white / solid dark text)
   ['white on TW square', WHITE, Colors.tw],
-  ['dark text on DW square', Colors.text, Colors.dw],
+  ['white on DW square', WHITE, Colors.dw],
   ['white on TL square', WHITE, Colors.tl],
   ['dark text on DL square', Colors.text, Colors.dl],
   ['white on START square', WHITE, Colors.start],
   // Action buttons — Swap (blue) / Pass (amber) label text on their tinted fills
   ['swap label on swap fill', Colors.swapText, Colors.swapBg],
   ['pass label on pass fill', Colors.passText, Colors.passBg],
-  // Mode accents: partner (berry) and friend (greige)
-  ['partner label on partner fill', modeAccent('partner').onFill, modeAccent('partner').fill],
-  ['partner chip text on partner chip', modeAccent('partner').onChip, modeAccent('partner').chip],
-  ['partner text on page bg', Colors.partner, Colors.background],
-  ['partner text on white', Colors.partner, Colors.surface],
-  ['friend label on friend fill', modeAccent('friend').onFill, modeAccent('friend').fill],
-  ['friend chip text on friend chip', modeAccent('friend').onChip, modeAccent('friend').chip],
-  ['dark text on partner double-word square', Colors.text, doubleWordColor('partner')],
-  ['dark text on friend double-word square', Colors.text, doubleWordColor('friend')],
 ];
 
 // Non-text UI components must clear 3:1 (WCAG 2.1 AA 1.4.11). The Swap/Pass
 // button borders are what set them apart, so they're checked against both their
-// own fill and the page background the bar sits on.
+// own fill and the pink page background the bar sits on.
 // [label, foreground, background]
 const NON_TEXT_AA: [string, string, string][] = [
   ['swap border on swap fill', Colors.swapBorder, Colors.swapBg],
   ['swap border on page bg', Colors.swapBorder, Colors.background],
   ['pass border on pass fill', Colors.passBorder, Colors.passBg],
   ['pass border on page bg', Colors.passBorder, Colors.background],
-  ['border on white (cards, inputs)', Colors.border, Colors.surface],
-  ['border on page bg', Colors.border, Colors.background],
   // Stats win-rate meter: primary fill on the tilePlaced track.
   ['stats meter fill on track', Colors.primary, Colors.tilePlaced],
 ];

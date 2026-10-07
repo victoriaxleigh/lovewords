@@ -4,18 +4,6 @@
 
 ### Changed
 
-- **New palette: beige-berry neutrals with pops of berry.** The brand moves
-  from candy pink to a warm beige-berry page (#F3E9E7) with greige, near-black
-  and white neutrals, and berry (`primary` #7A1F4A) used sparingly: the main
-  button, unread dots, the heart and triple-word squares. Bonus squares follow
-  one rule: warm = word, cool = letter, darker = triple, lighter = double.
-  Swap and Pass are plain outlined buttons. Partner and friend games are told
-  apart by wording and label (berry vs greige accent). `modeAccent` and
-  `doubleWordColor` in `src/utils/colors.ts` still pick the accent from the game
-  mode. All text pairs are checked at 7:1 and borders at 3:1 in
-  `__tests__/contrast.test.ts`. The app icon (berry background, beige tile, berry
-  heart), web manifest and privacy page are recoloured too. Not yet recoloured:
-  the pixel-art achievement badges.
 - **Original board layout.** The premium squares now use LoveWords' own
   balanced layout (8 triple-word, 16 double-word, 12 triple-letter, 24
   double-letter, symmetric on all eight axes, no word premium on the centre
@@ -116,15 +104,6 @@
 
 ### Changed
 
-- **New palette: teal with a berry partner accent.** The brand moves from
-  candy pink to a deep teal (`primary` #0B5F5A) on a cool white page. Partner
-  games keep berry (#8C1D4E) for love notes, the Partner pill and double-word
-  squares; friend games use coral (#F2937F). Bonus squares are brick, teal,
-  indigo and gold. The helper functions `modeAccent` and `doubleWordColor` in
-  `src/utils/colors.ts` pick the accent from the game mode. All text pairs are
-  checked at 7:1 in `__tests__/contrast.test.ts`. The app icon, web manifest,
-  splash background and privacy page are recoloured too. Not yet recoloured:
-  the pixel-art achievement badges.
 - Declined invitations are filtered by PostgREST and removed after 30 days; private discovery,
   notification, lookup-limit, and creation-grant bookkeeping now has scheduled retention.
 - Rack dragging now previews insertion slots and smoothly transitions between reordering and board
