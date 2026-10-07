@@ -40,6 +40,16 @@
   Game On, Regular Rivals and Ride or Die count friend games only, each with
   its own pixel-art badge. The board now has twelve badges.
 
+### Changed
+
+- **Post-game analysis is solved once per game.** The turn-by-turn solve for a
+  finished game is now cached in a new backend-only `game_solutions` table, so
+  opening the same game again, the other player opening it, and "Coach me" all
+  reuse one stored result instead of re-running the solver (up to ~25 s in
+  production). Solves cut short by the time budget are never cached, a
+  `SOLVER_VERSION` bump invalidates old rows, and any cache failure falls back
+  to a live solve. Needs migration `20261007000100_game_solutions.sql`. (#25)
+
 ### Fixed
 
 - **Nudges failed with a database timestamp type error.** The notification claim

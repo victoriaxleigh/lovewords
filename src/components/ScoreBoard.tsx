@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Player } from '../types';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 
 type Props = {
   players: [Player, Player];
@@ -27,7 +28,7 @@ export default function ScoreBoard({ players, currentTurn, myUid, bagCount, isSo
         style={[styles.playerCard, !isMyTurn && styles.activeCard]}
         accessibilityLabel={`${them?.displayName ?? 'Opponent'}, ${them?.score ?? 0} points${!isMyTurn ? ', their turn' : ''}`}
       >
-        <Text style={styles.name} numberOfLines={1}>{them?.displayName ?? 'Them'}</Text>
+        <Text style={styles.name} numberOfLines={1}>{shortName(them?.displayName) || 'Them'}</Text>
         <Text style={styles.score}>{them?.score ?? 0}</Text>
         {!isMyTurn && <View style={styles.turnDot} />}
       </View>
@@ -43,7 +44,7 @@ export default function ScoreBoard({ players, currentTurn, myUid, bagCount, isSo
         style={[styles.playerCard, isMyTurn && styles.activeCard]}
         accessibilityLabel={`${isSolo ? (me?.displayName ?? 'You') : 'You'}, ${me?.score ?? 0} points${isMyTurn ? ', your turn' : ''}`}
       >
-        <Text style={styles.name} numberOfLines={1}>{isSolo ? (me?.displayName ?? 'You') : 'You'}</Text>
+        <Text style={styles.name} numberOfLines={1}>{isSolo ? (shortName(me?.displayName) || 'You') : 'You'}</Text>
         <Text style={styles.score}>{me?.score ?? 0}</Text>
         {isMyTurn && <View style={styles.turnDot} />}
       </View>

@@ -107,6 +107,17 @@ create table if not exists game_analysis_events (
   primary key (game_id, event_index)
 );
 
+-- Per-game cache of the post-game solve. A finished game's solve never goes
+-- stale and is player-independent (the asker is stamped on at read time), so
+-- one row serves /solve and /coach for both players. A row whose
+-- solver_version is older than the functions' SOLVER_VERSION is a miss.
+create table if not exists game_solutions (
+  game_id uuid primary key references games(id) on delete cascade,
+  solution jsonb not null check (jsonb_typeof(solution) = 'object'),
+  solver_version integer not null check (solver_version > 0),
+  created_at timestamptz not null default now()
+);
+
 -- Capture full newly appended v2 events and sanitize the public copy in the
 -- same transaction. Provenance is immutable: only games created with both
 -- player entries marked historyVersion=2 may retain that marker.
@@ -241,6 +252,7 @@ alter table profiles enable row level security;
 alter table games enable row level security;
 alter table game_analysis_events enable row level security;
 alter table game_coach_notes enable row level security;
+alter table game_solutions enable row level security;
 alter table love_notes enable row level security;
 
 -- Profiles are private by default. Public discovery and exact-email lookup
@@ -932,6 +944,11 @@ revoke execute on function public.capture_game_analysis_events()
 -- with the service-role key, so no client role gets a policy or any grant.
 revoke all on table game_coach_notes from public, anon, authenticated;
 grant select, insert on table game_coach_notes to service_role;
+
+-- Cached solves are backend-only too: the service-role solve/coach functions
+-- read and upsert them; no client role gets a policy or table privilege.
+revoke all on table game_solutions from public, anon, authenticated;
+grant select, insert, update on table game_solutions to service_role;
 
 -- Love notes: only players in the related game
 create policy "notes_read" on love_notes for select

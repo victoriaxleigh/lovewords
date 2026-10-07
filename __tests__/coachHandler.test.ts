@@ -93,6 +93,8 @@ function installFetch(notes: Notes, status = 'finished') {
 
     if (url.includes('/auth/v1/user')) return ok({ id: USER_ID });
     if (url.includes('/rest/v1/game_analysis_events')) return ok([]);
+    // Empty solve cache that accepts writes; covered in solveCache.test.ts.
+    if (url.includes('/rest/v1/game_solutions')) return ok(method === 'POST' ? null : []);
     if (url.includes('/rest/v1/game_coach_notes')) {
       if (!notes.tableExists) return missingTable();
       if (method === 'HEAD') return ok([], { 'content-range': `0-0/${notes.count}` });
@@ -153,8 +155,9 @@ describe('game-coach handler', () => {
     expect(parse(result).cached).toBeUndefined();
     expect(mockCreate).toHaveBeenCalledTimes(1);
 
-    const save = calls.find((c) => c.method === 'POST');
-    expect(save?.url).toContain('/rest/v1/game_coach_notes');
+    // The solve cache is written first (game_solutions); this is the note save.
+    const save = calls.find((c) => c.method === 'POST' && c.url.includes('/rest/v1/game_coach_notes'));
+    expect(save).toBeDefined();
     expect(save?.body).toMatchObject({
       game_id: GAME_ID,
       user_id: USER_ID,

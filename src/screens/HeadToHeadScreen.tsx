@@ -17,6 +17,7 @@ import {
   SeatStats,
 } from '../engine/stats';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { RADII, SHADOWS } from '../utils/styles';
 import { GameMode, Player } from '../types';
 
@@ -38,7 +39,7 @@ function formatDate(timestamp: number) {
 }
 
 export function headToHeadStreakCopy(stats: HeadToHeadStats): string {
-  const name = stats.opponent.displayName;
+  const name = shortName(stats.opponent.displayName);
   const { kind, length } = stats.streak;
   const tease = stats.mode === 'friend';
   if (kind === 'win') {
@@ -168,7 +169,8 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
     };
   }, [currentUser.uid, opponentUid]);
 
-  const name = stats?.opponent.displayName ?? opponentName ?? 'Player';
+  const fullName = stats?.opponent.displayName ?? opponentName ?? 'Player';
+  const name = shortName(fullName) || 'Player';
 
   function renderBody() {
     if (error) {
@@ -201,7 +203,7 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
           <View
             style={styles.versus}
             accessible
-            accessibilityLabel={`You ${record.wins} wins, ${name} ${record.losses} wins, ${record.ties} ties`}
+            accessibilityLabel={`You ${record.wins} wins, ${fullName} ${record.losses} wins, ${record.ties} ties`}
           >
             <View style={styles.versusSide}>
               <Text style={styles.versusName} numberOfLines={1}>
@@ -247,7 +249,7 @@ export default function HeadToHeadScreen({ currentUser }: Props) {
               key={row.label}
               style={styles.tableRow}
               accessible
-              accessibilityLabel={`${row.label}: you ${row.me}${row.meMeta ? ` (${row.meMeta})` : ''}, ${name} ${row.them}${row.themMeta ? ` (${row.themMeta})` : ''}`}
+              accessibilityLabel={`${row.label}: you ${row.me}${row.meMeta ? ` (${row.meMeta})` : ''}, ${fullName} ${row.them}${row.themMeta ? ` (${row.themMeta})` : ''}`}
             >
               <Text style={[styles.tableCell, styles.tableLabel]}>{row.label}</Text>
               <View style={styles.tableCell}>

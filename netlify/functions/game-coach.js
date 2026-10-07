@@ -21,6 +21,7 @@ const {
   reviewLimit,
   saveNote,
 } = require('./lib/coachNotes');
+const { forAsker, readCachedSolve, writeCachedSolve } = require('./lib/solveCache');
 
 // Netlify's synchronous execution limit is 60s (fixed, not configurable).
 //
@@ -244,8 +245,14 @@ exports.handler = async (event) => {
       guard.player1_uid === user.id ? 'player-1' : 'player-2';
 
     // Ground truth is computed here, server-side. The client never supplies it.
-    const solve = capResponseSize(
-      solveGame(exportData, {
+    // Usually /solve has already cached it moments earlier, so the coach reads
+    // that row and skips the solver; on a miss it solves and fills the cache.
+    const cached = await readCachedSolve(config.supabaseUrl, config.supabaseKey, gameId);
+    let fullSolve;
+    if (cached) {
+      fullSolve = forAsker(cached, askingAlias);
+    } else {
+      fullSolve = solveGame(exportData, {
         askingAlias,
         // Auth and the Supabase round trips have already burned part of the
         // request; charge the solver for that rather than handing it a fixed
@@ -257,8 +264,10 @@ exports.handler = async (event) => {
             REQUEST_BUDGET_MS - MODEL_RESERVE_MS - (Date.now() - requestStart)
           )
         ),
-      })
-    );
+      });
+      await writeCachedSolve(config.supabaseUrl, config.supabaseKey, gameId, fullSolve);
+    }
+    const solve = capResponseSize(fullSolve);
 
     // Bound what is actually billed. `capResponseSize` caps the solver half
     // only; `game.moves` is player-writable with no length limit upstream, so

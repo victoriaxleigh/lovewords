@@ -29,6 +29,7 @@ import TileRack from '../components/TileRack';
 import ScoreBoard from '../components/ScoreBoard';
 import LoveNotesModal from './LoveNotesModal';
 import { Colors } from '../utils/colors';
+import { shortName } from '../utils/displayName';
 import { requestNotificationPermission, sendTurnNotification } from '../utils/webNotifications';
 import { isDictionaryLoaded } from '../engine/dictionary';
 
@@ -649,14 +650,14 @@ export default function GameScreen() {
             : winner
             ? winner.uid === myUid
               ? 'You won!'
-              : `${winner.displayName} won!`
+              : `${shortName(winner.displayName)} won!`
             : "It's a tie! 💕"}
         </Text>
         {endedByPasses && (
           <Text style={styles.finishedReason}>No more moves — game ended by passes</Text>
         )}
         <Text style={styles.finishedScores}>
-          {game.players[0].displayName} {game.players[0].score} – {game.players[1].score} {game.players[1].displayName}
+          {shortName(game.players[0].displayName)} {game.players[0].score} – {game.players[1].score} {shortName(game.players[1].displayName)}
         </Text>
         <TouchableOpacity
           style={[
@@ -817,7 +818,7 @@ export default function GameScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Head-to-head stats with ${opponent.displayName}`}
           >
-            <Text style={styles.statsLinkText}>📊 Head-to-head with {opponent.displayName}</Text>
+            <Text style={styles.statsLinkText}>📊 Head-to-head with {shortName(opponent.displayName)}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -866,10 +867,10 @@ export default function GameScreen() {
       <View style={[styles.turnBanner, isMyTurn ? styles.turnBannerMine : styles.turnBannerTheirs]}>
         <Text style={styles.turnText}>
           {isSolo
-            ? `🎯 Playing as ${me?.displayName ?? 'Player'}`
+            ? `🎯 Playing as ${shortName(me?.displayName) || 'Player'}`
             : isMyTurn
             ? `${isFriend ? '🎲' : '💌'} Your turn — place your tiles!`
-            : `⏳ Waiting for ${partner?.displayName}…`}
+            : `⏳ Waiting for ${shortName(partner?.displayName)}…`}
         </Text>
         {!isSolo && !isMyTurn && game.status === 'active' && (
           <TouchableOpacity
