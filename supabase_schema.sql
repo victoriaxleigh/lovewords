@@ -221,7 +221,7 @@ create table if not exists love_notes (
 );
 
 -- Saved AI coach notes, one per (finished game, asking player). Backend-only.
--- Mirrors supabase/migrations/20261006000100_game_coach_notes.sql.
+-- Mirrors supabase/migrations/20261007000200_game_coach_notes.sql.
 create table if not exists game_coach_notes (
   game_id uuid not null references games(id) on delete cascade,
   user_id uuid not null,

@@ -66,7 +66,7 @@ to re-run.
 |---|---|---|
 | `alter table games add column if not exists mode text not null default 'partner';` | Partner/Friend mode | apply once |
 | `supabase/migrations/20260723000100_private_game_analysis_events.sql` | Analysis export + AI coach (creates `game_analysis_events` + scrub trigger) | apply once |
-| `supabase/migrations/20261006000100_game_coach_notes.sql` | Coach review cache + quota (creates `game_coach_notes`, service-role only). Optional: without it the coach still works, it just isn't cached or limited | apply once via the linked CLI workflow in `AGENTS.md` |
+| `supabase/migrations/20261007000200_game_coach_notes.sql` | Coach review cache + quota (creates `game_coach_notes`, service-role only). Optional: without it the coach still works, it just isn't cached or limited | apply once via the linked CLI workflow in `AGENTS.md` |
 | RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | apply once |
 | `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | apply once |
 | `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | apply once |
