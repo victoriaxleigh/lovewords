@@ -123,6 +123,10 @@ function parseBody(result: HandlerResponse) {
 
 describe('game-solve handler', () => {
   let fetchMock: jest.Mock;
+  // `game_solutions` cache traffic is routed here, so the ordered `fetchMock`
+  // queues below describe only the auth/game/event calls. Defaults to an empty
+  // cache that accepts writes.
+  let cacheFetch: jest.Mock;
   const originalEnv = {
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
@@ -132,7 +136,14 @@ describe('game-solve handler', () => {
     process.env.SUPABASE_URL = 'https://supabase.example';
     process.env.SUPABASE_SERVICE_KEY = 'service-role-key';
     fetchMock = jest.fn();
-    global.fetch = fetchMock;
+    cacheFetch = jest.fn((_url: string, init?: { method?: string }) =>
+      Promise.resolve(init?.method === 'POST' ? response(201, null) : response(200, []))
+    );
+    global.fetch = jest.fn((url: string, init?: unknown) =>
+      String(url).includes('/rest/v1/game_solutions')
+        ? cacheFetch(url, init)
+        : fetchMock(url, init)
+    ) as unknown as typeof fetch;
     // The cooldown is module state keyed per (endpoint, user); each test is its
     // own first request.
     resetCooldowns();
@@ -385,6 +396,166 @@ describe('game-solve handler', () => {
     expect(body.turns[0].status).toBe('no_rack');
     expect(body.turns[0].best).toEqual([]);
     expect(body.turns[0].pointsLeft).toBeNull();
+  });
+
+  describe('game_solutions cache', () => {
+    const { SOLVER_VERSION } = require('../netlify/functions/lib/solver');
+
+    const okSolveCalls = (uid = USER_ID) =>
+      fetchMock
+        .mockResolvedValueOnce(response(200, { id: uid }))
+        .mockResolvedValueOnce(response(200, [authGame()]))
+        .mockResolvedValueOnce(response(200, [exportGame()]))
+        .mockResolvedValueOnce(response(200, privateAnalysisRows()));
+
+    const writes = () => cacheFetch.mock.calls.filter(([, init]) => init?.method === 'POST');
+
+    // What a miss writes: the solve with the asker stripped out.
+    async function cachedSolution() {
+      okSolveCalls();
+      await solveHandler(solveEvent());
+      const [[, init]] = writes();
+      resetCooldowns();
+      fetchMock.mockReset();
+      cacheFetch.mockClear();
+      return JSON.parse(init.body).solution;
+    }
+
+    test('a miss solves, then upserts one player-independent row', async () => {
+      okSolveCalls();
+      const result = await solveHandler(solveEvent());
+
+      expect(result.statusCode).toBe(200);
+      expect(writes()).toHaveLength(1);
+      const [[url, init]] = writes();
+      expect(url).toBe('https://supabase.example/rest/v1/game_solutions?on_conflict=game_id');
+      expect(init.headers.Prefer).toBe('resolution=merge-duplicates,return=minimal');
+
+      const row = JSON.parse(init.body);
+      expect(row.game_id).toBe(GAME_ID);
+      expect(row.solver_version).toBe(SOLVER_VERSION);
+      expect(row.solution).not.toHaveProperty('askingAlias');
+      expect(row.solution.turns[0]).not.toHaveProperty('isAsking');
+      expect(row.solution.turns[0].best[0].word).toBe('CARTELS');
+      // Same sanitized data as the response: no emails or UIDs are stored.
+      expect(init.body).not.toContain('ada@example.com');
+      expect(init.body).not.toContain(USER_ID);
+    });
+
+    test('a hit skips the export fetch and the solver, and stamps the asker', async () => {
+      const solution = await cachedSolution();
+      cacheFetch.mockImplementation(() =>
+        Promise.resolve(response(200, [{ solution, solver_version: SOLVER_VERSION }]))
+      );
+
+      // The other player opens the same game: one row serves both.
+      fetchMock
+        .mockResolvedValueOnce(response(200, { id: OTHER_USER_1 }))
+        .mockResolvedValueOnce(response(200, [authGame()]));
+      const result = await solveHandler(solveEvent());
+      const body = parseBody(result);
+
+      expect(result.statusCode).toBe(200);
+      // Only auth + guard: no export, no private events.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(writes()).toHaveLength(0);
+      expect(body.askingAlias).toBe('player-2');
+      expect(body.turns[0].isAsking).toBe(false);
+      expect(body.turns[0].best[0]).toEqual({
+        word: 'CARTELS',
+        score: 65,
+        row: 7,
+        col: 3,
+        direction: 'across',
+      });
+    });
+
+    test('a hit still requires a participant of a finished game', async () => {
+      const solution = await cachedSolution();
+      cacheFetch.mockImplementation(() =>
+        Promise.resolve(response(200, [{ solution, solver_version: SOLVER_VERSION }]))
+      );
+
+      fetchMock
+        .mockResolvedValueOnce(response(200, { id: OTHER_USER_2 }))
+        .mockResolvedValueOnce(response(200, [authGame()]));
+      const result = await solveHandler(solveEvent());
+
+      expect(result.statusCode).toBe(403);
+      expect(cacheFetch).not.toHaveBeenCalled();
+    });
+
+    test('a row from an older solver is a miss and is overwritten', async () => {
+      const solution = await cachedSolution();
+      const stale = { ...solution, turns: [] };
+      cacheFetch.mockImplementation((_url: string, init?: { method?: string }) =>
+        Promise.resolve(
+          init?.method === 'POST'
+            ? response(201, null)
+            : response(200, [{ solution: stale, solver_version: SOLVER_VERSION - 1 }])
+        )
+      );
+
+      okSolveCalls();
+      const body = parseBody(await solveHandler(solveEvent()));
+
+      expect(body.turns).toHaveLength(1);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(writes()).toHaveLength(1);
+      expect(JSON.parse(writes()[0][1].body).solver_version).toBe(SOLVER_VERSION);
+    });
+
+    test('a malformed row is a miss', async () => {
+      cacheFetch.mockImplementation((_url: string, init?: { method?: string }) =>
+        Promise.resolve(
+          init?.method === 'POST'
+            ? response(201, null)
+            : response(200, [{ solution: { turns: 'nope' }, solver_version: SOLVER_VERSION }])
+        )
+      );
+
+      okSolveCalls();
+      const body = parseBody(await solveHandler(solveEvent()));
+
+      expect(body.turns[0].status).toBe('solved');
+      expect(writes()).toHaveLength(1);
+    });
+
+    test.each([
+      ['an error status', () => Promise.resolve(response(500, { message: 'boom' }))],
+      ['a missing table', () => Promise.resolve(response(404, { message: 'relation' }))],
+      ['a network failure', () => Promise.reject(new Error('socket hang up'))],
+    ])('a cache read that fails with %s degrades to a live solve', async (_label, read) => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      cacheFetch.mockImplementation((_url: string, init?: { method?: string }) =>
+        init?.method === 'POST' ? Promise.resolve(response(201, null)) : read()
+      );
+
+      okSolveCalls();
+      const result = await solveHandler(solveEvent());
+
+      expect(result.statusCode).toBe(200);
+      expect(parseBody(result).turns[0].status).toBe('solved');
+      errorSpy.mockRestore();
+    });
+
+    test.each([
+      ['an error status', () => Promise.resolve(response(403, { message: 'denied' }))],
+      ['a network failure', () => Promise.reject(new Error('socket hang up'))],
+    ])('a cache write that fails with %s still returns the solve', async (_label, write) => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      cacheFetch.mockImplementation((_url: string, init?: { method?: string }) =>
+        init?.method === 'POST' ? write() : Promise.resolve(response(200, []))
+      );
+
+      okSolveCalls();
+      const result = await solveHandler(solveEvent());
+
+      expect(result.statusCode).toBe(200);
+      expect(parseBody(result).turns[0].best[0].word).toBe('CARTELS');
+      expect(errorSpy.mock.calls.flat().join(' ')).toContain('game_solutions write failed');
+      errorSpy.mockRestore();
+    });
   });
 
   test('reports a generic error when Supabase fails', async () => {

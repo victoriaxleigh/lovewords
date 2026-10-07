@@ -21,6 +21,12 @@ const ALL_LETTERS_MASK = (1 << 26) - 1;
 // that it is an array), so bound the work and the response body here.
 const MAX_TURNS = 300;
 
+// Stamped on every cached solve in `game_solutions`. Bump it whenever anything
+// that changes `solveGame` output for the same game changes: move generation,
+// scoring, the dictionary, the default `limit`, or the response shape. Rows
+// carrying an older version are treated as a miss and overwritten.
+const SOLVER_VERSION = 1;
+
 // What `solveGame` could say about a turn. Each needs different wording to the
 // player and different handling by the coach, so they are one field, not flags.
 const TURN_STATUS = Object.freeze({
@@ -759,6 +765,7 @@ module.exports = {
   BONUS,
   MAX_TURNS,
   SIZE,
+  SOLVER_VERSION,
   TURN_STATUS,
   applyPlacements,
   emptyGrid,

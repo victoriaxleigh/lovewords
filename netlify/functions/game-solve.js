@@ -9,6 +9,7 @@ const {
 } = require('./game-analysis-common');
 const { solveGame } = require('./lib/solver');
 const { capResponseSize, checkCooldown } = require('./lib/analysisLimits');
+const { forAsker, readCachedSolve, writeCachedSolve } = require('./lib/solveCache');
 
 // Netlify's synchronous execution limit is 60s (fixed, not configurable), which
 // leaves plenty of room for the Supabase round trips and the cold-start trie
@@ -18,8 +19,9 @@ const { capResponseSize, checkCooldown } = require('./lib/analysisLimits');
 // proportional to its memory, so the solver runs roughly 15x slower there than
 // on a laptop: a 41-turn game measured 969ms locally but only reached 10 of 41
 // turns inside a 6s budget on the deploy preview. Raising memory (Pro/
-// Enterprise) would buy speed directly; caching the solve per finished game is
-// the real fix, since a finished game's solution never changes.
+// Enterprise) would buy speed directly. This budget is only paid once per game:
+// a complete solve is cached in `game_solutions` (see lib/solveCache.js), since
+// a finished game's solution never changes.
 const SOLVE_BUDGET_MS = 25000;
 
 function gameIdFromEvent(event) {
@@ -91,6 +93,15 @@ exports.handler = async (event) => {
       );
     }
 
+    const askingAlias = guard.player1_uid === user.id ? 'player-1' : 'player-2';
+
+    // A finished game's solve never changes, so a hit skips the export fetch and
+    // the solver entirely. Only the asker is stamped on per request.
+    const cached = await readCachedSolve(config.supabaseUrl, config.supabaseKey, gameId);
+    if (cached) {
+      return jsonResponse(200, capResponseSize(forAsker(cached, askingAlias)));
+    }
+
     const game = await fetchGame(config.supabaseUrl, config.supabaseKey, gameId, [
       'id',
       'players',
@@ -113,8 +124,10 @@ exports.handler = async (event) => {
     // row — so no emails or Supabase UIDs can reach the response.
     const exportData = sanitizeGameExport(game, privateEvents);
 
-    const askingAlias = guard.player1_uid === user.id ? 'player-1' : 'player-2';
     const solve = solveGame(exportData, { askingAlias, budgetMs: SOLVE_BUDGET_MS });
+    // Awaited, not fire-and-forget: a Lambda can freeze as soon as it returns.
+    // A failed write is logged inside and never fails the request.
+    await writeCachedSolve(config.supabaseUrl, config.supabaseKey, gameId, solve);
 
     return jsonResponse(200, capResponseSize(solve));
   } catch (error) {
