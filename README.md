@@ -1,6 +1,6 @@
 # LoveWords 💌
 
-A Words with Friends-style word game built for two — play async, send love notes, and talk smack.
+An async word game built for two — play async, send love notes, and talk smack.
 
 ## Tech Stack
 

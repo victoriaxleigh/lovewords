@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Changed
+
+- **Original board layout.** The premium squares now use LoveWords' own
+  balanced layout (8 triple-word, 16 double-word, 12 triple-letter, 24
+  double-letter, symmetric on all eight axes, no word premium on the centre
+  row/column, triple-word squares at least 8 apart in a lane). New games use it;
+  games already in progress keep the layout stored on their board. The server
+  solver and analysis export read each game's own layout (export
+  `boardMetadata.version` 2 for the new layout, 1 for older games).
+  Known gap: the client history replay still draws the new layout under old
+  games' tiles (cosmetic only).
+- **Coach.** Renamed away from third-party game names, model string set to
+  `claude-sonnet-5-5`, and each finished game's review is saved per user in
+  `game_coach_notes`, so "Coach me again" re-reads it for free. Optional
+  `COACH_REVIEW_LIMIT` caps saved reviews per user (hook for sold packs).
+
 ### Added
 
 - **Stats pages.** A new 📊 button in the Lobby header opens a Stats screen:

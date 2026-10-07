@@ -25,19 +25,25 @@ describe('createEmptyBoard', () => {
     expect(board[7][7].bonus).toBe('START');
   });
 
-  test('corner (0,0) is a triple word square', () => {
+  test('(1,1) is a triple word square and the corner is plain', () => {
     const board = createEmptyBoard();
-    expect(board[0][0].bonus).toBe('TW');
+    expect(board[1][1].bonus).toBe('TW');
+    expect(board[0][0].bonus).toBeNull();
   });
 
-  test('(0,3) is a double letter square', () => {
+  test('(0,2) is a double word square', () => {
     const board = createEmptyBoard();
-    expect(board[0][3].bonus).toBe('DL');
+    expect(board[0][2].bonus).toBe('DW');
   });
 
-  test('(1,5) is a triple letter square', () => {
+  test('(0,1) is a double letter square', () => {
     const board = createEmptyBoard();
-    expect(board[1][5].bonus).toBe('TL');
+    expect(board[0][1].bonus).toBe('DL');
+  });
+
+  test('(5,6) is a triple letter square', () => {
+    const board = createEmptyBoard();
+    expect(board[5][6].bonus).toBe('TL');
   });
 
   test('each cell has correct row and col', () => {

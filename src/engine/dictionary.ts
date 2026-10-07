@@ -1,13 +1,13 @@
 /**
- * Scrabble dictionary using the ENABLE word list (public domain, ~173k words).
- * WWF and modern Scrabble dictionaries built on ENABLE but added words after it
- * froze in 1997 — those we care about live in wordSupplement.json.
+ * Word-game dictionary using the ENABLE word list (public domain, ~173k words).
+ * Modern word-game dictionaries build on ENABLE but add words that appeared after
+ * it froze in 1997 — those we care about live in wordSupplement.json.
  *
  * On first use it fetches the list from a public CDN and
  * caches it in localStorage so every lookup after that is instant.
  */
 
-// Words that are valid in modern Scrabble (NWL) / Words With Friends but
+// Words that are valid in current tournament-style word lists but
 // missing from 1997-era ENABLE. Shared with the server-side solver dictionary
 // (netlify/functions/lib/dictionary.js) so the two cannot drift.
 import SUPPLEMENT from './wordSupplement.json';

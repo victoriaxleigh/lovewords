@@ -154,36 +154,40 @@ export default function BoardComponent({
                 onPress={() => onCellPress(row, col)}
                 disabled={!!pending || !canPlace}
                 activeOpacity={0.6}
-                style={[
-                  styles.cell,
-                  {
-                    width: cellSize,
-                    height: cellSize,
-                    backgroundColor: hasTile ? 'transparent' : bonusBg,
-                    borderColor: hasTile ? '#333' : '#3D1A28',
-                    borderWidth: 0.5,
-                  },
-                ]}
+                // Outer touch target keeps the exact cellSize footprint (drag-drop
+                // maths in GameScreen depends on it); the visible rounded square
+                // is inset by 1px so squares read as separate tiles.
+                style={[styles.cell, { width: cellSize, height: cellSize }]}
               >
-                {pending ? (
-                  <DraggablePendingTile
-                    tile={pending}
-                    size={cellSize - 2}
-                    onTilePress={() => onTilePress?.(pending)}
-                    dragCallbacks={boardTileDragCallbacks}
-                    isDragging={boardDraggingTileId === pending.id}
-                  />
-                ) : cell.tile ? (
-                  <TileComponent tile={cell.tile} size={cellSize - 2} disabled highlight={isLastMove} />
-                ) : cell.bonus ? (
-                  <Text style={[
-                    styles.bonusText,
-                    { fontSize: cellSize * 0.22 },
-                    cell.bonus === 'DL' && styles.bonusTextDark,
-                  ]}>
-                    {BONUS_LABELS[cell.bonus]}
-                  </Text>
-                ) : null}
+                <View
+                  style={[
+                    styles.cellFace,
+                    {
+                      borderRadius: Math.max(3, cellSize * 0.2),
+                      backgroundColor: hasTile ? 'transparent' : bonusBg,
+                    },
+                  ]}
+                >
+                  {pending ? (
+                    <DraggablePendingTile
+                      tile={pending}
+                      size={cellSize - 4}
+                      onTilePress={() => onTilePress?.(pending)}
+                      dragCallbacks={boardTileDragCallbacks}
+                      isDragging={boardDraggingTileId === pending.id}
+                    />
+                  ) : cell.tile ? (
+                    <TileComponent tile={cell.tile} size={cellSize - 4} disabled highlight={isLastMove} />
+                  ) : cell.bonus ? (
+                    <Text style={[
+                      styles.bonusText,
+                      { fontSize: cellSize * 0.24 },
+                      cell.bonus === 'DL' && styles.bonusTextDark,
+                    ]}>
+                      {BONUS_LABELS[cell.bonus]}
+                    </Text>
+                  ) : null}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -196,12 +200,15 @@ export default function BoardComponent({
 const styles = StyleSheet.create({
   board: {
     backgroundColor: Colors.boardBg,
-    padding: 2,
-    borderRadius: 6,
+    padding: 2, // GameScreen's drop maths assumes 2px; keep in sync
+    borderRadius: 12,
   },
   row: { flexDirection: 'row' },
   cell: {
-    borderWidth: 0.5,
+    padding: 1,
+  },
+  cellFace: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -209,7 +216,7 @@ const styles = StyleSheet.create({
     // Solid white (not 85% opacity) so bonus labels reach WCAG AAA on the
     // deepened bonus-square colors.
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   bonusTextDark: {
     color: Colors.text,

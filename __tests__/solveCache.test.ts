@@ -281,11 +281,14 @@ describe('game-coach and the solve cache', () => {
     cacheFetch = jest.fn((_url: string, init?: { method?: string }) =>
       Promise.resolve(init?.method === 'POST' ? response(201, null) : response(200, []))
     );
-    global.fetch = jest.fn((url: string, init?: unknown) =>
-      String(url).includes('/rest/v1/game_solutions')
-        ? cacheFetch(url, init)
-        : fetchMock(url, init)
-    ) as unknown as typeof fetch;
+    global.fetch = jest.fn((url: string, init?: { method?: string }) => {
+      if (String(url).includes('/rest/v1/game_solutions')) return cacheFetch(url, init);
+      // No saved coach note yet, and the save is accepted.
+      if (String(url).includes('/rest/v1/game_coach_notes')) {
+        return Promise.resolve(init?.method === 'POST' ? response(201, null) : response(200, []));
+      }
+      return fetchMock(url, init);
+    }) as unknown as typeof fetch;
     mockCreate.mockReset();
     mockCreate.mockResolvedValue({
       stop_reason: 'end_turn',

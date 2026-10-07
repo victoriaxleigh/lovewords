@@ -424,7 +424,9 @@ describe('analysis handler flow', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
     const exportLookupUrl = fetchMock.mock.calls[2][0].toString();
     expect(exportLookupUrl).toContain(`id=eq.${GAME_ID}`);
-    expect(exportLookupUrl).not.toContain('board');
+    // `board` is selected only so the export can name its premium-square layout;
+    // the tile assertions above prove no stored tile leaks into the response.
+    expect(decodeURIComponent(exportLookupUrl)).toContain('moves,board,created_at');
     expect(exportLookupUrl).not.toContain('current_turn');
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe(
       'Bearer service-role-key'

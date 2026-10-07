@@ -1,5 +1,5 @@
 /**
- * Deterministic Words With Friends move generator.
+ * Deterministic move generator for LoveWords.
  *
  * Plain CommonJS and self-contained: the functions bundle runs under the `nft`
  * bundler and cannot consume the TypeScript engine. `scorePlay` below is a
@@ -25,7 +25,8 @@ const MAX_TURNS = 300;
 // that changes `solveGame` output for the same game changes: move generation,
 // scoring, the dictionary, the default `limit`, or the response shape. Rows
 // carrying an older version are treated as a miss and overwritten.
-const SOLVER_VERSION = 1;
+// 2: games are replayed on their own premium-square layout (boardMetadata).
+const SOLVER_VERSION = 2;
 
 // What `solveGame` could say about a turn. Each needs different wording to the
 // player and different handling by the coach, so they are one field, not flags.
@@ -45,13 +46,39 @@ const TURN_STATUS = Object.freeze({
 // export already publishes rather than hand-copying it a third time.
 const { BOARD_METADATA } = require('../game-analysis-common');
 
-const BONUS = (() => {
+const BONUS_TYPES = new Set(['TW', 'DW', 'TL', 'DL', 'START']);
+
+/**
+ * Turn a `boardMetadata.bonusSquares` map into a flat per-square lookup, or
+ * `null` if it is not a well-formed 15x15 layout. Nothing is guessed: a
+ * malformed layout is rejected whole rather than half applied.
+ */
+function buildBonusGrid(metadata) {
+  const squares = metadata?.bonusSquares;
+  if (metadata?.size !== SIZE || !squares || typeof squares !== 'object') return null;
   const cells = new Array(SIZE * SIZE).fill(null);
-  for (const [bonus, squares] of Object.entries(BOARD_METADATA.bonusSquares)) {
-    for (const [row, col] of squares) cells[row * SIZE + col] = bonus;
+  for (const [bonus, list] of Object.entries(squares)) {
+    if (!BONUS_TYPES.has(bonus) || !Array.isArray(list)) return null;
+    for (const square of list) {
+      if (!Array.isArray(square) || square.length !== 2) return null;
+      const [row, col] = square;
+      if (!Number.isInteger(row) || !Number.isInteger(col)) return null;
+      if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return null;
+      cells[row * SIZE + col] = bonus;
+    }
   }
   return cells;
-})();
+}
+
+// The board layout new games are played on.
+const BONUS = buildBonusGrid(BOARD_METADATA);
+
+// The layout `extractWord` scores against. A game is replayed on the layout its
+// own export names (`exportData.boardMetadata`), so a recorded game keeps
+// scoring the way it was played even after the default layout changes. It is
+// swapped for the duration of one synchronous `solveGame` call and always put
+// back; the function never awaits, so nothing else can observe the swap.
+let activeBonus = BONUS;
 
 function emptyGrid() {
   return new Array(SIZE * SIZE).fill(null);
@@ -129,7 +156,7 @@ function extractWord(grid, newSet, row, col, dRow, dCol) {
 
     let letterVal = tile.value;
     if (newSet.has(idx)) {
-      const bonus = BONUS[idx];
+      const bonus = activeBonus[idx];
       if (bonus === 'DL') letterVal *= 2;
       else if (bonus === 'TL') letterVal *= 3;
       else if (bonus === 'DW' || bonus === 'START') wordMultiplier *= 2;
@@ -206,7 +233,7 @@ function scorePlay(grid, placements) {
 // ─── Legality ────────────────────────────────────────────────────────────────
 
 /**
- * Full WWF legality check, independent of how the play was generated: one line,
+ * Full legality check, independent of how the play was generated: one line,
  * no gaps, empty target cells, connected (or covering the star on move one),
  * and every formed word — main and cross — in the dictionary.
  */
@@ -350,7 +377,7 @@ function buildRack(tiles) {
     const i = letter.charCodeAt(0) - 65;
     if (i < 0 || i > 25) continue;
     counts[i]++;
-    // Tile values are fixed per letter in WWF, so the last one wins harmlessly.
+    // Tile values are fixed per letter, so the last one wins harmlessly.
     values[i] = Number.isFinite(tile.value) ? tile.value : 0;
   }
   return { counts, values, blanks };
@@ -612,8 +639,21 @@ function applyPlacements(grid, placements) {
  * Replay a sanitized game export turn by turn and solve each position against
  * the board as it actually stood before that turn. Turns with no recorded
  * `rackBefore` come back unsolved rather than guessed at.
+ *
+ * Premium squares come from the export's own `boardMetadata` when it carries a
+ * well-formed layout, and from the current default layout otherwise.
  */
 function solveGame(exportData, options = {}) {
+  const previous = activeBonus;
+  activeBonus = buildBonusGrid(exportData?.boardMetadata) ?? BONUS;
+  try {
+    return replayAndSolve(exportData, options);
+  } finally {
+    activeBonus = previous;
+  }
+}
+
+function replayAndSolve(exportData, options = {}) {
   const budgetMs = options.budgetMs ?? 7000;
   const limit = options.limit ?? 5;
   const maxTurns = options.maxTurns ?? MAX_TURNS;

@@ -231,11 +231,27 @@ create table if not exists love_notes (
   created_at timestamptz default now()
 );
 
+-- Saved AI coach notes, one per (finished game, asking player). Backend-only.
+-- Mirrors supabase/migrations/20261007000200_game_coach_notes.sql.
+create table if not exists game_coach_notes (
+  game_id uuid not null references games(id) on delete cascade,
+  user_id uuid not null,
+  analysis text not null check (length(analysis) > 0),
+  recording_quality text,
+  truncated boolean not null default false,
+  model text,
+  created_at timestamptz not null default now(),
+  primary key (game_id, user_id)
+);
+
+create index if not exists game_coach_notes_user_idx on game_coach_notes (user_id);
+
 -- ── Row Level Security ──────────────────────────────────────
 
 alter table profiles enable row level security;
 alter table games enable row level security;
 alter table game_analysis_events enable row level security;
+alter table game_coach_notes enable row level security;
 alter table game_solutions enable row level security;
 alter table love_notes enable row level security;
 
@@ -923,6 +939,11 @@ revoke all on table game_analysis_events from public, anon, authenticated;
 grant select on table game_analysis_events to service_role;
 revoke execute on function public.capture_game_analysis_events()
   from public, anon, authenticated;
+
+-- Coach notes are backend-only too: the coach function reads and writes them
+-- with the service-role key, so no client role gets a policy or any grant.
+revoke all on table game_coach_notes from public, anon, authenticated;
+grant select, insert on table game_coach_notes to service_role;
 
 -- Cached solves are backend-only too: the service-role solve/coach functions
 -- read and upsert them; no client role gets a policy or table privilege.

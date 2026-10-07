@@ -58,7 +58,7 @@ Character limits are Apple's; drafts below stay within them.
 ## Keywords (≤100 chars, comma-separated, no spaces)
 
 ```
-word game,words,scrabble,couples,friends,2 player,puzzle,vocabulary,board game,letters,tiles,crossword
+word game,words,couples,friends,2 player,puzzle,vocabulary,board game,letters,tiles,crossword
 ```
 
 ---

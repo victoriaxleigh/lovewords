@@ -1,6 +1,6 @@
 # LoveWords — Setup Guide 💌
 
-A no-ads Words with Friends clone. Web app is live and free; the native
+A no-ads word game for two. Web app is live and free; the native
 (App Store) build adds a one-free-game-then-$2.99-lifetime paywall.
 
 ## 1. Supabase (already configured)
@@ -132,7 +132,7 @@ src/
 
 ## Features
 
-- Full 15×15 board with WWF bonus squares
+- Full 15×15 board with the LoveWords premium-square layout
 - 7-tile rack with drag-to-place mechanic
 - Word validation via dictionary API
 - Scoring with letter/word multipliers + bingo bonus (7 tiles = +35 pts)
