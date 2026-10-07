@@ -1,14 +1,73 @@
 # LoveWords — Agent Handoff Document
 
-> Last updated: 2026-08-04 (Session 13 — **Punny Partner/Friend mode subtitles.** The New Game modal's mode pills now show a pun plus a short gloss so the joke reads clearly instead of landing flat: 💕 Partner → *"Love letters"* / "sweet nothings between moves", 🎲 Friend → *"Fighting words"* / "friendly trash talk between moves". Two-line `Text` under the pill label (`modeSub` = pun, `modeGloss` = explanation), both reusing the already-contrast-verified `Colors.textLight` / `Colors.primaryDark` pair so no new contrast-test entries were needed. Explicit `accessibilityLabel` added to each pill so screen readers get the full "mode — pun, gloss" context in one read instead of three separate text nodes. Change is in `src/screens/NewGameModal.tsx` only (`modeToggle` JSX + `modeSub`/`modeGloss`/`modeGlossActive` styles); no test asserts the exact pill copy, so nothing else needed updating. `tsc --noEmit` shows only the 4 pre-existing errors (see Known Issues); **255/255 jest tests pass.**
->
-> Earlier (Session 12 — 2026-08-03): **Player invites (email / phone) for people not yet on LoveWords**, and a reworked "New game" flow. Entering an email/phone that has no account no longer dead-ends: it mints a single-use invite (code + link); the invitee opens the link `?invite=CODE` or types the code on sign-up and is dropped into a real game with the inviter. Redemption is atomic and idempotent through the existing `create_active_game` contract. Delivery is by the inviter's **own email app (mailto) or Messages (sms)** — no email/SMS provider needed; optional Resend auto-send is wired but off by default. The New Game modal opens to a **menu first** (🔍 Find a player / 💌 Invite by email or phone / 🎯 Practice solo), each branching to its own focused step with a back arrow — replacing the earlier single-screen layout. See the **Player Invites** notes in the Supabase Tables section below.
->
-> **Deploy state:** ✅ **All caught up.** PR #15 → #16 → #17 → #18 are all merged into `main` (base feature + Tom's review fixes, the CSPRNG fix, the ambiguous-column hotfix, and the menu-first flow rework, in that order). The `20260731000100_email_invites.sql` migration is idempotent — re-run it in Supabase only if you're setting up a fresh project; it's already applied to prod. This session's subtitle change is UI-copy-only (no migration, no branch/PR yet — currently uncommitted on `claude/invite-feature-js4o7j`, see below).
->
-> Session 11 (2026-07-30): fixed the push-notification & nudge regression from the player-discovery/invites deploy (opaque `sb_secret_…` keys, stale iOS-PWA sessions, `current_time` keyword collision in `claim_notification_delivery`). Session 10 (2026-07-25): finished-game analysis export; in-app AI coaching; score labels; Swap/Pass; tile-bag rebalance; WCAG.
+> Last updated: 2026-10-07 (Session 14). Older session notes are in `RELEASE_NOTES.md`.
 >
 > **Deploying?** See `DEPLOY.md` for the full runbook (env vars + scopes, migrations, verify, rollback).
+
+## Handoff — current state (2026-10-07)
+
+**Everything is merged and live.** `main` is at the #41 merge (`aded8c2`), Netlify has
+deployed it, and there are **no open PRs**. The only open GitHub issue is #10 (game
+creation trusts client-generated tiles; a deliberate "not yet" decision, see below).
+
+**Production database is in sync.** Every file in `supabase/migrations/` is applied
+to production through the linked CLI, and `npx supabase migration list --linked`
+shows Local and Remote matching. The latest two were applied on 2026-10-07:
+`20261007000100_game_solutions.sql` (#38) and `20261007000200_game_coach_notes.sql` (#41).
+
+### What shipped since the last handoff (2026-08-04)
+| PR | What |
+|---|---|
+| #19–#23 | New Game polish: punny mode subtitles, invite copy fallback, action-row and scoreboard overflow fixes, Contacts-picker deferral documented |
+| #24 | **Post-game move solver.** `game-solve.js` + `lib/solver.js` compute every turn's best plays server-side; the coach prompt is grounded in those facts instead of guessing. Spec: `docs/ai/features/post-game-move-solver/spec.md` |
+| #28 | Solver turn status is one `status` field instead of several booleans |
+| #31 | Unread dot for love notes on the lobby row and the game screen (closes #29) |
+| #32 | Forgot-password flow with an explicit recovery screen (`RecoveryScreen.tsx`) |
+| #33, #35, #36 | Achievements board (closes #30) with pixel-art badges, partner and friend tracks |
+| #34 | UI style guide for agents: `docs/ai/style.md` |
+| #37 | `tsc --noEmit` is clean (the four long-standing errors are fixed) |
+| #38 | **Solve cache** (closes #25): one `game_solutions` row per finished game serves `/solve` and `/coach` for both players |
+| #39 | Stats and Head-to-head pages |
+| #40 | First name + last initial everywhere (`src/utils/displayName.ts`), long-name and iOS chat-zoom fixes |
+| #41 | **New premium-square board layout** (old games keep theirs), rounded board squares, **saved coach reviews** (`game_coach_notes`), optional `COACH_REVIEW_LIMIT`, coach model `claude-sonnet-5-5`, "Words With Friends" naming removed |
+
+### Things the next agent should know
+- **Palette is still the original pink.** A teal/berry/beige redesign was built and then
+  taken out of #41 by the owner's decision. It is preserved on the unmerged
+  `board-coach-palette-backup` branch. Don't merge or revive it without asking.
+- **Migration file dates must sort after everything already applied.** `db push`
+  refuses a local migration dated earlier than the newest one in production (the only
+  way past is `--include-all`, which `AGENTS.md` forbids without owner approval). If an
+  unapplied migration ends up dated too early, rename it to a later timestamp before
+  pushing. Both 2026-10-07 migrations were renamed for exactly this reason.
+- **`db push` needs every applied migration file present locally.** Pushing from a
+  branch that lacks an applied file fails with "Remote migration versions not found".
+  Do **not** run the `migration repair` / `db pull` commands the CLI suggests; check out
+  a branch that has the files (normally `main`).
+- **Bump `SOLVER_VERSION` in `netlify/functions/lib/solver.js`** whenever move
+  generation, scoring, the dictionary, the board layout handling or the solve response
+  shape changes. Cached `game_solutions` rows with an older version are recomputed.
+  It is `2` as of #41.
+- **Two caches sit in front of the coach**, in this order: the player's saved review
+  (`game_coach_notes`), then the shared solve (`game_solutions`), then a live solve and
+  a model call. Both tables are optional at runtime: if one is missing, the functions
+  fall back to the uncached behaviour.
+
+### Open follow-ups (none are blocking)
+- **Coach `max_tokens` is 4000.** The owner once found long games' reviews cut off
+  before the takeaways and tried 8000 locally (never merged; the edit was against
+  pre-solver code). Worth revisiting in `game-coach.js` if reviews still truncate.
+- **Old games' history replay** draws the new board layout under their tiles
+  (cosmetic only; the server-side solver and export use each game's own layout).
+- **Issue #10:** move tile generation server-side into `create_active_game`.
+- **Coach monetization:** gate "Coach me" behind `MONETIZATION_ENABLED`, and create
+  coach-pack products in RevenueCat / App Store Connect for `COACH_REVIEW_LIMIT`.
+- **App Store path** is unchanged: blocked on Apple Developer Program enrollment
+  (see "Known Issues / Pending Work" below and `APP_STORE.md`).
+- **Branch cleanup:** many merged `claude/*` branches remain on GitHub and can be
+  deleted. Keep `board-coach-palette-backup` until the owner decides on the palette.
+
+---
 
 ## What This App Is
 **LoveWords** is an async two-player word game built as a web app (targeting App Store next).
@@ -44,69 +103,94 @@ Dev: `jest@^29.7.0`, `jest-expo@^55`, `ts-jest@^29.4.9`
 
 ```
 C:\Users\victo\lovewords\
-├── App.tsx                          ← Root: auth gate, navigation, push registration
-├── package.json
-├── netlify.toml                     ← Build + SPA redirect config
+├── App.tsx                          ← Root: auth gate, password-recovery gate, navigation, push registration
+├── AGENTS.md / CLAUDE.md            ← Agent rules (CLAUDE.md imports AGENTS.md); production DB safety
 ├── AGENT_HANDOFF.md                 ← This file
-├── RELEASE_NOTES.md                 ← Changelog by session
-├── ISSUES.md                        ← Active bug tracker (update each session)
-├── APP_STORE.md                     ← App Store submission kit (listing, privacy, checklist)
+├── DEPLOY.md                        ← Deploy runbook: env vars, migrations, verification, rollback
+├── CHANGELOG.md / RELEASE_NOTES.md  ← What shipped (by date / by session)
+├── ISSUES.md                        ← Bug & UX tracker
+├── APP_STORE.md                     ← App Store submission kit
+├── supabase_schema.sql              ← Reference schema for FRESH installs only; keep in sync with migrations
+├── docs/ai/
+│   ├── style.md                     ← UI style guide (read before changing UI)
+│   ├── features/post-game-move-solver/spec.md
+│   └── archive/                     ← Specs for finished features
 ├── public/
 │   ├── sw.js                        ← Service worker (background push, notificationclick)
 │   └── privacy.html                 ← Privacy policy (served at /privacy.html)
-├── supabase/
-│   └── migrations/
-│       ├── 20260723000100_private_game_analysis_events.sql  ← analysis events table + scrub trigger
-│       ├── 20260728000100_player_discovery_invites.sql      ← discovery/invites + notification tables & claim RPC
-│       └── 20260729000100_notification_claim_timestamp_fix.sql  ← fixes current_time→claim_time (unblocks push/nudge)
+├── supabase/migrations/             ← Forward-only; all applied to production (see DEPLOY.md §3)
+│   ├── 20260723000100_private_game_analysis_events.sql
+│   ├── 20260728000100_player_discovery_invites.sql
+│   ├── 20260729000100_notification_claim_timestamp_fix.sql
+│   ├── 20260731000100_email_invites.sql
+│   ├── 20260804000100_restore_notification_claim_timestamp_fix.sql
+│   ├── 20261007000100_game_solutions.sql      ← shared solve cache (#38)
+│   └── 20261007000200_game_coach_notes.sql    ← saved coach reviews (#41)
 ├── scripts/
 │   ├── generate-icons.js            ← rasterizes assets/logo/icon.svg → PNGs
 │   ├── inject-web-meta.js           ← injects PWA/iOS meta into dist/index.html
 │   └── dev-analysis-server.js       ← local mock analysis endpoint (npm run dev:analysis)
-├── netlify/
-│   └── functions/
-│       ├── notify.js                ← Serverless: receives POST, sends Web/Expo push
-│       ├── delete-account.js        ← Account deletion
-│       ├── game-analysis-common.js  ← Shared auth + sanitizeGameExport helpers
-│       ├── game-analysis-token.js   ← Issues 1-hour analysis capability tokens
-│       ├── game-analysis.js         ← Returns sanitized game JSON for a token
-│       └── game-coach.js            ← AI coaching via Claude (@anthropic-ai/sdk)
+├── netlify/functions/
+│   ├── notify.js                    ← Server-authorized Web/Expo push
+│   ├── send-invite.js               ← Optional invite email auto-send (Resend)
+│   ├── delete-account.js            ← Account deletion
+│   ├── game-analysis-common.js      ← Shared auth, Supabase headers, sanitizeGameExport, board metadata
+│   ├── game-analysis-token.js       ← Issues 1-hour analysis capability tokens
+│   ├── game-analysis.js             ← Returns sanitized game JSON for a token
+│   ├── game-solve.js                ← POST /api/games/:id/solve — per-turn best plays (cached)
+│   ├── game-coach.js                ← POST /api/games/:id/coach — AI review via Claude (cached)
+│   └── lib/
+│       ├── solver.js                ← Deterministic move generator; SOLVER_VERSION
+│       ├── solveCache.js            ← game_solutions read/upsert, asker stamping
+│       ├── coachNotes.js            ← game_coach_notes read/save, COACH_REVIEW_LIMIT
+│       ├── analysisLimits.js        ← cooldowns, prompt and response size caps
+│       ├── dictionary.js            ← server dictionary (enable1.txt.gz + wordSupplement.json)
+│       └── enable1.txt.gz
 └── src/
     ├── screens/
-    │   ├── AuthScreen.tsx           ← Login / Register form
-    │   ├── LobbyScreen.tsx          ← Home: game list, New game hero, Active/Past tabs, delete
-    │   ├── NewGameModal.tsx         ← Partner/Friend toggle + email invite + Practice Solo
-    │   ├── GameScreen.tsx           ← Main game + finished-game coaching (the core)
-    │   └── LoveNotesModal.tsx       ← In-game chat/love notes (mode-aware copy)
+    │   ├── AuthScreen.tsx           ← Sign in / Sign up / Forgot password
+    │   ├── RecoveryScreen.tsx       ← "Choose a new password" after a reset link
+    │   ├── LobbyScreen.tsx          ← Home: game list, New game hero, Active/Past tabs, unread dots
+    │   ├── NewGameModal.tsx         ← Menu-first: Find a player / Invite by email or phone / Solo
+    │   ├── GameScreen.tsx           ← Main game + finished-game solve table and coaching
+    │   ├── LoveNotesModal.tsx       ← In-game chat/love notes (mode-aware copy)
+    │   ├── StatsScreen.tsx          ← Your record, splits, bests, streaks, opponents
+    │   ├── HeadToHeadScreen.tsx     ← You vs one opponent
+    │   ├── AchievementsScreen.tsx   ← Badge board (partner + friend tracks)
+    │   ├── SettingsScreen.tsx
+    │   └── PaywallScreen.tsx        ← Dormant until MONETIZATION_ENABLED
     ├── components/
-    │   ├── BoardComponent.tsx       ← 15×15 board, exports getCellSize(); uses Gesture.Pan
-    │   ├── TileRack.tsx             ← Drag rack with react-native-gesture-handler (drag + tap)
+    │   ├── BoardComponent.tsx       ← 15×15 board (rounded squares), exports getCellSize(); Gesture.Pan
+    │   ├── TileRack.tsx / tileRackGesture.ts ← Drag rack (react-native-gesture-handler)
     │   ├── TileComponent.tsx        ← Single tile (selected state, blank, isNew, highlight)
     │   └── ScoreBoard.tsx           ← Score + bag count header
     ├── engine/
-    │   ├── board.ts                 ← createEmptyBoard, isValidPlacement, applyMoveToBoard, BOARD_SIZE=15
-    │   ├── scoring.ts               ← scoreMove, getFormedWords (bonus rules)
-    │   ├── tiles.ts                 ← createTileBag, drawTiles, shuffle, exchangeTiles
-    │   └── dictionary.ts            ← validateWords (async, ENABLE list, localStorage cache)
+    │   ├── board.ts                 ← createEmptyBoard (current layout), placement rules, BOARD_SIZE=15
+    │   ├── scoring.ts               ← scoreMove, getFormedWords
+    │   ├── tiles.ts                 ← createTileBag, drawTiles, shuffle
+    │   ├── dictionary.ts            ← validateWords (ENABLE list + wordSupplement.json)
+    │   ├── gameHistory.ts           ← v2 move history + deterministic replay
+    │   ├── rackOrder.ts             ← local rack organization
+    │   ├── achievements.ts          ← pure achievement rules
+    │   └── stats.ts                 ← pure stats + head-to-head
     ├── supabase/
     │   ├── config.ts                ← Supabase client (URL + anon key hardcoded here)
-    │   ├── authService.ts           ← register, login, logout, onAuthChange, getUserByEmail
-    │   └── gameService.ts           ← All game DB operations (see full breakdown below)
-    ├── hooks/
-    │   └── useAuth.ts               ← Wraps onAuthChange in useState/useEffect
-    ├── types/
-    │   └── index.ts                 ← All shared TypeScript types
+    │   ├── authService.ts           ← register, login, logout, password reset, onAuthChange
+    │   ├── gameService.ts           ← All game DB operations (see full breakdown below)
+    │   └── mockClient.ts            ← ?dev=1 mock backend
+    ├── hooks/useAuth.ts
+    ├── types/index.ts               ← All shared TypeScript types
     └── utils/
         ├── colors.ts                ← Color palette (WCAG AAA light pink/rose theme)
-        ├── styles.ts                ← Shared design tokens: RADII (sm/md/lg/xl) and SHADOWS (card/btn)
+        ├── styles.ts                ← RADII / SHADOWS tokens
+        ├── displayName.ts           ← shortName / shortNamesFor ("First L.")
+        ├── invites.ts, pendingInvite.ts       ← invite helpers
+        ├── passwordRecovery.ts, pendingRecovery.ts ← reset-link handling
+        ├── freeGameLimit.ts, purchases.ts     ← MONETIZATION_ENABLED (dormant)
         ├── apiBase.ts               ← FUNCTIONS_BASE for calling the Netlify functions
-        ├── webNotifications.ts      ← in-tab Notification() helpers
-        ├── notifications.ts         ← native Expo push registration
-        ├── pushSubscription.ts      ← Web Push SW registration + push_subscriptions upsert
-        ├── appBadge.ts              ← setupBadgeClearing() (Badging API, iOS PWA)
-        └── purchases.ts             ← MONETIZATION_ENABLED flag (RevenueCat, dormant for v1.0)
+        ├── webNotifications.ts, notifications.ts, pushSubscription.ts, appBadge.ts
 
-(Not shown: __tests__/ — 11 Jest suites; assets/ — icons/logo.)
+(Not shown: __tests__/ — 37 Jest suites; assets/ — icons, logo, achievements/ pixel-art badges.)
 ```
 
 ---
@@ -316,6 +400,25 @@ own; all writes go through security-definer RPCs. Key functions:
   silent empty result) so the New Game flow doesn't mistake a throttle/error
   for "not a member." Client `getUserByEmail` throws on error, returns null only
   for a confirmed miss.
+
+### `game_solutions` (solve cache, #38)
+Migration `20261007000100_game_solutions.sql`. One row per **finished** game:
+`game_id` (PK, FK → `games`, cascade), `solution` (jsonb object), `solver_version`
+(int), `created_at`. Player-independent: the asker (`askingAlias`, `isAsking`) is
+stripped before writing and stamped back at read time, so one row serves both
+players and both `/solve` and `/coach`. Only complete solves are stored (a solve
+cut short by the time budget is not). A row whose `solver_version` is older than
+`SOLVER_VERSION` is a miss and gets overwritten. RLS on; no client role has any
+grant; `service_role` has `select, insert, update`. Written only by
+`lib/solveCache.js`.
+
+### `game_coach_notes` (saved coach reviews, #41)
+Migration `20261007000200_game_coach_notes.sql`. One row per (finished game, asking
+player): `game_id` + `user_id` (composite PK), `analysis` text, `recording_quality`,
+`truncated`, `model`, `created_at`; index on `user_id` for the quota count. A saved
+review is returned on every later "Coach me" press (no solver, no model call, no
+cooldown, does not count against the limit). RLS on; no client role has any grant;
+`service_role` has `select, insert`. Written only by `lib/coachNotes.js`.
 
 ---
 
@@ -760,10 +863,16 @@ Registration (`authService.ts`):
 
 ```
 Stack.Navigator (no header)
-├── "Auth"  → AuthScreen         (shown when user === null)
-└── "Lobby" → LobbyScreen        (shown when logged in)
-    └── "Game" → GameScreen      (navigate with { gameId, myUid, myDisplayName })
-        └── LoveNotesModal       (rendered inside GameScreen, visibility toggled)
+├── RecoveryScreen                (rendered instead of the stack while a password reset is in progress)
+├── "Auth"  → AuthScreen          (shown when user === null)
+└── "Lobby" → LobbyScreen         (shown when logged in)
+    ├── "Game" → GameScreen       (navigate with { gameId, myUid, myDisplayName })
+    │   └── LoveNotesModal        (rendered inside GameScreen, visibility toggled)
+    ├── "Settings" → SettingsScreen
+    ├── "Achievements" → AchievementsScreen
+    ├── "Stats" → StatsScreen
+    ├── "HeadToHead" → HeadToHeadScreen
+    └── "Paywall" → PaywallScreen (dormant)
 ```
 
 ---
@@ -776,7 +885,7 @@ When it's the user's turn (normal games only, not solo) and they're losing by mo
 
 ## Finished-Game Analysis & AI Coaching
 
-Two serverless features let a player review a **finished** game. Both authenticate
+Three serverless features let a player review a **finished** game. Both authenticate
 the caller's Supabase session and confirm they're a player of a `status:'finished'`
 game before doing anything. Shared server helpers live in
 `netlify/functions/game-analysis-common.js` (`fetchSupabaseUser`, `fetchGame`,
@@ -797,39 +906,49 @@ A sanitized, versioned JSON export designed to be fed to an external AI via `cur
   functions go live** (it's transactional + idempotent).
 - Local review: `npm run dev:analysis` (mock server on :8088) + `?dev=1`.
 
-### 2. AI coaching (in-app) — `game-coach.js`
-Turns that same export into a written coaching note shown **inside the app** (no curl).
-- **`game-coach.js`** — `POST /api/games/:id/coach`; auth via Supabase session → builds
-  `sanitizeGameExport(...)` → calls the **Claude API** (`@anthropic-ai/sdk`,
-  `COACH_MODEL = 'claude-sonnet-5'`, `thinking:{type:'adaptive'}` + `output_config:{effort:'low'}`)
-  → returns `{ analysis, recordingQuality }`. Requires **`ANTHROPIC_API_KEY`** in Netlify
-  (secret, **Functions**-scoped — not "All scopes", since secrets can't use Post-processing).
-  ~4¢/game. `claude-opus-5` is more precise but pricier/slower; `claude-haiku-4-5` is cheapest
-  but too vague for concrete better-play advice (and rejects the thinking/effort params).
+### 2. Move solver (in-app) — `game-solve.js` (#24)
+- **`game-solve.js`** — `POST /api/games/:id/solve`; auth + participant + finished
+  checks → for every turn, the best legal plays from the rack the player actually held
+  (`lib/solver.js`, deterministic, 25 s budget). Shown as a per-turn table on the
+  finished-game screen (`requestGameSolve` in `gameService.ts`).
+- Each game is replayed on **its own** premium-square layout: the export's
+  `boardMetadata` is read from the stored board (version 1 = the original layout,
+  version 2 = the current one from #41).
+- **Cached** in `game_solutions` (see Supabase Tables). A hit skips the export and the
+  solver. Bump **`SOLVER_VERSION`** (currently `2`) whenever solver output for the
+  same game could change. Spec: `docs/ai/features/post-game-move-solver/spec.md`.
+
+### 3. AI coaching (in-app) — `game-coach.js`
+- **`game-coach.js`** — `POST /api/games/:id/coach`. Order of work:
+  1. auth, participant and finished checks;
+  2. the player's **saved review** in `game_coach_notes` → returned as-is (`cached: true`);
+  3. per-endpoint cooldown, then the optional **`COACH_REVIEW_LIMIT`** (402
+     `coach_limit_reached` at the cap; unset = unlimited);
+  4. the **cached solve** from `game_solutions`, else a live solve (15 s, within a
+     shared 50 s request budget that reserves 30 s for the model) that is then cached;
+  5. the Claude call — `COACH_MODEL = 'claude-sonnet-5-5'`, `max_tokens: 4000`,
+     `thinking:{type:'adaptive'}`, `output_config:{effort:'low'}` — grounded in the
+     solver's facts, with the prompt payload capped by `lib/analysisLimits.js`;
+  6. the review is saved to `game_coach_notes` (best effort).
+- Requires **`ANTHROPIC_API_KEY`** in Netlify (secret, **Functions**-scoped). ~4¢ per
+  new review; re-reads are free.
 - **Client**: `requestGameCoaching(gameId)` in `gameService.ts` (has a `?dev=1` canned
-  mock). Wired into the finished-game screen in `GameScreen.tsx` — the "🤖 Coach me on
-  this game" button renders the returned text in a card. (This replaced the old
-  curl-command UI; the analysis-token/export endpoints above still exist for power users.)
-- **Recording quality**: coaching is only rack-aware for **v2 games** (created after the
-  analysis feature shipped) — those return `recordingQuality: 'full'` and get concrete
-  "you should have played X" advice. Older games return `'basic'` (no per-turn rack was
-  ever recorded — unrecoverable); the card shows an "played before full move tracking" note
-  and the coach gives higher-level feedback only. This is expected, not a bug.
-- **Latency note**: Sonnet + adaptive thinking on a long game can approach the Netlify
-  sync-function timeout; if that shows up, drop the `thinking` param, lower effort, or stream.
-- **App Store TODO**: gate the coach behind premium — wire the "Coach me" button to the
-  dormant `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts` so it's premium-only when
-  monetization is turned on. Not gated today (free for everyone).
+  mock), rendered in a card on the finished-game screen ("🤖 Coach me on this game").
+- **Recording quality**: coaching is only rack-aware for **v2 games**. Older games return
+  `recordingQuality: 'basic'`; the card shows a "played before full move tracking" note.
+  Expected, not a bug.
+- **App Store TODO**: gate the coach behind premium via the dormant
+  `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts`. Not gated today.
 
 ---
 
 ## Tests
 
-**255 unit tests across 23 suites**, all passing. Run with:
+**497 unit tests across 37 suites**, all passing (2026-10-07), and `npx tsc --noEmit` is clean. Run with:
 ```bash
 npx jest            # (package.json "test" script runs jest --coverage)
 ```
-Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysis*`, `contrast`, `playerDiscovery*`, `gameInvites`, and the invite suites: `invites` (pure helpers), `emailInvites` (service layer), `emailInvitesSql` (SQL-contract assertions over the migration **and** `supabase_schema.sql`), plus `playerDiscoveryUiContract` (asserts the New Game modal's flow strings). All in `__tests__/`. Always run after touching `src/engine/`, `src/supabase/gameService.ts`, the analysis functions, the invite SQL/migration, or the New Game modal. **The SQL-contract tests read both the migration and the schema snapshot — keep the two in sync when editing invite SQL.**
+Suites include `board`, `boardLayout`, `scoring`, `solver`, `solveHandler`, `solveCache`, `coachHandler`, `achievements`, `stats`, `displayName`, `loveNoteUnread*`, `password*`,, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysis*`, `contrast`, `playerDiscovery*`, `gameInvites`, and the invite suites: `invites` (pure helpers), `emailInvites` (service layer), `emailInvitesSql` (SQL-contract assertions over the migration **and** `supabase_schema.sql`), plus `playerDiscoveryUiContract` (asserts the New Game modal's flow strings). All in `__tests__/`. Always run after touching `src/engine/`, `src/supabase/gameService.ts`, the analysis functions, the invite SQL/migration, or the New Game modal. **The SQL-contract tests read both the migration and the schema snapshot — keep the two in sync when editing invite SQL.**
 
 ---
 
@@ -845,15 +964,15 @@ Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`,
 6. **EAS Build + submit** — ⏳ blocked on the Apple Developer Program account (user enrolling; $99/yr). Then `eas init` → `eas build --platform ios --profile production` → App Store Connect app record → `eas submit`. Bundle ID is `com.lovewords.app`.
 7. **Screenshots** — ⏳ best captured from the iOS Simulator at 1290×2796 once built; framing/captions in `APP_STORE.md`.
 8. **Friend mode** — ✅ **DONE (Session 9).** See the "Partner/Friend Mode + Home Screen" section below.
-9. **Player invites (email/phone) + New Game flow rework** — ✅ **DONE and merged to `main`** (PRs #15–#18; see the Deploy state note at the top). Delivery defaults to the inviter's own mail app / Messages (no provider). Menu-first flow (Find / Invite / Solo) shipped in Session 12; Session 13 added punny mode-pill subtitles ("Love letters" / "Fighting words" with a plain-language gloss under each) — currently uncommitted, see the header note.
+9. **Player invites (email/phone) + New Game flow rework** — ✅ **DONE and merged to `main`** (PRs #15–#23). Delivery defaults to the inviter's own mail app / Messages (no provider). Menu-first flow (Find / Invite / Solo) shipped in Session 12; Session 13 added punny mode-pill subtitles ("Love letters" / "Fighting words" with a plain-language gloss under each) — merged in #19.
 10. **"Add from Contacts" on the invite field** — ⏳ **Deferred, by user decision (Session 13).** No web API exists for a Contacts *picker* on iOS Safari/PWA (Apple has never implemented the W3C Contact Picker API) — this is a platform wall, not a bug. Android Chrome does support it (`navigator.contacts.select`) as a progressive enhancement, and `textContentType`/`autoComplete` hints on the contact `TextInput` in `NewGameModal.tsx` would let iOS's QuickType bar suggest a matching contact while typing, but neither was built — the user explicitly chose to wait for the native app instead of building either partial option. **A real contacts picker on iOS only becomes possible once the native app ships** (`expo-contacts` via EAS Build — see item 6 above, blocked on Apple Developer Program enrollment). If this comes up again: don't re-investigate from scratch, just confirm the EAS Build status and revisit then. Note also: `public/privacy.html` currently states invite contacts are "never the device address book" — that claim would need updating if a contacts picker is ever added.
 
 ⚠️ **User-generated content / review risk:** players send free-text messages. v1.0 is invite-only (low risk) but Apple may ask about UGC; block/report/filter becomes mandatory once **Phase 2 random matchmaking** ships.
 
 ### Nice to fix
-5. **Push notifications end-to-end not fully verified** — the Netlify function has been deployed but the full flow (opponent receives notification when not on page) hasn't been confirmed working end-to-end.
+5. ~~**Push notifications end-to-end not fully verified**~~ — ✅ verified in Session 11 (nudge confirmed from the installed iOS PWA).
 
-6. **Pre-existing TypeScript errors** — leftover `src/firebase/` directory from an earlier abandoned Firebase attempt causes TS errors. They don't block the Expo web build (Expo uses Babel/Metro, not `tsc`). Safe to ignore or delete the `src/firebase/` folder entirely.
+6. ~~**Pre-existing TypeScript errors**~~ — ✅ fixed in #37; `tsc --noEmit` is clean. Keep it that way.
 
 7. **`exchangeTiles` in `tiles.ts`** — exported but never called anywhere. The swap logic in `swapTiles`/`swapSoloTiles` in `gameService.ts` is inlined. Can be cleaned up.
 

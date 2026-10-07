@@ -1,10 +1,38 @@
 # Lovewords — Active Bug & UX Issues
 
-> Updated 2026-07-30. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> Updated 2026-10-07. Pass this to the next agent alongside `AGENT_HANDOFF.md`.
+> GitHub issues are the source of truth for new work; as of 2026-10-07 the only open one is #10.
 > All file paths are relative to `C:\Users\victo\lovewords\`.
 > ✅ = resolved  🔴 = critical  🟠 = high  🟡 = medium
 
 ---
+
+## ✅ Issue #25 — Post-game solve re-ran on every view (FIXED — Session 14)
+
+**Symptom:** opening a finished game's analysis, or tapping "Coach me", re-ran the
+move solver every time: ~6 s and up to the 25 s budget in production (Netlify's
+Lambda CPU is ~15× slower than a dev machine).
+**Fix:** #38 caches one player-independent solve per finished game in
+`game_solutions`, shared by `/solve` and `/coach`; #41 also saves each player's
+coach review in `game_coach_notes`. Both migrations applied to production on
+2026-10-07. Any cache failure falls back to a live solve.
+
+## 🟡 Watch — Coach reviews cut off on very long games
+
+`game-coach.js` uses `max_tokens: 4000`. The owner has seen long games' reviews end
+before the takeaways. If it recurs, raise `max_tokens` (8000 was tried locally) and
+check the response still fits Netlify's 60 s limit.
+
+## 🟡 Open — Game creation trusts client-generated tiles (GitHub #10)
+
+`create_active_game` checks the shape of a new game but not that the tiles are a
+legal draw, so a modified client could deal itself a better rack. Fix: generate the
+bag and racks server-side. Low risk between people who trust each other; tracked so
+it's a decision, not an oversight.
+
+## ✅ Issue — Four TypeScript errors on main (FIXED — #37)
+
+`npx tsc --noEmit` is clean as of 2026-10-05. Keep it that way.
 
 ## ✅ Issue — Push notifications & nudge broken after the invites deploy (FIXED — Session 11)
 

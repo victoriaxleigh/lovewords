@@ -1,8 +1,8 @@
 ---
 feature: post-game-move-solver
-status: implementing
+status: complete
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-10-07
 iteration: 3
 ---
 
@@ -509,3 +509,9 @@ issues, which no earlier test covered.
   `GameScreen.tsx`. Pure refactor: no migration, nothing persisted yet. Earlier log entries keep the
   old field names as written at the time. New shape test added; 350 tests pass. `COACH_SYSTEM`
   wording changed, so like the [iter 3] prompt edits it is unverified against a live model here.
+- [post-ship] follow-ups: complete — merged and live 2026-10-07. #28 collapsed the turn
+  booleans into one `status` field. #38 (closes #25) caches one player-independent solve per
+  finished game in `game_solutions`, shared by `/solve` and `/coach`, invalidated by
+  `SOLVER_VERSION`. #41 replays each game on its own premium-square layout (export
+  `boardMetadata.version` 1 = original layout, 2 = current), bumps `SOLVER_VERSION` to 2, and
+  saves each player's coach review in `game_coach_notes`. Both migrations applied to production.

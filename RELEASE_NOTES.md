@@ -2,6 +2,76 @@
 
 ---
 
+## Session 14 — 2026-09-08 → 2026-10-07
+
+### Post-game move solver, solve cache, saved coach reviews
+- **Move solver (#24, #28).** `game-solve.js` and `lib/solver.js` compute, for every
+  turn of a finished game, the best legal plays from the rack the player actually
+  held. The finished-game screen shows them per turn, and the AI coach is grounded
+  in those facts instead of guessing words.
+- **Solve cache (#38, closes #25).** The solve for a finished game is stored once in
+  `game_solutions` and shared by both players and by "Coach me". Repeat views no
+  longer pay a solve of up to ~25 s. `SOLVER_VERSION` invalidates old rows.
+- **Saved coach reviews (#41).** Each player's review is stored in
+  `game_coach_notes`, so "Coach me" again is instant and free. Optional
+  `COACH_REVIEW_LIMIT` caps reviews per player. Coach model is now
+  `claude-sonnet-5-5`.
+
+### New board layout (#41)
+LoveWords' own premium-square layout for new games; games already in progress keep
+the layout they started on, and the solver and analysis export read each game's own
+layout. Board squares are drawn as rounded, separated tiles. "Words With Friends"
+naming was removed from the app, the coach and the docs. A teal/berry palette was
+built in the same branch but removed before merge by the owner's decision; it is
+kept on the `board-coach-palette-backup` branch.
+
+### Player-facing features
+- **Stats and Head-to-head pages (#39).**
+- **Achievements board (#35)** with pixel-art badges (#33) and friend-track badges (#36).
+- **Forgot password (#32)** with an explicit "Choose a new password" screen.
+- **Unread dot for love notes (#31)** on the lobby row and game screen.
+- **First name + last initial everywhere (#40)**, plus long-name layout fixes and
+  no more iOS zoom when tapping the chat box.
+
+### Developer
+- UI style guide for agents: `docs/ai/style.md` (#34).
+- `tsc --noEmit` is clean (#37).
+
+### Production database
+Two migrations applied on 2026-10-07 through the linked CLI:
+`20261007000100_game_solutions.sql` and `20261007000200_game_coach_notes.sql`. Both
+were renamed from earlier dates before being applied, because `db push` refuses a
+migration dated earlier than one already in production. Local and remote migration
+history match. **497 tests pass** across 37 suites.
+
+---
+
+## Session 13 — 2026-08-04
+
+### Punny Partner/Friend mode subtitles (#19)
+The New Game modal's mode pills show a pun plus a short gloss: 💕 Partner →
+*"Love letters"* / "sweet nothings between moves", 🎲 Friend → *"Fighting words"* /
+"friendly trash talk between moves". Each pill has one accessibility label with the
+full context. Same day: reliable invite copy fallback, pre-addressed invite
+email/text (#21), action-row and scoreboard overflow fixes on small screens (#20,
+#22), and the Contacts-picker deferral documented (#23): iOS Safari/PWA has no
+contacts picker API, so it waits for the native app.
+
+---
+
+## Session 12 — 2026-08-03
+
+### Invite people who aren't on LoveWords yet (#15–#18)
+Entering an email or phone number with no account mints a single-use invite (code +
+link). The invitee opens `?invite=CODE` or types the code at sign-up and lands in a
+real game with the inviter. Redemption is atomic and idempotent through
+`create_active_game`. Delivery uses the inviter's own email app (mailto) or Messages
+(sms), so no provider is needed; optional Resend auto-send is wired but off by
+default. The New Game modal opens to a menu first (🔍 Find a player / 💌 Invite by
+email or phone / 🎯 Practice solo). Migration `20260731000100_email_invites.sql`.
+
+---
+
 ## Session 11 — 2026-07-30
 
 ### Push notifications & nudge regression fix

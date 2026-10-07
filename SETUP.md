@@ -28,17 +28,24 @@ variable (and the secret-scope rules), Supabase migrations, auto vs manual
 deploy, post-deploy smoke tests, and rollback. The quick notes below are a
 summary; `DEPLOY.md` is the source of truth.
 
+### Database migrations
+
+All migrations in `supabase/migrations/` are already applied to production (status
+table in `DEPLOY.md` §3). Apply any **new** migration with the linked Supabase CLI
+workflow in `AGENTS.md` / `DEPLOY.md` §3, **before** deploying code that depends on it.
+Never paste migrations into the SQL Editor, and never apply the full
+`supabase_schema.sql` to an existing project; it is for fresh installs only.
+
 ### Finished-game analysis export
 
-Deploy the database migration before the client/functions that write version-2 events:
+Already applied in production. On a new environment, deploy the database migration
+before the client/functions that write version-2 events:
 
-1. Open Supabase **SQL Editor → New query**.
-2. Paste and run
-   `supabase/migrations/20260723000100_private_game_analysis_events.sql`.
-   Run this standalone migration—not the full `supabase_schema.sql`—against an existing project.
-   It is transactional and safe to rerun.
-3. Configure the three Netlify server-only variables below.
-4. Run `npm run build:web`, then deploy the site/functions.
+1. Apply `supabase/migrations/20260723000100_private_game_analysis_events.sql` with
+   `npx supabase db push --linked` (dry run first; see `DEPLOY.md` §3). It is
+   transactional and safe to rerun.
+2. Configure the three Netlify server-only variables below.
+3. Run `npm run build:web`, then deploy the site/functions.
 
 This order prevents a newly deployed client from leaving hidden rack/draw/return history in the
 participant-readable `games.moves` JSON while the database is still on the old schema. The
@@ -46,12 +53,10 @@ migration backfills any pre-migration version-2 events before scrubbing those hi
 
 ### Player discovery and invitations
 
-Before deploying a client with display-name discovery, run the standalone
-`supabase/migrations/20260728000100_player_discovery_invites.sql` migration in the Supabase SQL
-Editor. It is transactional and safe to rerun. This must be deployed first: it removes broad
-authenticated profile reads, adds opt-in discovery, and installs the privacy-safe search and exact
-email lookup functions used by the client. Use the standalone migration for an existing project,
-not the full `supabase_schema.sql`.
+Already applied in production. On a new environment, apply
+`supabase/migrations/20260728000100_player_discovery_invites.sql` the same way before deploying
+a client with display-name discovery. It removes broad authenticated profile reads, adds opt-in
+discovery, and installs the privacy-safe search and exact email lookup functions the client uses.
 
 The analysis-token functions require these server-only Netlify environment variables:
 
@@ -71,7 +76,10 @@ analysis signing secret through `EXPO_PUBLIC_*` variables or client code.
 These require accounts I (the agent) can't create or log into — do these
 whenever you're ready to pick up "the Apple stuff":
 
-### Supabase — run once in the SQL Editor
+### Supabase — add as a new forward-only migration when native work starts
+Not applied yet. Put this in a new file under `supabase/migrations/` (dated after the
+newest applied migration) and apply it with the CLI workflow in `DEPLOY.md` §3,
+then mirror it in `supabase_schema.sql`:
 ```sql
 -- Paywall: tracks whether a user has unlocked lifetime access
 ALTER TABLE profiles ADD COLUMN has_paid boolean DEFAULT false;

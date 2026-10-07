@@ -59,19 +59,42 @@ build) for functions to see it.
 
 ## 3. Supabase migrations (one-time, before dependent code)
 
-Run in **Supabase → SQL Editor → New query**. These are transactional and safe
-to re-run.
+Apply new migrations with the **linked CLI workflow in `AGENTS.md`**, never by
+pasting SQL into the Supabase SQL Editor:
+
+```sh
+npx supabase migration list --linked      # Local and Remote must match for everything already applied
+npx supabase db push --linked --dry-run   # review: only the new file(s) should be listed
+npx supabase db push --linked --yes
+npx supabase migration list --linked      # confirm they now match again
+```
+
+One-time setup on a new machine: `npx supabase login`, then
+`npx supabase link --project-ref <project ref>` (Project Settings → General →
+Project ID). Two rules learned the hard way:
+
+- **A new migration must be dated after the newest applied one.** `db push`
+  refuses an earlier-dated file (getting past that needs `--include-all`, which
+  needs owner approval). If an unapplied migration sorts too early, rename it.
+- **Push from a checkout that contains every applied migration file** (normally
+  `main`). Otherwise the CLI says "Remote migration versions not found". Do not
+  run the `migration repair` / `db pull` commands it suggests.
+
+**Status as of 2026-10-07: everything below is applied to production**, and the
+CLI history matches. The first two rows predate the CLI workflow and were run by
+hand once.
 
 | Migration | For | Status |
 |---|---|---|
-| `alter table games add column if not exists mode text not null default 'partner';` | Partner/Friend mode | apply once |
-| `supabase/migrations/20260723000100_private_game_analysis_events.sql` | Analysis export + AI coach (creates `game_analysis_events` + scrub trigger) | apply once |
-| `supabase/migrations/20261007000200_game_coach_notes.sql` | Coach review cache + quota (creates `game_coach_notes`, service-role only). Optional: without it the coach still works, it just isn't cached or limited | apply once via the linked CLI workflow in `AGENTS.md` |
-| RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | apply once |
-| `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | apply once |
-| `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | apply once |
-| `supabase/migrations/20260731000100_email_invites.sql` | Email / code invites for people not yet on the app (creates `email_invites` + `create_email_invite` / `create_phone_invite` / `redeem_email_invite` RPCs). Redemption creates the game **atomically** inside the RPC via `create_active_game`; codes use `gen_random_bytes`; `claim_invite_email_delivery` rate-limits invite emails; `find_profile_by_email` now raises on throttle. Fully idempotent — **re-run it to pick up the review fixes** if you applied an earlier copy. Required for invites; the optional `send-invite` function only *delivers* email invites | apply once (re-run safe) |
-| `supabase/migrations/20261007000100_game_solutions.sql` | Post-game solve cache (creates backend-only `game_solutions`, one row per finished game, read and upserted by `game-solve` / `game-coach`). Apply with the linked CLI workflow in `AGENTS.md` (`migration list` → `db push --dry-run` → review → `db push --yes` → `migration list`), **before** the dependent code ships. Without it the functions still work, just with a live solve on every request | apply once (re-run safe) |
+| `alter table games add column if not exists mode text not null default 'partner';` | Partner/Friend mode | ✅ applied (by hand) |
+| RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | ✅ applied (by hand) |
+| `supabase/migrations/20260723000100_private_game_analysis_events.sql` | Analysis export + AI coach (creates `game_analysis_events` + scrub trigger) | ✅ applied |
+| `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | ✅ applied |
+| `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | ✅ applied |
+| `supabase/migrations/20260731000100_email_invites.sql` | Email / code invites for people not yet on the app (creates `email_invites` + `create_email_invite` / `create_phone_invite` / `redeem_email_invite` RPCs). Redemption creates the game **atomically** inside the RPC via `create_active_game`; codes use a CSPRNG; `claim_invite_email_delivery` rate-limits invite emails; `find_profile_by_email` raises on throttle. Required for invites; the optional `send-invite` function only *delivers* email invites | ✅ applied |
+| `supabase/migrations/20260804000100_restore_notification_claim_timestamp_fix.sql` | Restores the corrected `claim_notification_delivery` (`claim_time`) after an older migration re-applied in the SQL Editor overwrote it | ✅ applied |
+| `supabase/migrations/20261007000100_game_solutions.sql` | Post-game solve cache (#38): backend-only `game_solutions`, one row per finished game, read and upserted by `game-solve` / `game-coach`. Without it the functions still work, with a live solve on every request | ✅ applied 2026-10-07 |
+| `supabase/migrations/20261007000200_game_coach_notes.sql` | Saved coach reviews + optional quota (#41): backend-only `game_coach_notes`. Without it the coach still works; reviews just aren't saved or limited | ✅ applied 2026-10-07 |
 
 The analysis migration must be applied **before** the analysis/coach functions
 are used, or exports fall back to `recordingQuality: "basic"` (no per-turn rack
@@ -82,7 +105,8 @@ data). See `AGENT_HANDOFF.md` for the full schema.
 if `20260728000100` (RPC/tables) or `20260729000100` (timestamp fix) is not
 applied, notifications fail server-side with a **502** that surfaces in the app
 as **"Could not nudge (E502)"**. The whole schema also lives in
-`supabase_schema.sql` — applying that once brings a fresh project fully current.
+`supabase_schema.sql`, but that file is for **fresh installs only**: never apply
+it to an existing environment (see `AGENTS.md`).
 
 ---
 
@@ -138,6 +162,10 @@ Then the real end-to-end checks:
   that `SUPABASE_SERVICE_KEY` is the secret/service_role key (see §2–§3). The
   client also distinguishes `E401`/`ESESSION` (auth) and `ENETWORK` from the
   `E502` Data-API failure, so the button code tells you which boundary broke.
+- Open a finished game twice: the per-turn best-plays table should come back
+  almost instantly the second time (served from `game_solutions`).
+- Tap **Coach me** twice on the same game: the second tap returns the saved
+  review immediately (served from `game_coach_notes`).
 - Finish a game → **Coach me on this game** → a **new** game returns the
   move-by-move review with rack-based tips (`recordingQuality: "full"`). Games
   created before the analysis feature show a "played before full move tracking"
@@ -148,17 +176,26 @@ Then the real end-to-end checks:
 ## 6. The AI coach — operating notes
 
 - **Model:** `COACH_MODEL` in `netlify/functions/game-coach.js` (currently
-  `claude-sonnet-5`, ~4¢/game). `claude-opus-5` is more precise/pricier;
-  `claude-haiku-4-5` is cheapest but too vague for concrete better-play advice
-  (and rejects the `thinking`/`output_config` params — remove them if you switch).
+  `claude-sonnet-5-5`, ~4¢ per new review). `claude-opus-5-5` is more
+  precise/pricier; `claude-haiku-4-5` is cheapest but too vague for concrete
+  better-play advice (and rejects the `thinking`/`output_config` params — remove
+  them if you switch).
+- **Each review is generated once per player per game** and saved in
+  `game_coach_notes`; pressing "Coach me" again is free. The solver result is
+  shared through `game_solutions`, so the coach rarely re-solves.
+- **`COACH_REVIEW_LIMIT`** (optional Netlify env var) caps how many games each
+  player can have reviewed. Unset means unlimited.
 - **Cost scales with usage, not installs** — it only runs when a player finishes
   a game and taps the button. Rough guide: ~1,000 coached games/month ≈ $40 on
   Sonnet.
 - **Don't delete/rotate `ANTHROPIC_API_KEY`** without redeploying, or the coach
   reverts to "not configured."
-- **Latency:** Sonnet + adaptive thinking on a long game can approach the
-  Netlify sync-function timeout. If that surfaces, lower `effort`, drop the
-  `thinking` param, or move the endpoint to streaming.
+- **Latency:** the coach shares one 50 s budget (Netlify's synchronous limit is
+  60 s): up to 15 s for a live solve, 30 s reserved for the model. With the solve
+  cache, a normal press skips the solve entirely. If reviews still time out,
+  lower `effort`, drop the `thinking` param, or move the endpoint to streaming.
+- **`max_tokens` is 4000.** Very long games have been seen to cut off before the
+  takeaways; raise it in `game-coach.js` if that recurs.
 - **App Store TODO:** gate the coach behind premium via the dormant
   `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts` before launch.
 

@@ -62,17 +62,20 @@ Requires `netlify login` first. Ask Victoria for Netlify access.
 
 ```
 src/
-├── screens/       — GameScreen, LobbyScreen, AuthScreen, LoveNotesModal
+├── screens/       — Game, Lobby, Auth, Recovery, NewGame, LoveNotes, Stats, HeadToHead, Achievements, Settings
 ├── components/    — BoardComponent, TileRack, TileComponent, ScoreBoard
-├── engine/        — board, scoring, tiles, dictionary logic
-├── supabase/      — Supabase client + all DB operations
+├── engine/        — board, scoring, tiles, dictionary, game history, achievements, stats
+├── supabase/      — Supabase client, all DB operations, ?dev=1 mock
 ├── hooks/         — useAuth
 ├── types/         — shared TypeScript types
-└── utils/         — colors, push notifications
+└── utils/         — colors, styles, display names, invites, push notifications
 
-netlify/functions/ — notify.js (serverless Web Push sender)
+netlify/functions/ — push (notify), invites, account deletion, finished-game analysis,
+                     move solver (game-solve) and AI coach (game-coach)
+supabase/migrations/ — forward-only database migrations (apply with the CLI; see DEPLOY.md)
 public/sw.js       — service worker for background push notifications
-__tests__/         — unit tests (board, scoring, tiles, swap, dictionary)
+__tests__/         — Jest unit tests (497 tests, 37 suites)
+docs/ai/           — UI style guide and feature specs for coding agents
 ```
 
 ## Architecture Notes

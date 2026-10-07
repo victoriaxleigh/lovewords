@@ -125,7 +125,9 @@ describe('standalone analysis-storage migration', () => {
     expect(setup).toContain(
       'supabase/migrations/20260723000100_private_game_analysis_events.sql'
     );
-    expect(analysisSetup.indexOf('SQL Editor → New query')).toBeLessThan(
+    // Database first, through the linked CLI (AGENTS.md forbids the SQL Editor).
+    expect(analysisSetup.indexOf('npx supabase db push --linked')).toBeGreaterThan(-1);
+    expect(analysisSetup.indexOf('npx supabase db push --linked')).toBeLessThan(
       analysisSetup.indexOf('Configure the three Netlify server-only variables')
     );
     expect(
