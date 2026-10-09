@@ -1,10 +1,10 @@
 ---
 feature: word-requests
-status: awaiting-deploy
+status: deployed-verifying
 created: 2026-10-09
 updated: 2026-10-09
 pr: https://github.com/victoriaxleigh/lovewords/pull/43
-branch: claude/word-requests
+branch: claude/word-requests (merged as 1e01bfd)
 ---
 
 # Handoff: word requests (PR #43)
@@ -121,13 +121,13 @@ or migration repair without explicit owner approval.
 > set. Tested on Deploy Preview #43 (which uses the production database):
 > Settings row, request, reject, approve and both pushes work. Pushes go to
 > the one device an account last registered (`push_subscriptions` is one row
-> per user), so test on that device. Test words SZDD and SGD were approved and
-> must be deleted from `added_words` if still there. Still to do: a
+> per user), so test on that device. Test words SZDD and SGD were approved, then
+> deleted from `added_words` by the owner. Still to do: a
 > non-reviewer account must not see the row; then steps 6–8.
 
 ### 6. Merge and deploy
 
-- [ ] Only after steps 1–5: merge PR #43 with a merge commit.
+- [x] Only after steps 1–5: merge PR #43 with a merge commit. (Merged 2026-10-09 as `1e01bfd`.)
 - [ ] Wait for the Netlify production deploy to publish. If the env var was set
       after the build started, trigger a redeploy.
 
