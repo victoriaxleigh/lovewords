@@ -87,7 +87,7 @@ Contact Info, never the address book.
 | Contact Info — Email Address | ✅ Yes | Yes | No | App Functionality (account, invites) |
 | Contact Info — Phone Number | ✅ Yes | Yes | No | App Functionality (invite someone by phone — you enter it; not read from the address book) |
 | Contact Info — Name (display name) | ✅ Yes | Yes | No | App Functionality |
-| User Content — in-game messages/notes | ✅ Yes | Yes | No | App Functionality |
+| User Content — in-game messages/notes, word requests | ✅ Yes | Yes | No | App Functionality |
 | Identifiers — push token | ✅ Yes | Yes | No | App Functionality (notifications) |
 | Contacts (address book) | ❌ No | — | — | — |
 | Location | ❌ No | — | — | — |

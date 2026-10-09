@@ -70,7 +70,9 @@ src/
 ├── types/         — shared TypeScript types
 └── utils/         — colors, push notifications
 
-netlify/functions/ — notify.js (serverless Web Push sender)
+netlify/functions/ — serverless functions: notify (push), game-solve and
+                     game-coach (move solver + AI coach), word-requests
+                     (player word requests + owner review), invites, account deletion
 public/sw.js       — service worker for background push notifications
 __tests__/         — unit tests (board, scoring, tiles, swap, dictionary)
 ```
@@ -80,5 +82,5 @@ __tests__/         — unit tests (board, scoring, tiles, swap, dictionary)
 - **Solo mode:** both players share the same UID; active side tracks by `moves.length % 2`
 - **Realtime:** Supabase Realtime subscriptions; always does a fresh `SELECT *` on update events (not `payload.new`) to guarantee all columns are present
 - **Drag + tap:** tiles can be placed by dragging or tapping (tap to select, tap cell to place)
-- **Dictionary:** ENABLE word list (~178k words) fetched from GitHub CDN on first load, cached in `localStorage`
+- **Dictionary:** ENABLE word list (~178k words) fetched from GitHub CDN on first load, cached in `localStorage`, plus ~2,400 newer words in `src/engine/wordSupplement.json` and any words the owner has approved through word requests (the `added_words` table, merged each time a game opens). The server solver uses the same three sources.
 - See `AGENT_HANDOFF.md` for full architecture details

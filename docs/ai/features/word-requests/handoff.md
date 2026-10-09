@@ -166,5 +166,9 @@ or migration repair without explicit owner approval.
 - The NWL check is inert until a licensed `nwl.txt.gz` exists. Its licensing
   terms (NASPA, info@scrabbleplayers.org) are the owner's to arrange; check
   whether the licence allows committing the file to this repo.
+- Rejected words come back when a different player asks, and reviewers get
+  pushed again; the same player re-asking after a rejection sees "requested"
+  though nothing is stored. Details and two smaller ones in `ISSUES.md` →
+  "Known limitations — word requests".
 - `lib/userPush.js` duplicates the two small push senders from `notify.js` on
   purpose, to keep the notification claim path untouched.

@@ -62,7 +62,8 @@ C:\Users\victo\lovewords\
 │   └── migrations/
 │       ├── 20260723000100_private_game_analysis_events.sql  ← analysis events table + scrub trigger
 │       ├── 20260728000100_player_discovery_invites.sql      ← discovery/invites + notification tables & claim RPC
-│       └── 20260729000100_notification_claim_timestamp_fix.sql  ← fixes current_time→claim_time (unblocks push/nudge)
+│       ├── 20260729000100_notification_claim_timestamp_fix.sql  ← fixes current_time→claim_time (unblocks push/nudge)
+│       └── 20261009000100_word_requests.sql                 ← word_requests (backend-only) + added_words (public read)
 ├── scripts/
 │   ├── generate-icons.js            ← rasterizes assets/logo/icon.svg → PNGs
 │   ├── inject-web-meta.js           ← injects PWA/iOS meta into dist/index.html
@@ -74,13 +75,19 @@ C:\Users\victo\lovewords\
 │       ├── game-analysis-common.js  ← Shared auth + sanitizeGameExport helpers
 │       ├── game-analysis-token.js   ← Issues 1-hour analysis capability tokens
 │       ├── game-analysis.js         ← Returns sanitized game JSON for a token
-│       └── game-coach.js            ← AI coaching via Claude (@anthropic-ai/sdk)
+│       ├── game-coach.js            ← AI coaching via Claude (@anthropic-ai/sdk)
+│       ├── game-solve.js            ← Server move solver for finished games
+│       ├── word-requests.js         ← Word requests: players ask, reviewers approve/reject (/api/word-requests)
+│       └── lib/                     ← dictionary.js (trie + addWords), solver.js, addedWords.js,
+│                                      nwl.js (optional licensed NWL check), userPush.js (push/email for word requests)
 └── src/
     ├── screens/
     │   ├── AuthScreen.tsx           ← Login / Register form
     │   ├── LobbyScreen.tsx          ← Home: game list, New game hero, Active/Past tabs, delete
     │   ├── NewGameModal.tsx         ← Partner/Friend toggle + email invite + Practice Solo
     │   ├── GameScreen.tsx           ← Main game + finished-game coaching (the core)
+    │   ├── SettingsScreen.tsx       ← Account, discoverability, Word requests row (reviewers only)
+    │   ├── WordRequestsScreen.tsx   ← Reviewer list of pending words: Add word / Reject
     │   └── LoveNotesModal.tsx       ← In-game chat/love notes (mode-aware copy)
     ├── components/
     │   ├── BoardComponent.tsx       ← 15×15 board, exports getCellSize(); uses Gesture.Pan
@@ -91,11 +98,13 @@ C:\Users\victo\lovewords\
     │   ├── board.ts                 ← createEmptyBoard, isValidPlacement, applyMoveToBoard, BOARD_SIZE=15
     │   ├── scoring.ts               ← scoreMove, getFormedWords (bonus rules)
     │   ├── tiles.ts                 ← createTileBag, drawTiles, shuffle, exchangeTiles
-    │   └── dictionary.ts            ← validateWords (async, ENABLE list, localStorage cache)
+    │   ├── dictionary.ts            ← validateWords (async, ENABLE + supplement + approved words), addWords
+    │   └── wordSupplement.json      ← ~2,400 newer words missing from ENABLE (SCOWL + hand-picked)
     ├── supabase/
     │   ├── config.ts                ← Supabase client (URL + anon key hardcoded here)
     │   ├── authService.ts           ← register, login, logout, onAuthChange, getUserByEmail
-    │   └── gameService.ts           ← All game DB operations (see full breakdown below)
+    │   ├── gameService.ts           ← All game DB operations (see full breakdown below)
+    │   └── wordRequests.ts          ← requestWord, listWordRequests, reviewWord, refreshAddedWords
     ├── hooks/
     │   └── useAuth.ts               ← Wraps onAuthChange in useState/useEffect
     ├── types/
@@ -151,6 +160,12 @@ ANTHROPIC_API_KEY=<Claude API key for the AI game-coach function (game-coach.js)
 RESEND_API_KEY=<Resend API key; when set, send-invite emails the invite via Resend>
 INVITE_FROM_EMAIL=<e.g. "LoveWords <play@yourdomain>"; needs a Resend-verified domain; else defaults to onboarding@resend.dev>
 APP_URL=<public origin for invite links; defaults to the Netlify site URL>
+
+# OPTIONAL — word requests (word-requests.js). Comma-separated emails of the
+# accounts that review requests in Settings → Word requests. They also get the
+# "new word request" push (and an email when RESEND_API_KEY is set).
+# Unset = nobody can review; players can still send requests.
+WORD_ADMIN_EMAILS=<owner's sign-in email[,another@example.com]>
 ```
 > ⚠️ Resend's shared `onboarding@resend.dev` sender can only deliver to your own
 > Resend account email. To email invites to **anyone**, you must verify a domain
@@ -320,6 +335,23 @@ own; all writes go through security-definer RPCs. Key functions:
   silent empty result) so the New Game flow doesn't mistake a throttle/error
   for "not a member." Client `getUserByEmail` throws on error, returns null only
   for a confirmed miss.
+
+### `word_requests` / `added_words`
+Migration `20261009000100_word_requests.sql` (additive, safe to re-run).
+- `word_requests`: one row per (word, player) with `status`
+  `pending`/`approved`/`rejected` and `reviewed_at`. **Backend-only**: no grant
+  or policy for `anon`/`authenticated`; only the `word-requests` function
+  (service role) reads and writes it. Cascades on account deletion.
+- `added_words`: the approved list (`word` primary key, `added_at`). Select is
+  open to `anon`/`authenticated`; only the service role writes. The app merges
+  it into its dictionary each time a game screen opens
+  (`refreshAddedWords`); `game-solve`/`game-coach` merge it into the solver via
+  `lib/addedWords.js` (5-minute cache per warm container).
+- Both check words against `^[A-Z]{2,15}$`.
+- Reviewers are decided server-side by `WORD_ADMIN_EMAILS` (`isReviewer` in
+  `word-requests.js`), never by the client. Each player can have at most 20
+  pending requests. To undo an approval, delete the row from `added_words`
+  (owner approval; Table Editor, not SQL).
 
 ---
 
@@ -623,6 +655,7 @@ Multiplayer swap clears state immediately in `finally` (unchanged).
 - `submitError` state → red banner with ✕ dismiss button above action buttons
 - `submitSuccess` state → green banner that auto-dismisses after 3 seconds
 - Error clears automatically when: recalled or new tile placed
+- When the dictionary rejects words, the red banner also shows **Ask to add WORD 📖** buttons (up to 3 words) that call `requestWord` (`src/supabase/wordRequests.ts`); a sent request turns into "WORD requested 📬". If the server says the word is already valid (approved since the screen opened), the banner refreshes approved words and tells the player to submit again
 
 ### Submit validation order
 1. `isValidPlacement(board, pendingTiles, isFirstMove)` — tiles in a line; first move must cover center (7,7)
@@ -732,10 +765,13 @@ Registration (`authService.ts`):
 - `exchangeTiles(rack, tilesToExchange, bag)` — exported but never called (swap logic is inlined in gameService)
 
 ### `dictionary.ts`
-- `validateWords(words)` → `Promise<{ valid, invalidWords }>` — loads ENABLE list from GitHub CDN on first call, caches in localStorage under key `lovewords_dict_v1`
+- `validateWords(words)` → `Promise<{ valid, invalidWords }>` — loads ENABLE list from GitHub CDN on first call, caches in localStorage (key now `lovewords_dict_v2`)
 - `isDictionaryLoaded()` — synchronous check; GameScreen polls this every 500ms until true, then sets `dictReady = true`
 - On load failure, all words return `true` (generous fallback)
 - Dictionary URL: `https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt`
+- Only the raw ENABLE list is cached; `wordSupplement.json` (~2,400 newer words, PR #42) is merged on load
+- `addWords(words)` adds owner-approved words (from `added_words`) to a separate set checked before the main list, so they count even before ENABLE finishes downloading
+- The server copy (`netlify/functions/lib/dictionary.js`) reads a bundled `enable1.txt.gz` + the same supplement, and has its own `addWords` for approved words
 
 ---
 
@@ -769,6 +805,9 @@ Stack.Navigator (no header)
     └── "Game" → GameScreen      (navigate with { gameId, myUid, myDisplayName })
         └── LoveNotesModal       (rendered inside GameScreen, visibility toggled)
 ```
+
+Also on the stack: `Settings` (→ `WordRequests` for reviewers), `Stats`,
+`Achievements`, `HeadToHead`, `Paywall`.
 
 ---
 
@@ -829,11 +868,11 @@ Turns that same export into a written coaching note shown **inside the app** (no
 
 ## Tests
 
-**255 unit tests across 23 suites**, all passing. Run with:
+**521 unit tests across 38 suites**, all passing (as of 2026-10-09, PR #43). Run with:
 ```bash
 npx jest            # (package.json "test" script runs jest --coverage)
 ```
-Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysis*`, `contrast`, `playerDiscovery*`, `gameInvites`, and the invite suites: `invites` (pure helpers), `emailInvites` (service layer), `emailInvitesSql` (SQL-contract assertions over the migration **and** `supabase_schema.sql`), plus `playerDiscoveryUiContract` (asserts the New Game modal's flow strings). All in `__tests__/`. Always run after touching `src/engine/`, `src/supabase/gameService.ts`, the analysis functions, the invite SQL/migration, or the New Game modal. **The SQL-contract tests read both the migration and the schema snapshot — keep the two in sync when editing invite SQL.**
+Suites include `board`, `scoring`, `tiles`, `swap`, `dictionary`, `gameHistory`, `gameServiceHistory`, `analysis*`, `contrast`, `playerDiscovery*`, `gameInvites`, and the invite suites: `invites` (pure helpers), `emailInvites` (service layer), `emailInvitesSql` (SQL-contract assertions over the migration **and** `supabase_schema.sql`), plus `playerDiscoveryUiContract` (asserts the New Game modal's flow strings), `solver`/`solveHandler`/`coachHandler`, and `wordRequestsHandler` (word requests: auth, validation, caps, reviewer gating, approve/reject, notifications). All in `__tests__/`. Always run after touching `src/engine/`, `src/supabase/gameService.ts`, the analysis functions, the invite SQL/migration, or the New Game modal. **The SQL-contract tests read both the migration and the schema snapshot — keep the two in sync when editing invite SQL.**
 
 ---
 
