@@ -1005,7 +1005,7 @@ export default function GameScreen() {
                   </View>
                 )}
                 {rejectedWords.some((w) => wordRequestState[w] === 'sent') && !wordRequestError && (
-                  <Text style={styles.wordRequestHint}>Thanks! We'll take a look and add it if it checks out.</Text>
+                  <Text style={styles.wordRequestHint}>Thanks! We'll take a look, and you'll get a notification if it's added.</Text>
                 )}
                 {wordRequestError && <Text style={styles.wordRequestHint}>{wordRequestError}</Text>}
               </View>

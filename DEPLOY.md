@@ -35,7 +35,7 @@ build) for functions to see it.
 | `ANALYSIS_TOKEN_SECRET` | **yes** | Functions (+Runtime) | game-analysis-token / game-analysis | HMAC secret for 1-hour analysis tokens. Generate: `openssl rand -base64 32` (≥32 bytes). |
 | `ANTHROPIC_API_KEY` | **yes** | Functions (+Runtime) | game-coach | Claude API key (`sk-ant-...`) from console.anthropic.com. Powers the AI coach. |
 | `COACH_REVIEW_LIMIT` | no | Functions (+Runtime) | game-coach | Max saved coach reviews per user. Unset, invalid or ≤0 = unlimited (the default). Re-reading an already-saved review never counts. Set it once coach packs are sold; the endpoint answers `402 coach_limit_reached` at the cap. |
-| `WORD_ADMIN_EMAILS` | no | Functions (+Runtime) | word-requests | Comma-separated emails of the accounts that review word requests (Settings → Word requests). Unset = nobody can review; players can still send requests. |
+| `WORD_ADMIN_EMAILS` | no | Functions (+Runtime) | word-requests | Comma-separated emails of the accounts that review word requests (Settings → Word requests). They also get a push (and an email, if `RESEND_API_KEY` is set) when a new word is requested. Unset = nobody can review; players can still send requests. |
 | `VAPID_PUBLIC_KEY` | no (public) | Builds, Functions, Runtime | notify | Public half of the Web Push keypair. Listed in `SECRETS_SCAN_OMIT_KEYS`. |
 | `VAPID_PRIVATE_KEY` | **yes** | Functions (+Runtime) | notify | Web Push private key. If leaked, rotate the keypair. |
 | `VAPID_EMAIL` | no | Functions (+Runtime) | notify | Contact email for push services. |
@@ -173,6 +173,15 @@ When a word is rejected, players can tap **Ask to add WORD 📖**. Requests go t
 **Settings → Word requests** and choose **Add word** or **Reject**. Added words
 go into `added_words`. The app reads that list each time a game opens, and the
 move solver reloads it every few minutes.
+
+Notifications (best-effort, never block a request):
+
+- **Reviewers** get a push the first time a word is requested (not for repeat
+  asks), plus an email when `RESEND_API_KEY` is set. Push needs the reviewer
+  to have turned on notifications in the app; their profile is looked up by
+  the emails in `WORD_ADMIN_EMAILS`.
+- **Players who asked** get a push ("✨ DOX is a word now!") when the word is
+  added. Rejections send nothing.
 
 Each pending word shows whether it is in the NASPA Word List. That needs a
 licensed copy: save it as `netlify/functions/lib/nwl.txt.gz` (one word per

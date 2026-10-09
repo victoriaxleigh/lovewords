@@ -9,6 +9,9 @@
  * Approving a word adds it to `added_words`, which every app and the solver
  * merge into their dictionary. Each pending word shows whether it is in the
  * NASPA Word List when a licensed copy is installed (see lib/nwl.js).
+ *
+ * Reviewers get a push (and an email when RESEND_API_KEY is set) the first
+ * time a word is requested; players who asked get a push when it is added.
  */
 
 const {
@@ -20,6 +23,9 @@ const {
 const { addWords, isValidWord } = require('./lib/dictionary');
 const { loadAddedWords } = require('./lib/addedWords');
 const { loadNwl, nwlStatus } = require('./lib/nwl');
+const { pushToUsers, sendEmail, userIdsForEmails } = require('./lib/userPush');
+
+const DEFAULT_APP_URL = 'https://lovewords1234.netlify.app';
 
 // A player can have this many requests waiting at once. Stops one account
 // filling the review list; reviewed requests no longer count.
@@ -78,6 +84,49 @@ async function countPending(config, userId) {
   return Number.isFinite(total) ? total : 0;
 }
 
+async function countPendingForWord(config, word) {
+  const query = new URLSearchParams({ word: `eq.${word}`, status: 'eq.pending', select: 'id' });
+  const response = await fetch(`${config.supabaseUrl}/rest/v1/word_requests?${query}`, {
+    method: 'HEAD',
+    headers: { ...supabaseHeaders(config.supabaseKey), Prefer: 'count=exact' },
+  });
+  if (!response.ok) return 0;
+  const total = Number.parseInt(
+    String(response.headers.get('content-range') ?? '').split('/')[1],
+    10
+  );
+  return Number.isFinite(total) ? total : 0;
+}
+
+// The first request for a word tells the reviewers; later ones only raise the
+// count on the review screen, so a popular word doesn't buzz every time.
+async function notifyReviewers(config, word) {
+  const emails = reviewerEmails();
+  if (emails.length === 0) return;
+  const appUrl = (process.env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, '');
+  const reviewerIds = await userIdsForEmails(config, emails);
+  await Promise.all([
+    pushToUsers(
+      config,
+      reviewerIds,
+      '📖 New word request',
+      `Someone asked to add ${word}. Review it in Settings → Word requests.`
+    ),
+    sendEmail(
+      emails,
+      `Word request: ${word}`,
+      `A player asked to add ${word} to the LoveWords dictionary.\n\n` +
+        `Review it in the app: Settings → Word requests.\n${appUrl}\n`,
+      `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#2D0A1E">` +
+        `<h1 style="font-size:20px;margin:0 0 12px">New word request 📖</h1>` +
+        `<p style="font-size:15px;line-height:1.5">A player asked to add <strong>${word}</strong> to the dictionary.</p>` +
+        `<p style="font-size:15px;line-height:1.5">Review it in the app under <strong>Settings → Word requests</strong>.</p>` +
+        `<p style="margin:24px 0"><a href="${appUrl}" style="background:#A8005F;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 22px;border-radius:12px;display:inline-block">Open LoveWords</a></p>` +
+        `</div>`
+    ),
+  ]);
+}
+
 async function handleRequest(config, user, body) {
   const word = normalizeWord(body.word);
   if (!word) {
@@ -102,7 +151,7 @@ async function handleRequest(config, user, body) {
       method: 'POST',
       headers: {
         ...supabaseHeaders(config.supabaseKey),
-        Prefer: 'resolution=ignore-duplicates,return=minimal',
+        Prefer: 'resolution=ignore-duplicates,return=representation',
       },
       body: JSON.stringify({ word, user_id: user.id }),
     }
@@ -110,6 +159,11 @@ async function handleRequest(config, user, body) {
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Supabase request insert failed (${response.status}): ${detail}`);
+  }
+  // A duplicate comes back empty; only a new row can be a word's first request.
+  const inserted = await response.json().catch(() => []);
+  if (Array.isArray(inserted) && inserted.length > 0) {
+    if ((await countPendingForWord(config, word)) === 1) await notifyReviewers(config, word);
   }
   return jsonResponse(200, { status: 'requested', word });
 }
@@ -167,6 +221,19 @@ async function handleReview(config, body) {
     addWords([word]);
   }
 
+  // Who asked, so they can be told once the word is added.
+  let requesterIds = [];
+  if (decision === 'approve') {
+    const who = new URLSearchParams({ word: `eq.${word}`, status: 'eq.pending', select: 'user_id' });
+    const response = await fetch(`${config.supabaseUrl}/rest/v1/word_requests?${who}`, {
+      headers: supabaseHeaders(config.supabaseKey),
+    });
+    if (response.ok) {
+      const rows = await response.json().catch(() => []);
+      requesterIds = Array.isArray(rows) ? rows.map((row) => row.user_id).filter(Boolean) : [];
+    }
+  }
+
   const query = new URLSearchParams({ word: `eq.${word}`, status: 'eq.pending' });
   const update = await fetch(`${config.supabaseUrl}/rest/v1/word_requests?${query}`, {
     method: 'PATCH',
@@ -179,6 +246,15 @@ async function handleReview(config, body) {
   if (!update.ok) {
     const detail = await update.text();
     throw new Error(`Supabase request update failed (${update.status}): ${detail}`);
+  }
+
+  if (requesterIds.length > 0) {
+    await pushToUsers(
+      config,
+      requesterIds,
+      `✨ ${word} is a word now!`,
+      `Your word request was approved. Go play it! 🎉`
+    );
   }
 
   return jsonResponse(200, { status: decision === 'approve' ? 'approved' : 'rejected', word });
