@@ -97,22 +97,33 @@ environment isn't linked or has no credentials, **stop and ask the owner** to
 run these steps or provide access. Never use the SQL Editor, `--include-all`
 or migration repair without explicit owner approval.
 
-- [ ] `npx supabase migration list --linked`: local and remote match up to
+- [x] `npx supabase migration list --linked`: local and remote match up to
       `20261007000200_game_coach_notes`. If remote has anything unrecorded,
       **stop** and reconcile with the owner.
-- [ ] `npx supabase db push --linked --dry-run`: the **only** pending
+- [x] `npx supabase db push --linked --dry-run`: the **only** pending
       migration is `20261009000100_word_requests.sql`. Anything else → stop.
-- [ ] Show the owner the dry-run output and get a go-ahead.
-- [ ] `npx supabase db push --linked --yes`
-- [ ] `npx supabase migration list --linked`: local and remote match.
+- [x] Show the owner the dry-run output and get a go-ahead.
+- [x] `npx supabase db push --linked --yes`
+- [x] `npx supabase migration list --linked`: local and remote match.
 
 ### 5. Netlify environment (owner)
 
-- [ ] `WORD_ADMIN_EMAILS` = the owner's sign-in email (comma-separate extras),
+- [x] `WORD_ADMIN_EMAILS` = the owner's sign-in email (comma-separate extras),
       scope **Functions** (plus Runtime), not Post-processing. See `DEPLOY.md` §2.
-- [ ] Confirm `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and the VAPID keys are
+- [x] Confirm `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and the VAPID keys are
       already set (they power existing features).
 - [ ] Optional: `RESEND_API_KEY` for reviewer emails.
+
+> **Progress (2026-10-09, later):** migration `20261009000100` applied by the
+> owner after a clean `migration list` and a dry run showing only that file;
+> the review screen reading `word_requests` confirms it is live.
+> `WORD_ADMIN_EMAILS` set for all contexts (Functions + Runtime); Resend not
+> set. Tested on Deploy Preview #43 (which uses the production database):
+> Settings row, request, reject, approve and both pushes work. Pushes go to
+> the one device an account last registered (`push_subscriptions` is one row
+> per user), so test on that device. Test words SZDD and SGD were approved and
+> must be deleted from `added_words` if still there. Still to do: a
+> non-reviewer account must not see the row; then steps 6–8.
 
 ### 6. Merge and deploy
 
