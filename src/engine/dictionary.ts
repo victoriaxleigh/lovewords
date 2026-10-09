@@ -7,8 +7,10 @@
  * caches it in localStorage so every lookup after that is instant.
  */
 
-// Words that are valid in current tournament-style word lists but
-// missing from 1997-era ENABLE. Shared with the server-side solver dictionary
+// Words missing from 1997-era ENABLE: a hand-picked block of short and recent
+// words, then common words from SCOWL 2020.12.07 (size 60, en/US) that ENABLE
+// lacks, minus fragments, contractions, proper nouns and slurs. SCOWL's notice
+// is in docs/licenses/SCOWL.txt. Shared with the server-side solver dictionary
 // (netlify/functions/lib/dictionary.js) so the two cannot drift.
 import SUPPLEMENT from './wordSupplement.json';
 
