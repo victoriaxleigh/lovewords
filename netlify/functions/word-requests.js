@@ -90,7 +90,10 @@ async function countPendingForWord(config, word) {
     method: 'HEAD',
     headers: { ...supabaseHeaders(config.supabaseKey), Prefer: 'count=exact' },
   });
-  if (!response.ok) return 0;
+  if (!response.ok) {
+    console.error(`word-requests: pending count for word failed (${response.status})`);
+    return 0;
+  }
   const total = Number.parseInt(
     String(response.headers.get('content-range') ?? '').split('/')[1],
     10
@@ -105,6 +108,7 @@ async function notifyReviewers(config, word) {
   if (emails.length === 0) return;
   const appUrl = (process.env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, '');
   const reviewerIds = await userIdsForEmails(config, emails);
+  console.log(`word-requests: new word, ${reviewerIds.length} of ${emails.length} reviewers have a profile`);
   await Promise.all([
     pushToUsers(
       config,
@@ -163,7 +167,9 @@ async function handleRequest(config, user, body) {
   // A duplicate comes back empty; only a new row can be a word's first request.
   const inserted = await response.json().catch(() => []);
   if (Array.isArray(inserted) && inserted.length > 0) {
-    if ((await countPendingForWord(config, word)) === 1) await notifyReviewers(config, word);
+    const pending = await countPendingForWord(config, word);
+    console.log(`word-requests: new request, ${pending} pending for this word`);
+    if (pending === 1) await notifyReviewers(config, word);
   }
   return jsonResponse(200, { status: 'requested', word });
 }

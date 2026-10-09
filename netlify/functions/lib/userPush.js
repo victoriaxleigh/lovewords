@@ -62,6 +62,7 @@ async function pushToUser(config, userId, title, message) {
 
   const sends = [];
   const web = webRows[0];
+  const channels = { web: Boolean(web), expo: Boolean(profileRows[0]?.expo_push_token) };
   if (web && vapidConfigured()) {
     const subscription = { endpoint: web.endpoint, keys: { p256dh: web.p256dh, auth: web.auth } };
     sends.push(
@@ -91,15 +92,24 @@ async function pushToUser(config, userId, title, message) {
       })
     );
   }
-  return sends;
+  return { sends, channels };
 }
 
 /** Push one message to each user. Awaited, so a Lambda can't freeze mid-send. */
 async function pushToUsers(config, userIds, title, message) {
   try {
-    const sends = (
-      await Promise.all([...new Set(userIds)].map((uid) => pushToUser(config, uid, title, message)))
-    ).flat();
+    const targets = await Promise.all(
+      [...new Set(userIds)].map((uid) => pushToUser(config, uid, title, message))
+    );
+    // One summary line per push, so a silent skip (no subscription, no VAPID keys in
+    // this deploy context) shows in the function log.
+    console.log(
+      `word push "${title}": users=${targets.length}` +
+        ` web=${targets.filter((t) => t.channels.web).length}` +
+        ` expo=${targets.filter((t) => t.channels.expo).length}` +
+        ` vapid=${vapidConfigured() ? 'yes' : 'no'}`
+    );
+    const sends = targets.flatMap((t) => t.sends);
     const results = await Promise.allSettled(sends);
     for (const result of results) {
       if (result.status === 'rejected') {
