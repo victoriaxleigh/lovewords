@@ -13,6 +13,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import HeadToHeadScreen from './src/screens/HeadToHeadScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
 import RecoveryScreen from './src/screens/RecoveryScreen';
+import WordRequestsScreen from './src/screens/WordRequestsScreen';
 import { Colors } from './src/utils/colors';
 import { Player } from './src/types';
 import { registerPushSubscription } from './src/utils/pushSubscription';
@@ -205,6 +206,7 @@ export default function App() {
               <Stack.Screen name="HeadToHead">
                 {() => <HeadToHeadScreen currentUser={currentPlayer!} />}
               </Stack.Screen>
+              <Stack.Screen name="WordRequests" component={WordRequestsScreen} />
               <Stack.Screen name="Paywall" component={PaywallScreen} />
               <Stack.Screen
                 name="Game"

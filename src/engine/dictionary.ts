@@ -26,6 +26,19 @@ const WORD_LIST_URL =
 let wordSet: Set<string> | null = null;
 let loadPromise: Promise<Set<string>> | null = null;
 
+// Words approved through word requests (the added_words table). Kept apart
+// from wordSet so they count even before the big list finishes downloading,
+// and so a refresh never touches the cached ENABLE payload.
+const addedWords = new Set<string>();
+
+/** Merge approved words into the dictionary (see src/supabase/wordRequests.ts). */
+export function addWords(words: string[]): void {
+  for (const word of words) {
+    const upper = String(word).toUpperCase().trim();
+    if (/^[A-Z]{2,15}$/.test(upper)) addedWords.add(upper);
+  }
+}
+
 async function loadDictionary(): Promise<Set<string>> {
   if (wordSet) return wordSet;
   if (loadPromise) return loadPromise;
@@ -69,6 +82,7 @@ if (typeof window !== 'undefined') {
 export async function isValidWord(word: string): Promise<boolean> {
   const upper = word.toUpperCase().trim();
   if (upper.length < 2) return false;
+  if (addedWords.has(upper)) return true;
 
   try {
     const dict = await loadDictionary();

@@ -16,7 +16,7 @@ Functions**. Native/App Store builds are separate — see `APP_STORE.md`.
 | Piece | Where | Notes |
 |---|---|---|
 | Web app (PWA) | Netlify, published from `dist/` | Built with `npm run build:web` |
-| Serverless functions | Netlify Functions (`netlify/functions/`) | `notify`, `game-analysis*`, `game-coach`, `delete-account`, `send-invite` |
+| Serverless functions | Netlify Functions (`netlify/functions/`) | `notify`, `game-analysis*`, `game-coach`, `game-solve`, `word-requests`, `delete-account`, `send-invite` |
 | Database + auth + realtime | Supabase (Postgres) | URL + anon key in `src/supabase/config.ts` |
 | Auto-deploy | Push to `main` | `netlify.toml` runs `npm run build:web` |
 
@@ -35,6 +35,7 @@ build) for functions to see it.
 | `ANALYSIS_TOKEN_SECRET` | **yes** | Functions (+Runtime) | game-analysis-token / game-analysis | HMAC secret for 1-hour analysis tokens. Generate: `openssl rand -base64 32` (≥32 bytes). |
 | `ANTHROPIC_API_KEY` | **yes** | Functions (+Runtime) | game-coach | Claude API key (`sk-ant-...`) from console.anthropic.com. Powers the AI coach. |
 | `COACH_REVIEW_LIMIT` | no | Functions (+Runtime) | game-coach | Max saved coach reviews per user. Unset, invalid or ≤0 = unlimited (the default). Re-reading an already-saved review never counts. Set it once coach packs are sold; the endpoint answers `402 coach_limit_reached` at the cap. |
+| `WORD_ADMIN_EMAILS` | no | Functions (+Runtime) | word-requests | Comma-separated emails of the accounts that review word requests (Settings → Word requests). They also get a push (and an email, if `RESEND_API_KEY` is set) when a new word is requested. Unset = nobody can review; players can still send requests. |
 | `VAPID_PUBLIC_KEY` | no (public) | Builds, Functions, Runtime | notify | Public half of the Web Push keypair. Listed in `SECRETS_SCAN_OMIT_KEYS`. |
 | `VAPID_PRIVATE_KEY` | **yes** | Functions (+Runtime) | notify | Web Push private key. If leaked, rotate the keypair. |
 | `VAPID_EMAIL` | no | Functions (+Runtime) | notify | Contact email for push services. |
@@ -67,6 +68,7 @@ to re-run.
 | `alter table games add column if not exists mode text not null default 'partner';` | Partner/Friend mode | apply once |
 | `supabase/migrations/20260723000100_private_game_analysis_events.sql` | Analysis export + AI coach (creates `game_analysis_events` + scrub trigger) | apply once |
 | `supabase/migrations/20261007000200_game_coach_notes.sql` | Coach review cache + quota (creates `game_coach_notes`, service-role only). Optional: without it the coach still works, it just isn't cached or limited | apply once via the linked CLI workflow in `AGENTS.md` |
+| `supabase/migrations/20261009000100_word_requests.sql` | Word requests (creates backend-only `word_requests` and the public-read `added_words` list that the app and solver merge into the dictionary). Apply with the linked CLI workflow in `AGENTS.md`. Without it, "Ask to add" fails gracefully and no words are added | apply once (re-run safe) |
 | RLS delete policy on `games` (see `AGENT_HANDOFF.md` → Supabase Tables) | In-app game deletion | apply once |
 | `supabase/migrations/20260728000100_player_discovery_invites.sql` | Player discovery + invites **and** server-authorized push (creates `search_profiles`, `find_profile_by_email`, `create_active_game`, the invite guard, and the notification tables + `claim_notification_delivery` RPC that `notify` depends on) | apply once |
 | `supabase/migrations/20260729000100_notification_claim_timestamp_fix.sql` | **Required for push + nudge.** Corrects a `current_time` PL/pgSQL keyword collision that made every `claim_notification_delivery` call throw, so `notify` returned 502 and no notification (turn / love note / invite / nudge) was delivered | apply once |
@@ -164,7 +166,29 @@ Then the real end-to-end checks:
 
 ---
 
-## 7. Rollback
+## 7. Word requests and the NWL check
+
+When a word is rejected, players can tap **Ask to add WORD 📖**. Requests go to
+`word_requests`; reviewers (the accounts in `WORD_ADMIN_EMAILS`) open
+**Settings → Word requests** and choose **Add word** or **Reject**. Added words
+go into `added_words`. The app reads that list each time a game opens, and the
+move solver reloads it every few minutes.
+
+Notifications (best-effort, never block a request):
+
+- **Reviewers** get a push the first time a word is requested (not for repeat
+  asks), plus an email when `RESEND_API_KEY` is set. Push needs the reviewer
+  to have turned on notifications in the app; their profile is looked up by
+  the emails in `WORD_ADMIN_EMAILS`.
+- **Players who asked** get a push ("✨ DOX is a word now!") when the word is
+  added. Rejections send nothing.
+
+Each pending word shows whether it is in the NASPA Word List. That needs a
+licensed copy: save it as `netlify/functions/lib/nwl.txt.gz` (one word per
+line, gzipped) and redeploy. Without the file every word shows "NWL not checked
+yet". Check the licence terms before committing the file to the repository.
+
+## 8. Rollback
 
 - **Netlify → Deploys** → open a previous successful deploy → **Publish deploy**
   (instant, no rebuild).

@@ -124,7 +124,7 @@ src/
   engine/         # Game logic (board, tiles, scoring, dictionary)
   supabase/       # Supabase config + auth/game services
   components/     # Board, Tile, TileRack, ScoreBoard
-  screens/        # Auth, Lobby, Game, Settings, Paywall, LoveNotes
+  screens/        # Auth, Lobby, Game, Settings, Word requests, Paywall, LoveNotes
   hooks/          # useAuth
   types/          # TypeScript types
   utils/          # Colors, styles, push notifications, IAP, app badge
@@ -134,7 +134,8 @@ src/
 
 - Full 15×15 board with the LoveWords premium-square layout
 - 7-tile rack with drag-to-place mechanic
-- Word validation via dictionary API
+- Word validation against ENABLE plus ~2,400 newer words and owner-approved words
+- Word requests: players ask for a rejected word to be added; the owner reviews them in Settings → Word requests (see `DEPLOY.md` §7)
 - Scoring with letter/word multipliers + bingo bonus (7 tiles = +35 pts)
 - Async multiplayer via Supabase (Postgres + Realtime)
 - 💌 Love notes between games — sweet messages instead of ads!

@@ -9,6 +9,7 @@ const {
   sanitizeGameExport,
 } = require('./game-analysis-common');
 const { solveGame } = require('./lib/solver');
+const { loadAddedWords } = require('./lib/addedWords');
 const {
   capPromptPayload,
   capResponseSize,
@@ -252,6 +253,8 @@ exports.handler = async (event) => {
     if (cached) {
       fullSolve = forAsker(cached, askingAlias);
     } else {
+      // Approved word requests count as words for the solver too.
+      await loadAddedWords(config.supabaseUrl, config.supabaseKey);
       fullSolve = solveGame(exportData, {
         askingAlias,
         // Auth and the Supabase round trips have already burned part of the

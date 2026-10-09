@@ -8,6 +8,7 @@ import {
   setDiscoverability,
 } from '../supabase/authService';
 import { restorePurchases } from '../utils/purchases';
+import { listWordRequests } from '../supabase/wordRequests';
 import { Colors } from '../utils/colors';
 import { RADII, SHADOWS } from '../utils/styles';
 import { Player } from '../types';
@@ -27,6 +28,25 @@ export default function SettingsScreen({ currentUser }: Props) {
   const [discoverable, setDiscoverableState] = useState(false);
   const [loadingDiscovery, setLoadingDiscovery] = useState(true);
   const [savingDiscovery, setSavingDiscovery] = useState(false);
+  // Pending word requests, or null when this account isn't a reviewer.
+  const [pendingWords, setPendingWords] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = navigation.addListener('focus', () => {
+      listWordRequests()
+        .then((list) => {
+          if (active) setPendingWords(list ? list.requests.length : null);
+        })
+        .catch(() => {
+          if (active) setPendingWords(null);
+        });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +140,25 @@ export default function SettingsScreen({ currentUser }: Props) {
           )}
         </View>
       </View>
+
+      {pendingWords !== null && (
+        <TouchableOpacity
+          style={[styles.section, styles.linkRow]}
+          onPress={() => navigation.navigate('WordRequests')}
+          accessibilityRole="button"
+          accessibilityLabel={`Word requests, ${pendingWords} waiting`}
+        >
+          <View style={styles.discoveryCopy}>
+            <Text style={styles.discoveryTitle}>Word requests 📖</Text>
+            <Text style={styles.discoveryHint}>
+              {pendingWords === 0
+                ? 'Nothing waiting for review.'
+                : `${pendingWords} ${pendingWords === 1 ? 'word' : 'words'} waiting for review.`}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+      )}
 
       {Platform.OS !== 'web' && (
         <View style={styles.section}>
@@ -241,6 +280,8 @@ const styles = StyleSheet.create({
   email: { fontSize: 15, fontWeight: '700', color: Colors.text },
   discoveryRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   discoveryCopy: { flex: 1 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  chevron: { fontSize: 24, fontWeight: '700', color: Colors.textLight },
   discoveryTitle: { color: Colors.text, fontSize: 15, fontWeight: '800' },
   discoveryHint: { color: Colors.textLight, fontSize: 12, lineHeight: 17, marginTop: 4 },
   actionBtn: {

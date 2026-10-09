@@ -35,6 +35,17 @@
 
 The coach is only rack-aware for **v2 games** (created after the analysis feature shipped). Older games never recorded `rackBefore`, so they return `recordingQuality: 'basic'` and get higher-level feedback only — the card shows a "played before full move tracking" note. Not recoverable; not a bug.
 
+## 🟡 Known limitations — word requests (PR #43)
+
+Found while reviewing PR #43. None block the release; revisit if they cause confusion.
+
+- **Rejected words come back.** A rejection marks only the existing requests. If a *different* player later asks for the same word, it reappears in Settings → Word requests and reviewers get the "📖 New word request" push again.
+- **Re-asking after a rejection looks pending.** The same player asking again for a word that was rejected is a no-op on the server (one row per word and player), but the banner still says "requested 📬 … you'll get a notification if it's added."
+- **Settings pings the function for everyone.** Every Settings visit calls `GET /api/word-requests` to decide whether to show the row; non-reviewers get a 403. Cheap, but one invocation per visit.
+- **First-request race.** If two players ask for a brand-new word at the same moment, neither request triggers the reviewer push (both see two pending rows). The word still appears on the review screen.
+
+Files: `netlify/functions/word-requests.js`, `src/screens/GameScreen.tsx`, `src/screens/SettingsScreen.tsx`.
+
 ## 🟡 TODO — gate AI coach behind premium before App Store launch
 
 The coach is free/ungated today. Before launch, wire the "🤖 Coach me on this game" button to the dormant `MONETIZATION_ENABLED` flag in `src/utils/purchases.ts` so it's a premium feature. Cost is ~4¢/game (Sonnet), only on finished-game taps. See `DEPLOY.md` → §6.

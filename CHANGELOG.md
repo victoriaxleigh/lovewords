@@ -26,6 +26,16 @@
 
 ### Added
 
+- **Word requests.** When a word is rejected, players can tap "Ask to add" to
+  request it. The owner reviews requests in Settings → Word requests (accounts
+  listed in `WORD_ADMIN_EMAILS`) and adds or rejects each word. Added words
+  count for everyone straight away, in games and in the move solver. Each
+  request shows whether the word is in the NASPA Word List once a licensed copy
+  is installed (`netlify/functions/lib/nwl.txt.gz`); until then it says "not
+  checked yet". Reviewers get a push (and an email when Resend is set up) when
+  a new word is requested, and players get a push when their word is added.
+  Needs migration `20261009000100_word_requests.sql`.
+
 - **Stats pages.** A new 📊 button in the Lobby header opens a Stats screen:
   your win–loss–tie record and win rate, partner and friend splits, average
   score, best game, best and longest word, bingos, points per play and streaks,

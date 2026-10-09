@@ -2,6 +2,48 @@
 
 ---
 
+## Word requests — 2026-10-09 (PR #43, awaiting deploy)
+
+### Players can ask for a word to be added
+When a submit is rejected, the error banner now offers **Ask to add WORD 📖**
+for up to three of the rejected words. Tapping it shows "WORD requested 📬"
+and a thank-you line. If the word was approved since the game opened, the
+banner says so and the player can submit again.
+
+### The owner reviews requests in the app
+Accounts listed in the new `WORD_ADMIN_EMAILS` Netlify variable see
+**Settings → Word requests** with a count of waiting words. The review screen
+lists pending words, most requested first, each with how many players asked
+and an NWL badge, and **Add word** / **Reject** buttons. The NWL badge reads
+"NWL not checked yet" until a licensed list is installed as
+`netlify/functions/lib/nwl.txt.gz`.
+
+### Added words count everywhere
+Approved words go into the new public-read `added_words` table. The app merges
+it into its dictionary whenever a game screen opens, and `game-solve` /
+`game-coach` merge it into the solver (refreshed every 5 minutes per warm
+function).
+
+### Notifications
+Reviewers get a push the first time a word is requested, plus an email when
+`RESEND_API_KEY` is set. Players who asked get "✨ WORD is a word now!" when
+it's added. Rejections send nothing. All sends are best-effort and never fail
+a request. Sending lives in `netlify/functions/lib/userPush.js`; `notify.js`
+is unchanged.
+
+### Deploy needs
+Migration `20261009000100_word_requests.sql` (linked CLI workflow in
+`AGENTS.md`) and `WORD_ADMIN_EMAILS` set on Netlify. The step-by-step deploy
+and production checks are in `docs/ai/features/word-requests/handoff.md`.
+**38 suites, 521 tests pass.**
+
+### Related: bigger dictionary (PR #42, shipped)
+About 2,400 newer words missing from ENABLE are now accepted in games and by
+the solver: common words from SCOWL 2020 plus a hand-picked set of recent
+ones (`src/engine/wordSupplement.json`; notice in `docs/licenses/SCOWL.txt`).
+
+---
+
 ## Session 11 — 2026-07-30
 
 ### Push notifications & nudge regression fix

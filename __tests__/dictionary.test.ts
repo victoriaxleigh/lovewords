@@ -76,6 +76,14 @@ describe('isValidWord', () => {
     expect(await isValidWord('website')).toBe(true);
   });
 
+  test('approved word requests count as words', async () => {
+    const { addWords } = require('../src/engine/dictionary');
+    expect(await isValidWord('qwzxv')).toBe(false);
+    addWords(['qwzxv', 'not a word', 'x']);
+    expect(await isValidWord('QWZXV')).toBe(true);
+    expect(await isValidWord('x')).toBe(false);
+  });
+
   test('supplement entries are unique uppercase words', () => {
     const supplement: string[] = require('../src/engine/wordSupplement.json');
     expect(new Set(supplement).size).toBe(supplement.length);

@@ -72,4 +72,17 @@ function isValidWord(word) {
   return node[TERMINAL] === true;
 }
 
-module.exports = { TERMINAL, getTrie, getWordCount, isValidWord };
+// Words approved through word requests (the added_words table) join the trie
+// on top of ENABLE + SUPPLEMENT. Adding is idempotent; nothing is ever removed
+// from a warm trie, so a word un-approved in the database stays valid in this
+// container until it is recycled.
+function addWords(words) {
+  const root = getTrie();
+  for (const word of words) {
+    const upper = String(word).toUpperCase();
+    if (upper.length < 2 || !/^[A-Z]+$/.test(upper)) continue;
+    insert(root, upper);
+  }
+}
+
+module.exports = { TERMINAL, addWords, getTrie, getWordCount, isValidWord };
