@@ -71,6 +71,15 @@ describe('isValidWord', () => {
     expect(await isValidWord('emoji')).toBe(true);
     expect(await isValidWord('memes')).toBe(true);
     expect(await isValidWord('yeet')).toBe(true);
+    expect(await isValidWord('dox')).toBe(true);
+    expect(await isValidWord('email')).toBe(true);
+    expect(await isValidWord('website')).toBe(true);
+  });
+
+  test('supplement entries are unique uppercase words', () => {
+    const supplement: string[] = require('../src/engine/wordSupplement.json');
+    expect(new Set(supplement).size).toBe(supplement.length);
+    for (const word of supplement) expect(word).toMatch(/^[A-Z]{2,15}$/);
   });
 });
 

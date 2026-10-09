@@ -4,6 +4,12 @@
 
 ### Changed
 
+- **Bigger dictionary.** About 2,400 newer words that the 1997 ENABLE list
+  lacks are now accepted in games and by the move solver: common words from
+  SCOWL 2020 (email, website, podcast, selfie, hashtag, smartphone…) plus a
+  hand-picked set of recent ones (dox, rizz, stan, mansplain, photobomb…).
+  Fragments, slang contractions (gonna, wanna), proper nouns and slurs were
+  left out. SCOWL's notice is in `docs/licenses/SCOWL.txt`.
 - **Original board layout.** The premium squares now use LoveWords' own
   balanced layout (8 triple-word, 16 double-word, 12 triple-letter, 24
   double-letter, symmetric on all eight axes, no word premium on the centre
