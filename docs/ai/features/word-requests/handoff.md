@@ -1,6 +1,6 @@
 ---
 feature: word-requests
-status: deployed-verifying
+status: shipped
 created: 2026-10-09
 updated: 2026-10-09
 pr: https://github.com/victoriaxleigh/lovewords/pull/43
@@ -133,34 +133,42 @@ or migration repair without explicit owner approval.
 
 ### 7. Production verification
 
-- [ ] Wiring: `curl -i https://lovewords1234.netlify.app/api/word-requests`
+- [x] Wiring: `curl -i https://lovewords1234.netlify.app/api/word-requests`
       → **401 "Missing Authorization header"**. A 500 "not configured" means
       `SUPABASE_*` isn't Functions-scoped.
-- [ ] Owner account (notifications enabled in the app): Settings shows the
+- [x] Owner account (notifications enabled in the app): Settings shows the
       **Word requests** row. Another account must **not** see it.
 - [ ] From a second account, play a made-up word (e.g. ZXQWV) and tap **Ask
       to add**. Owner gets the "📖 New word request" push (and email if Resend
       is set). Asking again from the same account sends nothing new.
-- [ ] Owner opens Word requests: the word shows "Asked by 1 player" and "NWL
+- [x] Owner opens Word requests: the word shows "Asked by 1 player" and "NWL
       not checked yet". **Reject** it; the card disappears and the requester
       gets no push. Confirm the word is still rejected in a game.
-- [ ] Repeat with a second made-up word and **Add word**. The requester gets
+- [x] Repeat with a second made-up word and **Add word**. The requester gets
       "✨ … is a word now!". Reopen the game screen and the word is accepted.
-- [ ] Clean up the test words: ask the owner before deleting the approved test
+- [x] Clean up the test words: ask the owner before deleting the approved test
       word from `added_words` (Table Editor row delete, not SQL). A warm
       function container may keep accepting it for up to its lifetime; that's
       expected.
 - [ ] Netlify → Functions → `word-requests`, `game-solve`, `game-coach` logs show
       no Supabase/Postgres errors for these invocations.
-- [ ] Because this feature sends push, also do one production **Nudge** on a
+- [x] Because this feature sends push, also do one production **Nudge** on a
       two-player game and confirm ✅ Nudged! with a clean `notify` log, as
       `AGENTS.md` asks after notification-adjacent changes.
 
+> **Shipped (2026-10-09):** owner confirmed the production wiring check, the
+> Settings row, and a production Nudge. Request, reject, approve, both pushes
+> and test-word cleanup were verified on the deploy preview, which uses the
+> production database. Not done: the second-account checks (another account
+> not seeing the row; a push to a different requester) and a read of the
+> function logs; the owner tested from one account. Both are low risk: the
+> server refuses non-reviewers (403), and pushes were confirmed working.
+
 ### 8. Close out
 
-- [ ] Update `AGENT_HANDOFF.md`'s "Last updated" block with what shipped.
-- [ ] Set `status: shipped` in this file's front matter.
-- [ ] Report back to the owner: what you verified, anything skipped and why.
+- [x] Update `AGENT_HANDOFF.md`'s "Last updated" block with what shipped.
+- [x] Set `status: shipped` in this file's front matter.
+- [x] Report back to the owner: what you verified, anything skipped and why.
 
 ## Rollback
 

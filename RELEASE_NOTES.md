@@ -2,7 +2,7 @@
 
 ---
 
-## Word requests — 2026-10-09 (PR #43, merged and live on the web)
+## Word requests — 2026-10-09 (PR #43, shipped)
 
 ### Players can ask for a word to be added
 When a submit is rejected, the error banner now offers **Ask to add WORD 📖**
@@ -36,8 +36,9 @@ Migration `20261009000100_word_requests.sql` applied to production with the
 linked CLI workflow in `AGENTS.md`, and `WORD_ADMIN_EMAILS` set on Netlify for
 all deploy contexts. Tested end to end on the PR's deploy preview (which uses
 the production database): request, reject, approve, and both pushes. Merged
-to `main` as `1e01bfd`; Netlify deploys `main` automatically. Remaining
-production checks are in `docs/ai/features/word-requests/handoff.md`.
+to `main` as `1e01bfd`; Netlify deploys `main` automatically. Production
+checks passed: the endpoint, the reviewer's Settings row, and a production
+Nudge.
 **38 suites, 521 tests pass.**
 
 ### Found while testing
