@@ -121,8 +121,8 @@ or migration repair without explicit owner approval.
 > set. Tested on Deploy Preview #43 (which uses the production database):
 > Settings row, request, reject, approve and both pushes work. Pushes go to
 > the one device an account last registered (`push_subscriptions` is one row
-> per user), so test on that device. Test words SZDD and SGD were approved and
-> must be deleted from `added_words` if still there. Still to do: a
+> per user), so test on that device. Test words SZDD and SGD were approved, then
+> deleted from `added_words` by the owner. Still to do: a
 > non-reviewer account must not see the row; then steps 6–8.
 
 ### 6. Merge and deploy
