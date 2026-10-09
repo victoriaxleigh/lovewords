@@ -260,6 +260,13 @@ async function handleReview(config, body) {
   return jsonResponse(200, { status: decision === 'approve' ? 'approved' : 'rejected', word });
 }
 
+// Logs how many reviewer emails this deploy sees (never the emails), so a 403
+// in the function log tells "WORD_ADMIN_EMAILS missing" from "email differs".
+function notReviewer() {
+  console.warn(`word-requests: not a reviewer (${reviewerEmails().length} reviewer emails configured)`);
+  return jsonResponse(403, { error: 'Not a reviewer' });
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'GET' && event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' }, { Allow: 'GET, POST' });
@@ -282,14 +289,14 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'GET') {
-      if (!isReviewer(user)) return jsonResponse(403, { error: 'Not a reviewer' });
+      if (!isReviewer(user)) return notReviewer();
       return await handleList(config);
     }
 
     const body = parseBody(event);
     if (body.action === 'request') return await handleRequest(config, user, body);
     if (body.action === 'review') {
-      if (!isReviewer(user)) return jsonResponse(403, { error: 'Not a reviewer' });
+      if (!isReviewer(user)) return notReviewer();
       return await handleReview(config, body);
     }
     return jsonResponse(400, { error: 'Unknown action' });
