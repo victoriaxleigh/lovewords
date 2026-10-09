@@ -50,6 +50,14 @@
   status = 200
   force = true
 
+# Word requests: players ask for a word, the owner reviews. Keep ahead of the
+# SPA fallback.
+[[redirects]]
+  from = "/api/word-requests"
+  to = "/.netlify/functions/word-requests"
+  status = 200
+  force = true
+
 # SPA fallback — all routes serve index.html
 [[redirects]]
   from = "/*"

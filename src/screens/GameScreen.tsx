@@ -32,6 +32,7 @@ import { Colors } from '../utils/colors';
 import { shortName } from '../utils/displayName';
 import { requestNotificationPermission, sendTurnNotification } from '../utils/webNotifications';
 import { isDictionaryLoaded } from '../engine/dictionary';
+import { refreshAddedWords, requestWord } from '../supabase/wordRequests';
 
 type RouteParams = { gameId: string; myUid: string; myDisplayName: string };
 
@@ -57,6 +58,11 @@ export default function GameScreen() {
   const [smackTalk, setSmackTalk] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  // Words the last submit rejected, offered as "Ask to add" buttons, and how
+  // each request went.
+  const [rejectedWords, setRejectedWords] = useState<string[]>([]);
+  const [wordRequestState, setWordRequestState] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({});
+  const [wordRequestError, setWordRequestError] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [nudgeSent, setNudgeSent] = useState(false);
@@ -427,11 +433,43 @@ export default function GameScreen() {
   }
 
 
+  // Approved word requests join the dictionary; fetched once per game screen.
+  useEffect(() => {
+    refreshAddedWords();
+  }, []);
+
+  async function handleRequestWord(word: string) {
+    setWordRequestError(null);
+    setWordRequestState((prev) => ({ ...prev, [word]: 'sending' }));
+    try {
+      const result = await requestWord(word);
+      if (result === 'already_valid') {
+        // Approved since this screen loaded: pick it up and let them retry.
+        await refreshAddedWords();
+        setWordRequestState((prev) => ({ ...prev, [word]: 'sent' }));
+        setWordRequestError(`${word} is a word now. Try submitting again ✨`);
+        return;
+      }
+      setWordRequestState((prev) => ({ ...prev, [word]: 'sent' }));
+    } catch (error) {
+      setWordRequestState((prev) => ({ ...prev, [word]: 'failed' }));
+      setWordRequestError(error instanceof Error ? error.message : "Couldn't send that request.");
+    }
+  }
+
+  function dismissSubmitError() {
+    setSubmitError(null);
+    setRejectedWords([]);
+    setWordRequestError(null);
+  }
+
   // Submit the move
   async function handleSubmit() {
     if (!game || !isMyTurn || pendingTiles.length === 0) return;
     setSubmitError(null);
     setSubmitSuccess(null);
+    setRejectedWords([]);
+    setWordRequestError(null);
 
     // Validate placement
     if (!isValidPlacement(game.board, pendingTiles, isFirstMove ?? false)) {
@@ -460,6 +498,7 @@ export default function GameScreen() {
 
     if (!valid) {
       setSubmitError(`"${invalidWords.join('", "')}" ${invalidWords.length > 1 ? 'are' : 'is'} not in the dictionary.`);
+      setRejectedWords([...new Set(invalidWords.map((w) => w.toUpperCase()))].slice(0, 3));
       return;
     }
 
@@ -937,8 +976,40 @@ export default function GameScreen() {
           {/* Inline submit feedback */}
           {submitError && (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>⚠️ {submitError}</Text>
-              <TouchableOpacity onPress={() => setSubmitError(null)} accessibilityLabel="Dismiss error" accessibilityRole="button">
+              <View style={styles.errorBannerBody}>
+                <Text style={styles.errorBannerText}>⚠️ {submitError}</Text>
+                {rejectedWords.length > 0 && (
+                  <View style={styles.wordRequestRow}>
+                    {rejectedWords.map((word) => {
+                      const state = wordRequestState[word];
+                      const sent = state === 'sent';
+                      return (
+                        <TouchableOpacity
+                          key={word}
+                          style={[styles.wordRequestBtn, sent && styles.wordRequestBtnSent]}
+                          onPress={() => handleRequestWord(word)}
+                          disabled={state === 'sending' || sent}
+                          accessibilityRole="button"
+                          accessibilityLabel={sent ? `${word} requested` : `Ask to add ${word} to the dictionary`}
+                        >
+                          {state === 'sending' ? (
+                            <ActivityIndicator size="small" color={Colors.primary} />
+                          ) : (
+                            <Text style={styles.wordRequestBtnText}>
+                              {sent ? `${word} requested 📬` : `Ask to add ${word} 📖`}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                {rejectedWords.some((w) => wordRequestState[w] === 'sent') && !wordRequestError && (
+                  <Text style={styles.wordRequestHint}>Thanks! We'll take a look and add it if it checks out.</Text>
+                )}
+                {wordRequestError && <Text style={styles.wordRequestHint}>{wordRequestError}</Text>}
+              </View>
+              <TouchableOpacity onPress={dismissSubmitError} accessibilityLabel="Dismiss error" accessibilityRole="button">
                 <Text style={styles.errorBannerDismiss}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -1454,8 +1525,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFB3B3',
   },
-  errorBannerText: {
+  errorBannerBody: {
     flex: 1,
+  },
+  errorBannerText: {
     fontSize: 12,
     color: Colors.errorDark,
     fontWeight: '600',
@@ -1466,6 +1539,37 @@ const styles = StyleSheet.create({
     color: Colors.errorDark,
     fontWeight: '700',
     paddingLeft: 8,
+  },
+  wordRequestRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  wordRequestBtn: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minHeight: 28,
+    justifyContent: 'center',
+  },
+  wordRequestBtnSent: {
+    borderColor: Colors.border,
+  },
+  wordRequestBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  wordRequestHint: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    fontStyle: 'italic',
+    color: Colors.errorDark,
   },
   successBanner: {
     backgroundColor: '#F0FFF4',

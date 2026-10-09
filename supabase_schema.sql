@@ -246,6 +246,27 @@ create table if not exists game_coach_notes (
 
 create index if not exists game_coach_notes_user_idx on game_coach_notes (user_id);
 
+-- Word requests and the approved list. Mirrors
+-- supabase/migrations/20261009000100_word_requests.sql.
+create table if not exists word_requests (
+  id uuid primary key default gen_random_uuid(),
+  word text not null check (word ~ '^[A-Z]{2,15}$'),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  unique (word, user_id)
+);
+
+create index if not exists word_requests_pending_idx on word_requests (status, word);
+create index if not exists word_requests_user_idx on word_requests (user_id, status);
+
+create table if not exists added_words (
+  word text primary key check (word ~ '^[A-Z]{2,15}$'),
+  added_at timestamptz not null default now()
+);
+
 -- ── Row Level Security ──────────────────────────────────────
 
 alter table profiles enable row level security;
@@ -253,6 +274,8 @@ alter table games enable row level security;
 alter table game_analysis_events enable row level security;
 alter table game_coach_notes enable row level security;
 alter table game_solutions enable row level security;
+alter table word_requests enable row level security;
+alter table added_words enable row level security;
 alter table love_notes enable row level security;
 
 -- Profiles are private by default. Public discovery and exact-email lookup
@@ -949,6 +972,20 @@ grant select, insert on table game_coach_notes to service_role;
 -- read and upsert them; no client role gets a policy or table privilege.
 revoke all on table game_solutions from public, anon, authenticated;
 grant select, insert, update on table game_solutions to service_role;
+
+-- Word requests are backend-only: the word-requests function reads and writes
+-- them with the service-role key and checks who may review.
+revoke all on table word_requests from public, anon, authenticated;
+grant select, insert, update on table word_requests to service_role;
+
+-- Approved words are public to read (every app merges them into its
+-- dictionary); only the service role writes them.
+drop policy if exists "added_words_read" on added_words;
+create policy "added_words_read" on added_words
+  for select to anon, authenticated using (true);
+revoke all on table added_words from public, anon, authenticated;
+grant select on table added_words to anon, authenticated;
+grant select, insert, delete on table added_words to service_role;
 
 -- Love notes: only players in the related game
 create policy "notes_read" on love_notes for select

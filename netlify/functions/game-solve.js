@@ -8,6 +8,7 @@ const {
   sanitizeGameExport,
 } = require('./game-analysis-common');
 const { solveGame } = require('./lib/solver');
+const { loadAddedWords } = require('./lib/addedWords');
 const { capResponseSize, checkCooldown } = require('./lib/analysisLimits');
 const { forAsker, readCachedSolve, writeCachedSolve } = require('./lib/solveCache');
 
@@ -125,6 +126,8 @@ exports.handler = async (event) => {
     // row — so no emails or Supabase UIDs can reach the response.
     const exportData = sanitizeGameExport(game, privateEvents);
 
+    // Approved word requests count as words for the solver too.
+    await loadAddedWords(config.supabaseUrl, config.supabaseKey);
     const solve = solveGame(exportData, { askingAlias, budgetMs: SOLVE_BUDGET_MS });
     // Awaited, not fire-and-forget: a Lambda can freeze as soon as it returns.
     // A failed write is logged inside and never fails the request.

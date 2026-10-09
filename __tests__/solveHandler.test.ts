@@ -139,10 +139,14 @@ describe('game-solve handler', () => {
     cacheFetch = jest.fn((_url: string, init?: { method?: string }) =>
       Promise.resolve(init?.method === 'POST' ? response(201, null) : response(200, []))
     );
+    // Approved word requests are read before solving; they get their own
+    // answer so the queued responses in fetchMock stay in order.
     global.fetch = jest.fn((url: string, init?: unknown) =>
       String(url).includes('/rest/v1/game_solutions')
         ? cacheFetch(url, init)
-        : fetchMock(url, init)
+        : String(url).includes('/rest/v1/added_words')
+          ? Promise.resolve(response(200, []))
+          : fetchMock(url, init)
     ) as unknown as typeof fetch;
     // The cooldown is module state keyed per (endpoint, user); each test is its
     // own first request.
