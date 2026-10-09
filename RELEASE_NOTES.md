@@ -2,7 +2,7 @@
 
 ---
 
-## Word requests — 2026-10-09 (PR #43, awaiting deploy)
+## Word requests — 2026-10-09 (PR #43, merged and live on the web)
 
 ### Players can ask for a word to be added
 When a submit is rejected, the error banner now offers **Ask to add WORD 📖**
@@ -31,11 +31,21 @@ it's added. Rejections send nothing. All sends are best-effort and never fail
 a request. Sending lives in `netlify/functions/lib/userPush.js`; `notify.js`
 is unchanged.
 
-### Deploy needs
-Migration `20261009000100_word_requests.sql` (linked CLI workflow in
-`AGENTS.md`) and `WORD_ADMIN_EMAILS` set on Netlify. The step-by-step deploy
-and production checks are in `docs/ai/features/word-requests/handoff.md`.
+### Deploy
+Migration `20261009000100_word_requests.sql` applied to production with the
+linked CLI workflow in `AGENTS.md`, and `WORD_ADMIN_EMAILS` set on Netlify for
+all deploy contexts. Tested end to end on the PR's deploy preview (which uses
+the production database): request, reject, approve, and both pushes. Merged
+to `main` as `1e01bfd`; Netlify deploys `main` automatically. Remaining
+production checks are in `docs/ai/features/word-requests/handoff.md`.
 **38 suites, 521 tests pass.**
+
+### Found while testing
+Pushes reach only the device an account registered most recently
+(`push_subscriptions` holds one row per user). If notifications seem missing,
+check which device that row points at before suspecting the feature. The
+function now logs a one-line summary per push (`word push "…": users= web=
+expo= vapid=`) to make this quick to spot.
 
 ### Related: bigger dictionary (PR #42, shipped)
 About 2,400 newer words missing from ENABLE are now accepted in games and by

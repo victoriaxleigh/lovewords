@@ -45,6 +45,9 @@ Character limits are Apple's; drafts below stay within them.
 > • In-game notes & messages so the conversation never stops
 > • Playful smack talk when someone pulls ahead
 > • Solo practice mode to sharpen your game
+> • Stats, head-to-head records and achievement badges for every pairing
+> • A move-by-move coach review after each game
+> • Missing a word? Ask to add it, and get a notification when it's in
 > • Get a notification the moment it's your turn
 > • Clean, friendly design — no clutter, no ads
 >
@@ -125,15 +128,28 @@ plan to add block/report before then.
 Apple requires screenshots for at least the **6.9"/6.7" iPhone** display size
 (1290×2796 or 1284×2778), 3–5 of them. The final, exact-resolution screenshots
 are best captured from the built app in the **iOS Simulator** (Screenshots there
-come out at the precise required size). Until the build exists, draft framing of
-the key screens was reviewed during development — use the order/captions below.
+come out at the precise required size).
 
-Suggested screenshot order + captions:
-1. Home screen — "Your games, all in one place"
-2. New game modal — "Play with a partner or a friend"
-3. Game board — "Build words, rack up points"
-4. Messages/notes — "Keep the conversation going"
-5. Finished game — "Winner takes the bragging rights"
+Draft screenshots are in `docs/screenshots/`, captured 2026-10-09 from the web
+app's dev preview (`?dev=1`) at 430×932 points ×3 = **1290×2796**, the 6.7"
+size. They use the preview's sample data (the player is "Dev"), so retake
+them from the iOS Simulator with a real account before submitting.
+
+Suggested order + captions (pick 3–5 for the store):
+
+| # | File | Caption |
+|---|---|---|
+| 1 | `1-board.png` | "Build words, rack up points" |
+| 2 | `2-home.png` | "Your games, all in one place" |
+| 3 | `3-new-game.png` | "Play with a partner or a friend" |
+| 4 | `4-love-notes.png` | "Keep the conversation going" |
+| 5 | `5-stats.png` | "See who's really winning" |
+| 6 | `6-achievements.png` | "Unlock badges together" |
+| 7 | `7-you-won.png` | "Winner takes the bragging rights" |
+| 8 | `8-word-requests.png` | Owner-only review screen; for docs and the pitch, not the store |
+
+To retake the web drafts: `npx expo start --web`, open `/?dev=1` in a
+430×932 viewport at device scale 3, and capture each screen.
 
 ---
 

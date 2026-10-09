@@ -1,8 +1,8 @@
 # LoveWords — Agent Handoff Document
 
-> **Open work (2026-10-09):** word requests (PR #43) is built but not deployed.
-> Follow `docs/ai/features/word-requests/handoff.md` for the checks, migration,
-> deploy and production verification.
+> **Open work (2026-10-09):** word requests (PR #43) is merged and deployed;
+> its migration is applied. Production verification and close-out remain:
+> steps 7–8 of `docs/ai/features/word-requests/handoff.md`.
 
 > Last updated: 2026-08-04 (Session 13 — **Punny Partner/Friend mode subtitles.** The New Game modal's mode pills now show a pun plus a short gloss so the joke reads clearly instead of landing flat: 💕 Partner → *"Love letters"* / "sweet nothings between moves", 🎲 Friend → *"Fighting words"* / "friendly trash talk between moves". Two-line `Text` under the pill label (`modeSub` = pun, `modeGloss` = explanation), both reusing the already-contrast-verified `Colors.textLight` / `Colors.primaryDark` pair so no new contrast-test entries were needed. Explicit `accessibilityLabel` added to each pill so screen readers get the full "mode — pun, gloss" context in one read instead of three separate text nodes. Change is in `src/screens/NewGameModal.tsx` only (`modeToggle` JSX + `modeSub`/`modeGloss`/`modeGlossActive` styles); no test asserts the exact pill copy, so nothing else needed updating. `tsc --noEmit` shows only the 4 pre-existing errors (see Known Issues); **255/255 jest tests pass.**
 >

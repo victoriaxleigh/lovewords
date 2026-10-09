@@ -1,10 +1,10 @@
 ---
 feature: word-requests
-status: awaiting-deploy
+status: deployed-verifying
 created: 2026-10-09
 updated: 2026-10-09
 pr: https://github.com/victoriaxleigh/lovewords/pull/43
-branch: claude/word-requests
+branch: claude/word-requests (merged as 1e01bfd)
 ---
 
 # Handoff: word requests (PR #43)
@@ -127,7 +127,7 @@ or migration repair without explicit owner approval.
 
 ### 6. Merge and deploy
 
-- [ ] Only after steps 1–5: merge PR #43 with a merge commit.
+- [x] Only after steps 1–5: merge PR #43 with a merge commit. (Merged 2026-10-09 as `1e01bfd`.)
 - [ ] Wait for the Netlify production deploy to publish. If the env var was set
       after the build started, trigger a redeploy.
 
