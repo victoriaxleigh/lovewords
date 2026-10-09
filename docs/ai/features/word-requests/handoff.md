@@ -53,36 +53,42 @@ work around it.
 
 ### 1. Branch is current and green
 
-- [ ] `git fetch origin && git checkout claude/word-requests`
-- [ ] If `main` moved, merge it in (`git merge origin/main`; no rebase or force
+- [x] `git fetch origin && git checkout claude/word-requests`
+- [x] If `main` moved, merge it in (`git merge origin/main`; no rebase or force
       push). Resolve conflicts, regenerate lockfiles with npm, never by hand.
-- [ ] `npm ci`
-- [ ] `npx jest`: expect all suites to pass (521 tests at handoff).
-- [ ] `npx tsc --noEmit`: expect a clean exit.
-- [ ] Netlify deploy preview on the PR built successfully.
+- [x] `npm ci`
+- [x] `npx jest`: expect all suites to pass (521 tests at handoff).
+- [x] `npx tsc --noEmit`: expect a clean exit.
+- [x] Netlify deploy preview on the PR built successfully.
 
 ### 2. Review the diff yourself
 
 Read `git diff origin/main...HEAD` adversarially. At minimum confirm:
 
-- [ ] `word_requests` has no grant or policy for `anon`/`authenticated`;
+- [x] `word_requests` has no grant or policy for `anon`/`authenticated`;
       `added_words` is select-only for them. Only `service_role` writes either.
-- [ ] Reviewer checks happen server-side in `word-requests.js` (`isReviewer`)
+- [x] Reviewer checks happen server-side in `word-requests.js` (`isReviewer`)
       before list and review. The app only hides the Settings row.
-- [ ] Words are validated as `^[A-Z]{2,15}$` on the server and by the table
+- [x] Words are validated as `^[A-Z]{2,15}$` on the server and by the table
       `check` constraints.
-- [ ] Every push/email path is awaited and can't fail the request
+- [x] Every push/email path is awaited and can't fail the request
       (`lib/userPush.js` never throws).
-- [ ] `notify.js` is unchanged (`git diff origin/main...HEAD -- netlify/functions/notify.js` is empty).
+- [x] `notify.js` is unchanged (`git diff origin/main...HEAD -- netlify/functions/notify.js` is empty).
 
 ### 3. Preview check (no backend)
 
-- [ ] `npx expo start --web`, open `/?dev=1` at about 375px wide.
-- [ ] Settings shows **Word requests 📖, 2 words waiting** (dev fixture).
+- [x] `npx expo start --web`, open `/?dev=1` at about 375px wide.
+- [x] Settings shows **Word requests 📖, 2 words waiting** (dev fixture).
       Open it, tap **Add word** on one card, and confirm it disappears.
-- [ ] In a game, play a non-word → banner shows **Ask to add …** → tap →
+- [x] In a game, play a non-word → banner shows **Ask to add …** → tap →
       "… requested 📬" plus the thank-you line. (The dev dictionary falls back
       to accepting everything if ENABLE can't download; if so, note it and move on.)
+
+> **Progress (2026-10-09):** steps 1–3 done. 38 suites / 521 tests pass,
+> `tsc` clean, diff review found no blockers. Preview at 375px: Settings row,
+> review screen and **Add word**, and the **Ask to add** banner all work as
+> described. Stopped at step 4: the cloud session had no Supabase network
+> access or credentials, so the owner is running the migration locally.
 
 ### 4. Production database (owner approval needed)
 
