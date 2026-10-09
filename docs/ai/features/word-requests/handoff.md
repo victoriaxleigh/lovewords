@@ -1,0 +1,164 @@
+---
+feature: word-requests
+status: awaiting-deploy
+created: 2026-10-09
+updated: 2026-10-09
+pr: https://github.com/victoriaxleigh/lovewords/pull/43
+branch: claude/word-requests
+---
+
+# Handoff: word requests (PR #43)
+
+You are picking up a finished feature that has **not shipped**. Your job is to
+verify it, get it deployed safely, and confirm it works in production. Read
+`AGENTS.md` first; its production database rules override anything here.
+
+## What the feature does
+
+1. A player's word is rejected → the error banner offers **Ask to add WORD 📖**.
+2. The request is stored once per (word, player). The first request for a word
+   pushes to the reviewers (and emails them if `RESEND_API_KEY` is set).
+3. Reviewers (accounts in `WORD_ADMIN_EMAILS`) see **Settings → Word requests**,
+   with each word's request count and an NWL badge, and tap **Add word** or
+   **Reject**.
+4. **Add word** writes to `added_words`. Every app merges that list into its
+   dictionary when a game screen opens, and `game-solve` / `game-coach` merge it
+   into the solver. Everyone who asked gets a push "✨ WORD is a word now!".
+   Rejections notify nobody.
+5. The NWL badge reads "NWL not checked yet" until a licensed list is saved as
+   `netlify/functions/lib/nwl.txt.gz`. No licence exists yet; **do not** add the
+   file or source NWL from anywhere.
+
+Related, already shipped: PR #42 added ~2,400 words to
+`src/engine/wordSupplement.json` (SCOWL + hand-picked; notice in
+`docs/licenses/SCOWL.txt`).
+
+## Files
+
+| Area | Files |
+|---|---|
+| Migration | `supabase/migrations/20261009000100_word_requests.sql` (mirrored in `supabase_schema.sql`) |
+| Function | `netlify/functions/word-requests.js`, routed in `netlify.toml` at `/api/word-requests` |
+| Server libs | `netlify/functions/lib/addedWords.js`, `lib/nwl.js`, `lib/userPush.js`; `addWords` in `lib/dictionary.js` |
+| Solver hooks | `loadAddedWords` before `solveGame` in `game-solve.js` and `game-coach.js` |
+| App | `src/supabase/wordRequests.ts`, `addWords` in `src/engine/dictionary.ts`, `src/screens/WordRequestsScreen.tsx`, banner in `GameScreen.tsx`, row in `SettingsScreen.tsx`, route in `App.tsx` |
+| Tests | `__tests__/wordRequestsHandler.test.ts`, `dictionary.test.ts`, `solveHandler.test.ts` (routes the new `added_words` read) |
+| Docs | `DEPLOY.md` §2 (env var), §3 (migration), §7 (operating notes); `CHANGELOG.md` |
+
+## Checks, in order
+
+Tick each box in this file as you go and push the update, so the next agent
+knows where you stopped. **Stop and ask the owner** wherever it says so; don't
+work around it.
+
+### 1. Branch is current and green
+
+- [ ] `git fetch origin && git checkout claude/word-requests`
+- [ ] If `main` moved, merge it in (`git merge origin/main`; no rebase or force
+      push). Resolve conflicts, regenerate lockfiles with npm, never by hand.
+- [ ] `npm ci`
+- [ ] `npx jest`: expect all suites to pass (521 tests at handoff).
+- [ ] `npx tsc --noEmit`: expect a clean exit.
+- [ ] Netlify deploy preview on the PR built successfully.
+
+### 2. Review the diff yourself
+
+Read `git diff origin/main...HEAD` adversarially. At minimum confirm:
+
+- [ ] `word_requests` has no grant or policy for `anon`/`authenticated`;
+      `added_words` is select-only for them. Only `service_role` writes either.
+- [ ] Reviewer checks happen server-side in `word-requests.js` (`isReviewer`)
+      before list and review. The app only hides the Settings row.
+- [ ] Words are validated as `^[A-Z]{2,15}$` on the server and by the table
+      `check` constraints.
+- [ ] Every push/email path is awaited and can't fail the request
+      (`lib/userPush.js` never throws).
+- [ ] `notify.js` is unchanged (`git diff origin/main...HEAD -- netlify/functions/notify.js` is empty).
+
+### 3. Preview check (no backend)
+
+- [ ] `npx expo start --web`, open `/?dev=1` at about 375px wide.
+- [ ] Settings shows **Word requests 📖, 2 words waiting** (dev fixture).
+      Open it, tap **Add word** on one card, and confirm it disappears.
+- [ ] In a game, play a non-word → banner shows **Ask to add …** → tap →
+      "… requested 📬" plus the thank-you line. (The dev dictionary falls back
+      to accepting everything if ENABLE can't download; if so, note it and move on.)
+
+### 4. Production database (owner approval needed)
+
+`AGENTS.md` rules apply in full. You need the linked Supabase CLI; if this
+environment isn't linked or has no credentials, **stop and ask the owner** to
+run these steps or provide access. Never use the SQL Editor, `--include-all`
+or migration repair without explicit owner approval.
+
+- [ ] `npx supabase migration list --linked`: local and remote match up to
+      `20261007000200_game_coach_notes`. If remote has anything unrecorded,
+      **stop** and reconcile with the owner.
+- [ ] `npx supabase db push --linked --dry-run`: the **only** pending
+      migration is `20261009000100_word_requests.sql`. Anything else → stop.
+- [ ] Show the owner the dry-run output and get a go-ahead.
+- [ ] `npx supabase db push --linked --yes`
+- [ ] `npx supabase migration list --linked`: local and remote match.
+
+### 5. Netlify environment (owner)
+
+- [ ] `WORD_ADMIN_EMAILS` = the owner's sign-in email (comma-separate extras),
+      scope **Functions** (plus Runtime), not Post-processing. See `DEPLOY.md` §2.
+- [ ] Confirm `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and the VAPID keys are
+      already set (they power existing features).
+- [ ] Optional: `RESEND_API_KEY` for reviewer emails.
+
+### 6. Merge and deploy
+
+- [ ] Only after steps 1–5: merge PR #43 with a merge commit.
+- [ ] Wait for the Netlify production deploy to publish. If the env var was set
+      after the build started, trigger a redeploy.
+
+### 7. Production verification
+
+- [ ] Wiring: `curl -i https://lovewords1234.netlify.app/api/word-requests`
+      → **401 "Missing Authorization header"**. A 500 "not configured" means
+      `SUPABASE_*` isn't Functions-scoped.
+- [ ] Owner account (notifications enabled in the app): Settings shows the
+      **Word requests** row. Another account must **not** see it.
+- [ ] From a second account, play a made-up word (e.g. ZXQWV) and tap **Ask
+      to add**. Owner gets the "📖 New word request" push (and email if Resend
+      is set). Asking again from the same account sends nothing new.
+- [ ] Owner opens Word requests: the word shows "Asked by 1 player" and "NWL
+      not checked yet". **Reject** it; the card disappears and the requester
+      gets no push. Confirm the word is still rejected in a game.
+- [ ] Repeat with a second made-up word and **Add word**. The requester gets
+      "✨ … is a word now!". Reopen the game screen and the word is accepted.
+- [ ] Clean up the test words: ask the owner before deleting the approved test
+      word from `added_words` (Table Editor row delete, not SQL). A warm
+      function container may keep accepting it for up to its lifetime; that's
+      expected.
+- [ ] Netlify → Functions → `word-requests`, `game-solve`, `game-coach` logs show
+      no Supabase/Postgres errors for these invocations.
+- [ ] Because this feature sends push, also do one production **Nudge** on a
+      two-player game and confirm ✅ Nudged! with a clean `notify` log, as
+      `AGENTS.md` asks after notification-adjacent changes.
+
+### 8. Close out
+
+- [ ] Update `AGENT_HANDOFF.md`'s "Last updated" block with what shipped.
+- [ ] Set `status: shipped` in this file's front matter.
+- [ ] Report back to the owner: what you verified, anything skipped and why.
+
+## Rollback
+
+- Code: Netlify → Deploys → publish the previous deploy, or revert the merge on
+  `main`. The migration is additive; leaving the tables in place is safe.
+- A wrongly approved word: delete its row from `added_words` (owner approval).
+  Apps drop it on their next launch; solver containers within minutes to hours.
+
+## Known limits (not bugs)
+
+- Players without notifications enabled aren't told their word was added; it
+  just starts working.
+- No in-app way to undo an approval; see Rollback.
+- The NWL check is inert until a licensed `nwl.txt.gz` exists. Its licensing
+  terms (NASPA, info@scrabbleplayers.org) are the owner's to arrange; check
+  whether the licence allows committing the file to this repo.
+- `lib/userPush.js` duplicates the two small push senders from `notify.js` on
+  purpose, to keep the notification claim path untouched.
