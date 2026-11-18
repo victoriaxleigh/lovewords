@@ -66,10 +66,15 @@ async function pushToUser(config, userId, title, message) {
   if (web && vapidConfigured()) {
     const subscription = { endpoint: web.endpoint, keys: { p256dh: web.p256dh, auth: web.auth } };
     sends.push(
-      webpush.sendNotification(subscription, JSON.stringify({ title, body: message })).catch(
+      webpush
+        .sendNotification(subscription, JSON.stringify({ title, body: message }), {
+          TTL: 24 * 60 * 60,
+          urgency: 'high',
+        })
+        .catch(
         async (error) => {
-          // 410 = subscription expired; clean it up like notify.js does.
-          if (error.statusCode === 410) {
+          // 404/410 = subscription expired; clean it up like notify.js does.
+          if (error.statusCode === 404 || error.statusCode === 410) {
             await fetch(`${config.supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${id}`, {
               method: 'DELETE',
               headers,

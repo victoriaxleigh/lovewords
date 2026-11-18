@@ -804,6 +804,8 @@ export async function acceptGameInvite(game: Game): Promise<void> {
     .select('id')
     .single();
   if (error || !data) throw new Error(error?.message ?? 'Invitation is no longer available.');
+  // Tell the inviter their game has started and they move first.
+  void sendPushNotification(game.players[0].uid, 'turn', game.id, 'start');
 }
 
 export async function declineGameInvite(game: Game): Promise<void> {
@@ -1063,6 +1065,7 @@ export async function swapTiles(
     .eq('id', gameId);
 
   if (error) return { success: false, error: error.message };
+  void sendPushNotification(game.players[otherIndex].uid, 'turn', gameId, String(game.moves.length));
   return { success: true };
 }
 
@@ -1088,6 +1091,7 @@ export async function passTurn(gameId: string, game: Game, playerUid: string) {
     })
     .eq('id', gameId);
   if (error) throw error;
+  void sendPushNotification(game.players[otherIndex].uid, 'turn', gameId, String(game.moves.length));
 }
 
 // ─── Love Notes ───────────────────────────────────────────────────────────────

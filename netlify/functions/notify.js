@@ -20,6 +20,11 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
+// Every LoveWords push is something the recipient acts on now. Without
+// urgency 'high', iOS and Android battery saving can hold a push back or drop
+// it. TTL: the push service keeps trying for a day, then gives up.
+const WEB_PUSH_OPTIONS = { TTL: 24 * 60 * 60, urgency: 'high' };
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -98,19 +103,33 @@ exports.handler = async (event) => {
   const participantsMatch = senderIsPlayer1 || senderIsPlayer2;
   let eventKey;
   let authorized = false;
+  let turnKind = 'move';
   if (type === 'invite') {
     authorized = game.status === 'waiting' && senderIsPlayer1 && eventId === gameId;
     eventKey = `invite:${gameId}`;
   } else if (type === 'turn') {
     const moves = Array.isArray(game.moves) ? game.moves : [];
-    const moveIndex = moves.length - 1;
-    const lastMove = moves[moveIndex];
-    authorized =
-      game.status === 'active' &&
-      participantsMatch &&
-      game.current_turn === recipientUid &&
-      eventId === String(moveIndex) &&
-      lastMove?.uid === senderUid;
+    if (eventId === 'start') {
+      // The invited player accepted; the inviter (player 1) moves first.
+      turnKind = 'start';
+      authorized =
+        game.status === 'active' &&
+        senderIsPlayer2 &&
+        moves.length === 0 &&
+        game.current_turn === recipientUid;
+    } else {
+      // Any move that hands over the turn: a word, a swap or a pass. The move
+      // that ends the game leaves it 'finished' and still tells the other player.
+      const moveIndex = moves.length - 1;
+      const lastMove = moves[moveIndex];
+      turnKind = game.status === 'finished' ? 'final' : 'move';
+      authorized =
+        (game.status === 'active' || game.status === 'finished') &&
+        participantsMatch &&
+        game.current_turn === recipientUid &&
+        eventId === String(moveIndex) &&
+        lastMove?.uid === senderUid;
+    }
     eventKey = `turn:${gameId}:${eventId}`;
   } else if (type === 'nudge') {
     authorized =
@@ -219,6 +238,10 @@ exports.handler = async (event) => {
   const title =
     type === 'invite'
       ? `${isFriend ? '🎲' : '💌'} Game invite from ${senderName}`
+      : type === 'turn' && turnKind === 'start'
+      ? `${isFriend ? '🎲' : '💌'} ${senderName} accepted your invite`
+      : type === 'turn' && turnKind === 'final'
+      ? '🏁 Game over on LoveWords'
       : type === 'turn'
       ? isFriend
         ? '🎲 Your turn on LoveWords!'
@@ -232,6 +255,10 @@ exports.handler = async (event) => {
   const message =
     type === 'invite'
       ? `${senderName} invited you to play LoveWords.`
+      : type === 'turn' && turnKind === 'start'
+      ? 'You go first — make your move! 🎯'
+      : type === 'turn' && turnKind === 'final'
+      ? `${senderName} made the last move — see who won! 🏆`
       : type === 'turn'
       ? `${senderName} just played — go make your move! 🎯`
       : type === 'nudge'
@@ -260,10 +287,10 @@ async function sendWebPush(subscriptionRow, title, message, supabaseUrl, supabas
   const payload = JSON.stringify({ title, body: message });
 
   try {
-    await webpush.sendNotification(subscription, payload);
+    await webpush.sendNotification(subscription, payload, WEB_PUSH_OPTIONS);
   } catch (err) {
-    // 410 = subscription expired/invalid — clean it up
-    if (err.statusCode === 410) {
+    // 404/410 = subscription expired or unknown to the push service — clean it up
+    if (err.statusCode === 404 || err.statusCode === 410) {
       await fetch(
         `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(recipientUid)}`,
         { method: 'DELETE', headers: supabaseHeaders }
