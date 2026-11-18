@@ -342,4 +342,102 @@ describe('authenticated notification handler', () => {
     expect(result.statusCode).toBe(403);
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
+
+  function gameRow(overrides: Record<string, unknown>) {
+    return {
+      player1_uid: SENDER_ID,
+      player2_uid: RECIPIENT_ID,
+      status: 'active',
+      current_turn: RECIPIENT_ID,
+      mode: 'partner',
+      moves: [{ uid: SENDER_ID }],
+      ...overrides,
+    };
+  }
+
+  function mockDelivery(game: Record<string, unknown>) {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(response(200, { id: SENDER_ID }))
+      .mockResolvedValueOnce(response(200, [game]))
+      .mockResolvedValueOnce(response(200, true))
+      .mockResolvedValueOnce(response(200, [{ display_name: 'Server Name' }]))
+      .mockResolvedValueOnce(
+        response(200, [{ endpoint: 'https://push.example', p256dh: 'key', auth: 'auth' }])
+      )
+      .mockResolvedValueOnce(response(200, []));
+  }
+
+  test('sends web push as high urgency with a one-day TTL', async () => {
+    mockDelivery(gameRow({}));
+
+    const result = await handler(
+      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'turn', eventId: '0' })
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(webpush.sendNotification.mock.calls[0][2]).toEqual({
+      TTL: 86400,
+      urgency: 'high',
+    });
+  });
+
+  test('tells the other player about the move that finished the game', async () => {
+    mockDelivery(gameRow({ status: 'finished', moves: [{ uid: RECIPIENT_ID }, { uid: SENDER_ID }] }));
+
+    const result = await handler(
+      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'turn', eventId: '1' })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const payload = JSON.parse(webpush.sendNotification.mock.calls[0][1]);
+    expect(payload.title).toContain('Game over');
+    expect(payload.body).toContain('Server Name');
+  });
+
+  test('tells the inviter when their invite is accepted and they move first', async () => {
+    mockDelivery(
+      gameRow({ player1_uid: RECIPIENT_ID, player2_uid: SENDER_ID, moves: [] })
+    );
+
+    const result = await handler(
+      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'turn', eventId: 'start' })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const claimBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    expect(claimBody.claim_event_key).toBe(`turn:${GAME_ID}:start`);
+    const payload = JSON.parse(webpush.sendNotification.mock.calls[0][1]);
+    expect(payload.title).toContain('Server Name accepted your invite');
+  });
+
+  test('rejects a start notification once moves have been played', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(response(200, { id: SENDER_ID }))
+      .mockResolvedValueOnce(
+        response(200, [gameRow({ player1_uid: RECIPIENT_ID, player2_uid: SENDER_ID })])
+      );
+
+    const result = await handler(
+      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'turn', eventId: 'start' })
+    );
+
+    expect(result.statusCode).toBe(403);
+  });
+
+  test('removes a subscription the push service no longer knows (404)', async () => {
+    mockDelivery(gameRow({}));
+    (global.fetch as jest.Mock).mockResolvedValueOnce(response(200, []));
+    webpush.sendNotification.mockRejectedValueOnce(
+      Object.assign(new Error('gone'), { statusCode: 404 })
+    );
+
+    const result = await handler(
+      event({ recipientUid: RECIPIENT_ID, gameId: GAME_ID, type: 'turn', eventId: '0' })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    const deleteCall = calls.find(([, init]) => init?.method === 'DELETE');
+    expect(deleteCall?.[0]).toContain(`/push_subscriptions?user_id=eq.${RECIPIENT_ID}`);
+  });
 });
