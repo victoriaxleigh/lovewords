@@ -313,4 +313,68 @@ describe('game-coach handler', () => {
     expect(calls.some((c) => c.url.includes('game_coach_notes'))).toBe(false);
     expect(mockCreate).not.toHaveBeenCalled();
   });
+  test.each([
+    [529, 'overloaded_error'],
+    [429, 'rate_limit_error'],
+  ])('a %i from the model tells the player to retry and saves nothing', async (status, type) => {
+    const { calls } = installFetch({ saved: null, count: 0, tableExists: true });
+    mockCreate.mockRejectedValue(
+      Object.assign(new Error(`${status} ${type}`), { status, error: { error: { type } } })
+    );
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = (await coachHandler(coachEvent())) as HandlerResponse;
+
+    expect(result.statusCode).toBe(503);
+    expect(parse(result).code).toBe('coach_busy');
+    expect(calls.some((c) => c.method === 'POST' && c.url.includes('game_coach_notes'))).toBe(false);
+    expect(errors.mock.calls.some((args) => String(args[1]).includes(type))).toBe(true);
+    errors.mockRestore();
+  });
+
+  test('a model timeout is reported as busy, not a generic failure', async () => {
+    installFetch({ saved: null, count: 0, tableExists: true });
+    mockCreate.mockRejectedValue(
+      Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' })
+    );
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = (await coachHandler(coachEvent())) as HandlerResponse;
+
+    expect(result.statusCode).toBe(503);
+    expect(parse(result).code).toBe('coach_busy');
+    errors.mockRestore();
+  });
+
+  test('a non-retryable model error (e.g. no credit) logs its type', async () => {
+    installFetch({ saved: null, count: 0, tableExists: true });
+    mockCreate.mockRejectedValue(
+      Object.assign(new Error('Your credit balance is too low'), {
+        status: 400,
+        error: { error: { type: 'invalid_request_error' } },
+      })
+    );
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = (await coachHandler(coachEvent())) as HandlerResponse;
+
+    expect(result.statusCode).toBe(502);
+    expect(parse(result).code).toBe('coach_unavailable');
+    expect(
+      errors.mock.calls.some((args) => String(args[1]).includes('credit balance is too low'))
+    ).toBe(true);
+    errors.mockRestore();
+  });
+
+  test('the model call is held inside the request deadline with no SDK retries', async () => {
+    installFetch({ saved: null, count: 0, tableExists: true });
+    const Anthropic = require('@anthropic-ai/sdk');
+
+    await coachHandler(coachEvent());
+
+    const options = Anthropic.mock.calls[Anthropic.mock.calls.length - 1][0];
+    expect(options.maxRetries).toBe(0);
+    expect(options.timeout).toBeGreaterThan(0);
+    expect(options.timeout).toBeLessThanOrEqual(50000);
+  });
 });
